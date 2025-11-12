@@ -10,7 +10,7 @@ const CustomerLogin = () => {
     e.preventDefault();
 
     try {
-      const response = await fetch("http://localhost:4000/api/customer", {
+      const response = await fetch("http://localhost:4000/api/customer/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emailOrPhone, password }),
@@ -80,6 +80,14 @@ const CustomerLogin = () => {
           >
             Log In
           </button>
+
+          <div className="text-center mt-3">
+             <span className="text-secondary">Don't have an account? </span>
+             <a href="/register" className="text-primary fw-semibold">
+              Register here
+             </a>
+             </div>
+
         </form>
       </div>
     </div>
