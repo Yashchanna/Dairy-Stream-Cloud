@@ -1,57 +1,116 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { Card, Row, Col, Table, Badge } from "react-bootstrap";
 
-export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalCustomers: 0,
-    todayDeliveries: 0,
-    pendingBills: 0,
-    monthlyRevenue: 0,
-  });
-
-  useEffect(() => {
-    fetch("http://localhost:5000/api/admin/stats")
-      .then((res) => res.json())
-      .then((data) => setStats(data))
-      .catch((err) => console.error("Error fetching stats:", err));
-  }, []);
-
+const AdminDashboard = () => {
   return (
-    <div className="min-h-screen bg-gray-100 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white shadow-md p-4">
-        <h1 className="text-2xl font-bold text-green-700 mb-6">Dairy Admin</h1>
-        <ul className="space-y-4 text-gray-700">
-          <li>Dashboard</li>
-          <li>Customers</li>
-          <li>Deliveries</li>
-          <li>Billing</li>
-          <li>Reports</li>
-        </ul>
-      </aside>
+    <div className="container-fluid p-4" style={{ background: "#f5f8ff", minHeight: "100vh" }}>
+      <h2 className="fw-bold text-primary mb-1">Admin Dashboard</h2>
+      <p className="text-secondary mb-4">Welcome back! Monitor your dairy business operations.</p>
 
-      {/* Main Content */}
-      <main className="flex-1 p-6">
-        <h2 className="text-xl font-semibold mb-6">Dashboard Overview</h2>
+      {/* ===== Stats Cards ===== */}
+      <Row className="g-3 mb-4">
+        <Col lg={3} md={6}>
+          <Card className="shadow-sm stat-card border-0">
+            <Card.Body>
+              <i className="bi bi-people-fill text-primary fs-2"></i>
+              <h5 className="mt-2">Total Customers</h5>
+              <h2 className="fw-bold text-primary">128</h2>
+            </Card.Body>
+          </Card>
+        </Col>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-6">
-          <StatCard title="Total Customers" value={stats.totalCustomers} />
-          <StatCard title="Today’s Deliveries" value={stats.todayDeliveries} />
-          <StatCard title="Pending Bills" value={stats.pendingBills} />
-          <StatCard
-            title="Monthly Revenue"
-            value={`₹${stats.monthlyRevenue.toLocaleString()}`}
-          />
-        </div>
-      </main>
+        <Col lg={3} md={6}>
+          <Card className="shadow-sm stat-card border-0">
+            <Card.Body>
+              <i className="bi bi-truck text-success fs-2"></i>
+              <h5 className="mt-2">Delivery Agents</h5>
+              <h2 className="fw-bold text-success">12</h2>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col lg={3} md={6}>
+          <Card className="shadow-sm stat-card border-0">
+            <Card.Body>
+              <i className="bi bi-calendar-check text-warning fs-2"></i>
+              <h5 className="mt-2">Deliveries Today</h5>
+              <h2 className="fw-bold text-warning">524</h2>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col lg={3} md={6}>
+          <Card className="shadow-sm stat-card border-0">
+            <Card.Body>
+              <i className="bi bi-cash-coin text-danger fs-2"></i>
+              <h5 className="mt-2">Pending Payments</h5>
+              <h2 className="fw-bold text-danger">₹ 32,870</h2>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* ===== Recent Orders / Activities ===== */}
+      <Row className="g-4">
+        <Col lg={8}>
+          <Card className="shadow-sm border-0">
+            <Card.Header className="bg-white fw-bold text-primary fs-5">
+              Recent Deliveries
+            </Card.Header>
+            <Card.Body className="p-0">
+              <Table striped hover responsive className="mb-0 text-center">
+                <thead className="table-light">
+                  <tr>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Qty (L)</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>05 Oct 2025</td>
+                    <td>Amit Patil</td>
+                    <td>1.0</td>
+                    <td><Badge bg="success">Delivered</Badge></td>
+                  </tr>
+                  <tr>
+                    <td>05 Oct 2025</td>
+                    <td>Shaikh Household</td>
+                    <td>0.5</td>
+                    <td><Badge bg="warning">Paused</Badge></td>
+                  </tr>
+                  <tr>
+                    <td>04 Oct 2025</td>
+                    <td>Nimbalkar Society</td>
+                    <td>1.0</td>
+                    <td><Badge bg="danger">Missed</Badge></td>
+                  </tr>
+                </tbody>
+              </Table>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        {/* Activities Panel */}
+        <Col lg={4}>
+          <Card className="shadow-sm border-0">
+            <Card.Header className="bg-white fw-bold text-primary fs-5">
+              Recent Activities
+            </Card.Header>
+            <Card.Body>
+              <ul className="list-unstyled">
+                <li className="mb-3"><i className="bi bi-plus-circle text-primary"></i> New customer registered — <strong>Amit Patil</strong></li>
+                <li className="mb-3"><i className="bi bi-person-plus text-success"></i> Delivery agent added — <strong>Suresh Kumar</strong></li>
+                <li className="mb-3"><i className="bi bi-wallet text-warning"></i> Payment received — <strong>₹590</strong></li>
+                <li className="mb-2"><i className="bi bi-x-circle text-danger"></i> Delivery skipped — <strong>Flat 304</strong></li>
+              </ul>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
-}
+};
 
-const StatCard = ({ title, value }) => (
-  <div className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition">
-    <h3 className="text-gray-500 text-sm mb-2">{title}</h3>
-    <p className="text-2xl font-semibold text-green-700">{value}</p>
-  </div>
-);
-
+export default AdminDashboard;

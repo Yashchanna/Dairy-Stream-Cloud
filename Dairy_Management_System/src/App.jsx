@@ -8,17 +8,20 @@ import AdminDashboard from './components/AdminDashboard';
 import CustomerLogin from './components/CustomerLogin';
 import CustomerRegister from './components/CustomerRegister';
 import CustomerDashboard from './components/CustomerDashboard';
+import AgentDashboard from './components/agentDashboard';
 function App() {
   return (
     <Routes>
       <Route path='/' element={<CustomerLogin></CustomerLogin>}></Route>
       <Route path='/register' element={<CustomerRegister></CustomerRegister>}></Route>
       <Route path='/customer-dashboard' element={<CustomerDashboard></CustomerDashboard>}></Route>
-      <Route path='admin/adminDashboard' element={<AdminDashboard></AdminDashboard>}></Route>
+      <Route path='admin/AdminDashboard' element={<AdminDashboard></AdminDashboard>}></Route>
       <Route path='admin/addCustomer' element={<AddNewCustomerForm></AddNewCustomerForm>}></Route>
 
       <Route path='admin/addAgent' element={<AddNewAgentForm></AddNewAgentForm>}></Route>
       <Route path='/customerDashbord' element={<DairyCustomerDashboard></DairyCustomerDashboard>}></Route>
+      <Route path='agent/AgentDashboard' element={<AgentDashboard></AgentDashboard>}></Route>
+      <Route path='*' element={<h2 className='text-center mt-5'>404 - Page Not Found</h2>}></Route>
 
     </Routes>
    

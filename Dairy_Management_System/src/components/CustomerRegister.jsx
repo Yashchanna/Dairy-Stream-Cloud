@@ -166,7 +166,7 @@ const CustomerRegister = () => {
             />
           </div>
 
-          {/* Milk Quantity */}
+          {/* Milk Quantity
           <div className="mb-3">
             <input
               type="number"
@@ -179,10 +179,10 @@ const CustomerRegister = () => {
               onChange={handleChange}
               required
             />
-          </div>
+          </div> */}
 
           {/* Extra Product */}
-          <div className="mb-3">
+          {/* <div className="mb-3">
             <select
               className="form-select"
               name="defaultExtraProduct"
@@ -196,10 +196,10 @@ const CustomerRegister = () => {
               <option value="Paneer">Paneer</option>
               <option value="Chaas">Chaas</option>
             </select>
-          </div>
+          </div> */}
 
           {/* Extra Product Quantity */}
-          <div className="mb-3">
+          {/* <div className="mb-3">
             <input
               type="number"
               className="form-control"
@@ -210,10 +210,10 @@ const CustomerRegister = () => {
               onChange={handleChange}
               required
             />
-          </div>
+          </div> */}
 
           {/* Billing Cycle */}
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <select
               className="form-select"
               name="billingCycle"
@@ -225,7 +225,7 @@ const CustomerRegister = () => {
               <option value="Weekly">Weekly</option>
               <option value="Daily">Daily</option>
             </select>
-          </div>
+          </div> */}
 
           {/* Register Button */}
           <button

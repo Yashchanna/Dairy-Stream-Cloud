@@ -95,7 +95,7 @@ const DairyCustomerDashboard = () => {
       {/* Header Section */}
       <header className="mb-4">
         <h1 className="fs-2 fw-bold text-primary">My Dairy Dashboard</h1>
-        <p className="text-secondary mt-1">Welcome back, karan Sharma. Manage your daily subscription.</p>
+        <p className="text-secondary mt-1">Welcome back, Anya Sharma. Manage your daily subscription.</p>
       </header>
 
       {/* Notifications Banner */}
