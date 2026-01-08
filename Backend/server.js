@@ -1,16 +1,21 @@
-const express = require("express");
-const cors = require("cors");
-// require("dotenv").config();
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
 
-// create express app
+import customerRoutes from "./routes/customer.routes.js";
+
+// Load environment variables
+dotenv.config();
+
+// Create express app
 const app = express();
 
 // ======================
 // Middlewares
 // ======================
-app.use(cors()); // allow frontend requests
-app.use(express.json()); // parse JSON body
-app.use(express.urlencoded({ extended: true })); // parse form data
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ======================
 // Health Check Route
@@ -23,11 +28,9 @@ app.get("/", (req, res) => {
 });
 
 // ======================
-// API Routes (later)
+// API Routes
 // ======================
-// app.use("/api/customers", customerRoutes);
-// app.use("/api/agents", agentRoutes);
-// app.use("/api/admin", adminRoutes);
+app.use("/api/customer", customerRoutes);
 
 // ======================
 // Global Error Handler
@@ -46,5 +49,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
