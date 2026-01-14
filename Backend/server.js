@@ -54,15 +54,20 @@ app.listen(PORT, () => {
 
 
 
-app.get("/test-supabase", async (req, res) => {
+app.get("/supabase-health", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("customers")
-      .select("*")
+      .select("id")
       .limit(1);
+
+    console.log("Supabase data:", data);
+    console.log("Supabase error:", error);
 
     res.json({ data, error });
   } catch (err) {
+    console.error("Supabase exception:", err);
     res.status(500).json({ error: err.message });
   }
 });
+

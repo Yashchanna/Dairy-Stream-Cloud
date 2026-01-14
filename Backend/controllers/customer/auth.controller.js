@@ -18,6 +18,7 @@ export const registerCustomer = async (req, res) => {
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
+  console.log("register coustomer data recived")
 };
 
 export const loginCustomer = async (req, res) => {
@@ -38,4 +39,5 @@ export const loginCustomer = async (req, res) => {
   } catch (err) {
     res.status(401).json({ message: err.message });
   }
+  console.log("login coustomer request recived")
 };
