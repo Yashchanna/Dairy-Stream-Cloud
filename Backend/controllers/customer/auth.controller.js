@@ -2,6 +2,7 @@ import {
   registerCustomerService,
   loginCustomerService,
 } from "../../services/customer/auth.service.js";
+console.log("🔥 AUTH CONTROLLER LOADED");
 
 export const registerCustomer = async (req, res) => {
   try {
@@ -22,6 +23,8 @@ export const registerCustomer = async (req, res) => {
 };
 
 export const loginCustomer = async (req, res) => {
+  console.log("🔥 LOGIN CONTROLLER HIT");
+
   try {
     const { email, password } = req.body;
 

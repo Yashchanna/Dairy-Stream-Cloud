@@ -5,6 +5,7 @@ import { sendEmail } from "../../utils/email.js"
 export const createEmailVerificationToken = async (customer) => {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+console.log("EMAIL TOKEN INSERT RESULT:", error);
 
   await supabase.from("email_verification_tokens").insert([
     {
@@ -13,6 +14,8 @@ export const createEmailVerificationToken = async (customer) => {
       expires_at: expiresAt,
     },
   ]);
+  console.log("EMAIL TOKEN INSERT RESULT:", error);
+
 
   const link = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
 

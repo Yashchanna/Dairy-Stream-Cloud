@@ -20,6 +20,7 @@ import {
 } from "../controllers/customer/verifyEmail.controller.js";
 
 import { authenticate } from "../middleware/customer/auth.middleware.js";
+console.log("🔥 CUSTOMER ROUTES LOADED");
 
 const router = express.Router();
 
@@ -27,7 +28,10 @@ const router = express.Router();
  * AUTH ROUTES
  */
 router.post("/register", registerCustomer);
-router.post("/login", loginCustomer);
+router.post("/login", (req, res, next) => {
+  console.log("🔥 LOGIN ROUTE HIT");
+  next();
+}, loginCustomer);
 
 /**
  * EMAIL VERIFICATION
