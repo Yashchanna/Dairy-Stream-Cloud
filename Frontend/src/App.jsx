@@ -9,6 +9,7 @@ import CustomerDashboard from "./components/CustomerDashboard";
 import AgentDashboard from "./components/agentDashboard";
 import LoginPage from "./pages/LoginPage";
 import RegisterNewuserPage from "./pages/RegisterNewuserPage";
+import RegisterDairyPage from "./pages/RegisterDairyPage";
 function App() {
   return (
     <Routes>
@@ -44,6 +45,12 @@ function App() {
         path="agent/AgentDashboard"
         element={<AgentDashboard></AgentDashboard>}
       ></Route>
+
+      <Route
+        path="/register-dairy"
+        element={<RegisterDairyPage></RegisterDairyPage>}
+      ></Route>
+
       <Route
         path="*"
         element={<h2 className="text-center mt-5">404 - Page Not Found</h2>}
