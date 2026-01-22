@@ -9,12 +9,13 @@ import CustomerRegister from './components/CustomerRegister';
 import CustomerDashboard from './components/CustomerDashboard';
 import AgentDashboard from './components/agentDashboard';
 import LoginPage from './pages/LoginPage';
+import RegisterNewuserPage from './pages/RegisterNewuserPage';
 function App() {
   return (
     <Routes>
       {/* need to change the route later */}
         <Route path='/' element={<LoginPage></LoginPage>}></Route> 
-      <Route path='/register' element={<CustomerRegister></CustomerRegister>}></Route>
+      <Route path='/register' element={<RegisterNewuserPage></RegisterNewuserPage>}></Route>
     
       <Route path='/customer-dashboard' element={<CustomerDashboard></CustomerDashboard>}></Route>
       <Route path='admin/AdminDashboard' element={<AdminDashboard></AdminDashboard>}></Route>

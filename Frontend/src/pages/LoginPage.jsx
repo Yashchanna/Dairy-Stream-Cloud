@@ -106,7 +106,7 @@ const LoginPage = () => {
 
         // Handle New User immediately [cite: 128, 179]
         if (response.nextStep === 'EXPLORE') {
-           navigate('/register'); // Or /customer/setup-profile
+           navigate('/register', { state: { mobile: identifier } }); // Or /customer/setup-profile
            return;
         }
 
