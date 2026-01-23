@@ -1,20 +1,34 @@
 import React from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
+import ProtectedRoute from "./components/ProtectedRoute"
 import AddNewCustomerForm from "./components/AddNewCustomerForm";
 import { Route, Routes } from "react-router-dom";
 import AddNewAgentForm from "./components/AddNewAgentForm";
 import DairyCustomerDashboard from "./components/DairyCustomerDashboard";
 import AdminDashboard from "./components/AdminDashboard";
-import CustomerDashboard from "./components/CustomerDashboard";
 import AgentDashboard from "./components/agentDashboard";
 import LoginPage from "./pages/LoginPage";
 import RegisterNewuserPage from "./pages/RegisterNewuserPage";
 import RegisterDairyPage from "./pages/RegisterDairyPage";
+import ExploreDairiesPage from "./pages/public/ExploreDairiesPage";
+import CustomerDashboard from "./pages/customer/CustomerDashboard";
 function App() {
   return (
     <Routes>
       {/* need to change the route later */}
       <Route path="/" element={<LoginPage></LoginPage>}></Route>
+
+      {/* Public Route */}
+      <Route path="/explore" element={<ExploreDairiesPage />} />
+      {/* Protected Dashboard Route */}
+      <Route
+        path="/customer-dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <CustomerDashboard />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/register"
         element={<RegisterNewuserPage></RegisterNewuserPage>}
