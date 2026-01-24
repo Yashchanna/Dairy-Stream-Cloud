@@ -8,15 +8,19 @@ import {
  * GET /api/customer/profile
  */
 export const getProfile = async (req, res) => {
+  console.log("🧪 AUTH CUSTOMER OBJECT:", req.customer);
+
   try {
-    const customerId = req.customer.id;
+    if (!req.customer || !req.customer.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const customerId = req.customer.id; // ✅ MISSING LINE (FIX)
 
     const { data, error } = await findCustomerById(customerId);
 
     if (error || !data) {
-      return res.status(404).json({
-        message: "Customer not found",
-      });
+      return res.status(404).json({ message: "Customer not found" });
     }
 
     // Never send password back
@@ -27,6 +31,7 @@ export const getProfile = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 /**
  * UPDATE CUSTOMER PROFILE
