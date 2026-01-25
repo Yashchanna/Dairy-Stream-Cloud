@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, MapPin, Filter, Star, ShieldCheck, 
-  Clock, Truck 
+  Clock, Truck, ChevronDown, User 
 } from 'lucide-react';
 
-// --- MOCK DATA (Replace this with API Call later) ---
+// --- EXPANDED MOCK DATA ---
 const MOCK_DAIRIES = [
   {
     id: 'D001',
@@ -16,8 +16,9 @@ const MOCK_DAIRIES = [
     isVerified: true,
     isTrusted: true,
     slots: ['Morning', 'Evening'],
-    image: 'https://images.unsplash.com/photo-1528498033373-3c6c08e93d79?auto=format&fit=crop&q=80&w=200',
-    address: 'Kothrud, Pune'
+    image: 'https://images.unsplash.com/photo-1528498033373-3c6c08e93d79?auto=format&fit=crop&q=80&w=400',
+    address: 'Kothrud, Pune',
+    minPrice: 60
   },
   {
     id: 'D002',
@@ -28,8 +29,61 @@ const MOCK_DAIRIES = [
     isVerified: true,
     isTrusted: false,
     slots: ['Morning Only'],
-    image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=200',
-    address: 'Baner, Pune'
+    image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=400',
+    address: 'Baner, Pune',
+    minPrice: 55
+  },
+  {
+    id: 'D003',
+    name: 'Gokul Dairy',
+    rating: 4.5,
+    reviews: 210,
+    distance: '0.8 km',
+    isVerified: true,
+    isTrusted: true,
+    slots: ['Morning', 'Evening'],
+    image: 'https://images.unsplash.com/photo-1596733430282-743a35525829?auto=format&fit=crop&q=80&w=400',
+    address: 'Deccan, Pune',
+    minPrice: 58
+  },
+  {
+    id: 'D004',
+    name: 'Sunrise Organics',
+    rating: 3.9,
+    reviews: 45,
+    distance: '5.0 km',
+    isVerified: false,
+    isTrusted: false,
+    slots: ['Morning Only'],
+    image: 'https://images.unsplash.com/photo-1635843104646-c225010041d1?auto=format&fit=crop&q=80&w=400',
+    address: 'Viman Nagar, Pune',
+    minPrice: 70
+  },
+  {
+    id: 'D005',
+    name: 'Happy Cow Milk',
+    rating: 4.9,
+    reviews: 530,
+    distance: '2.1 km',
+    isVerified: true,
+    isTrusted: true,
+    slots: ['Morning', 'Evening'],
+    image: 'https://images.unsplash.com/photo-1546445317-29f4545e9d53?auto=format&fit=crop&q=80&w=400',
+    address: 'Kalyani Nagar, Pune',
+    minPrice: 65
+  },
+  {
+    id: 'D006',
+    name: 'Local Fresh',
+    rating: 4.0,
+    reviews: 20,
+    distance: '0.5 km',
+    isVerified: false,
+    isTrusted: false,
+    slots: ['Morning'],
+    image: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&q=80&w=400',
+    address: 'Shivajinagar, Pune',
+    minPrice: 50
   }
 ];
 
@@ -38,97 +92,152 @@ const ExploreDairiesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dairies, setDairies] = useState(MOCK_DAIRIES);
 
-  // --- BACKEND INTEGRATION NOTE ---
-  // useEffect(() => {
-  //   fetch('/api/dairies/nearby?lat=...&long=...')
-  //     .then(res => res.json())
-  //     .then(data => setDairies(data));
-  // }, []);
+  // Simple Filter Logic (Name or Address)
+  const filteredDairies = dairies.filter(dairy => 
+    dairy.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    dairy.address.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen bg-slate-50">
       
-      {/* --- HEADER --- */}
-      <div className="bg-white sticky top-0 z-10 shadow-sm border-b border-gray-100">
-        <div className="p-4 flex flex-col gap-4 max-w-lg mx-auto">
-          
-          <div className="flex justify-between items-center">
-             <div className="flex items-center gap-2 text-blue-600">
-                <MapPin size={20} />
-                <span className="font-bold text-gray-900 truncate max-w-[200px]">Kothrud, Pune</span>
+      {/* --- HEADER (Full Width) --- */}
+      <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+             
+             {/* Logo & Location */}
+             <div className="flex items-center justify-between md:justify-start gap-6">
+                <div onClick={() => navigate('/')} className="cursor-pointer font-bold text-2xl text-blue-600 tracking-tight flex items-center gap-2">
+                   DairyStream
+                </div>
+                
+                {/* Location Picker */}
+                <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-full cursor-pointer transition">
+                   <MapPin size={18} className="text-red-500" />
+                   <div className="text-sm">
+                      <span className="text-gray-500">Delivering to</span>
+                      <span className="font-bold text-gray-800 ml-1">Kothrud, Pune</span>
+                   </div>
+                   <ChevronDown size={16} className="text-gray-400"/>
+                </div>
              </div>
-             <button onClick={() => navigate('/')} className="text-sm font-semibold text-blue-600">Login</button>
+
+             {/* Search Bar (Wide) */}
+             <div className="flex-1 max-w-2xl relative">
+                <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Search for dairies, milk, paneer..." 
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition shadow-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+
+             {/* Login Button */}
+             <div className="hidden md:block">
+                <button onClick={() => navigate('/')} className="flex items-center gap-2 font-semibold text-gray-700 hover:text-blue-600 transition">
+                   <User size={20} /> Login
+                </button>
+             </div>
           </div>
 
-          <div className="relative">
-             <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-             <input 
-               type="text" 
-               placeholder="Search 'Cow Milk' or 'Dairy Name'" 
-               className="w-full pl-10 pr-4 py-2.5 bg-gray-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-             />
-          </div>
-
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-             <button className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-full text-xs font-semibold whitespace-nowrap hover:bg-gray-200">
-                <Filter size={12}/> Filters
+          {/* Filters Row */}
+          <div className="flex gap-3 overflow-x-auto pb-1 mt-4 no-scrollbar">
+             <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold hover:border-gray-300 transition shadow-sm">
+                <Filter size={14}/> Filters
              </button>
-             <button className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-semibold whitespace-nowrap">
-                Verified Only
+             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
+                Verified Partners
              </button>
-             <button className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-semibold whitespace-nowrap">
-                Within 5 km
+             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
+                Rating 4.0+
+             </button>
+             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
+                Morning Delivery
+             </button>
+             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
+                Within 2 km
              </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* --- DAIRY LIST --- */}
-      <div className="p-4 max-w-lg mx-auto space-y-4">
-         <h2 className="text-lg font-bold text-gray-800">Nearby Dairies</h2>
+      {/* --- CONTENT GRID --- */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+         <h2 className="text-xl font-bold text-gray-900 mb-6">Nearby Dairies</h2>
          
-         {dairies.map((dairy) => (
-            <div key={dairy.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer" onClick={() => navigate(`/join/${dairy.id}`)}>
-               <div className="flex gap-4">
-                  <img src={dairy.image} alt={dairy.name} className="w-20 h-20 rounded-xl object-cover bg-gray-200"/>
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredDairies.map((dairy) => (
+               <div 
+                  key={dairy.id} 
+                  className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group"
+                  onClick={() => navigate(`/join/${dairy.id}`)}
+               >
+                  {/* Image Area */}
+                  <div className="relative h-48 overflow-hidden">
+                     <img 
+                        src={dairy.image} 
+                        alt={dairy.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                     />
+                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-gray-800 shadow-sm flex items-center gap-1">
+                        <Clock size={12}/> {dairy.distance}
+                     </div>
+                     {dairy.isVerified && (
+                        <div className="absolute bottom-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 shadow-md">
+                           <ShieldCheck size={10}/> Verified
+                        </div>
+                     )}
+                  </div>
                   
-                  <div className="flex-1">
-                     <div className="flex justify-between items-start">
-                        <h3 className="font-bold text-gray-900">{dairy.name}</h3>
-                        <div className="flex items-center gap-1 bg-green-100 px-1.5 py-0.5 rounded text-[10px] font-bold text-green-700">
-                           {dairy.rating} <Star size={8} fill="currentColor"/>
+                  {/* Content Area */}
+                  <div className="p-4">
+                     <div className="flex justify-between items-start mb-1">
+                        <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600 transition">{dairy.name}</h3>
+                        <div className="flex items-center gap-1 bg-green-100 px-1.5 py-0.5 rounded text-xs font-bold text-green-700">
+                           {dairy.rating} <Star size={10} fill="currentColor"/>
                         </div>
                      </div>
                      
-                     <p className="text-xs text-gray-500 mb-2">{dairy.address} • {dairy.distance}</p>
+                     <p className="text-sm text-gray-500 mb-3">{dairy.address}</p>
                      
-                     <div className="flex gap-2 mb-3">
-                        {dairy.isVerified && (
-                           <span className="flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100 font-medium">
-                              <ShieldCheck size={10}/> Verified
-                           </span>
-                        )}
+                     <div className="flex items-center gap-2 mb-4">
                         {dairy.isTrusted && (
-                           <span className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full border border-yellow-100 font-medium">
+                           <span className="text-[10px] bg-yellow-50 text-yellow-700 px-2 py-1 rounded-md border border-yellow-100 font-medium flex items-center gap-1">
                               <Star size={10}/> Trusted
                            </span>
                         )}
+                        <span className="text-[10px] bg-gray-50 text-gray-600 px-2 py-1 rounded-md border border-gray-100 font-medium">
+                           {dairy.slots.length} Slots Available
+                        </span>
                      </div>
 
-                     <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <div className="flex items-center gap-1"><Clock size={12}/> {dairy.slots.length} Slots</div>
-                        <div className="flex items-center gap-1"><Truck size={12}/> Delivery</div>
+                     <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <div>
+                           <span className="text-xs text-gray-400">Starts at</span>
+                           <p className="font-bold text-gray-900">₹{dairy.minPrice}<span className="text-xs font-normal text-gray-500">/L</span></p>
+                        </div>
+                        <button className="bg-blue-50 text-blue-600 p-2 rounded-full hover:bg-blue-600 hover:text-white transition">
+                           <Truck size={20} />
+                        </button>
                      </div>
                   </div>
                </div>
-               
-               <button className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
-                  View & Join
-               </button>
+            ))}
+         </div>
+
+         {/* Empty State (if search fails) */}
+         {filteredDairies.length === 0 && (
+            <div className="text-center py-20">
+               <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search size={30} className="text-gray-400"/>
+               </div>
+               <h3 className="text-lg font-bold text-gray-900">No dairies found</h3>
+               <p className="text-gray-500">Try searching for a different area or name.</p>
             </div>
-         ))}
+         )}
       </div>
     </div>
   );
