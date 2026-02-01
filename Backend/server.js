@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { supabase } from "./config.js";
 import customerRoutes from "./routes/customer.routes.js";
-
+import routes from "./routes/index.js";
 // Load environment variables
 dotenv.config();
 
@@ -30,7 +30,7 @@ app.get("/", (req, res) => {
 // ======================
 // API Routes
 // ======================
-app.use("/api/customer", customerRoutes);
+app.use('/api', routes);
 
 // ======================
 // Global Error Handler
