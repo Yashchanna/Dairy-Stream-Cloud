@@ -1,456 +1,368 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useAuth } from "./hooks/useAuth.jsx";
+
 import {
-  Loader2,
-  ShieldCheck,
-  MapPin,
+  ArrowLeft,
+  ArrowRight,
   Eye,
   EyeOff,
+  Loader2,
   Lock,
   User,
-  ChevronRight,
-  CheckCircle2,
-  AlertCircle,
 } from "lucide-react";
-import dairyImage from "../assets/dairyproduct.png";
 
-// --- 1. ADVANCED MOCK API (Simulating all PDF Scenarios) ---
-const mockDetectAPI = async (identifier) => {
-  return new Promise((resolve) => {
+/* ================= MOCK DETECT API (UNCHANGED) ================= */
+const mockDetectAPI = async (identifier) =>
+  new Promise((resolve) => {
     setTimeout(() => {
-      const id = identifier.toUpperCase();
-
-      // SCENARIO 1: STAFF (Standard Flow)
-      if (id.startsWith("STF")) {
+      if (identifier === "9999999999") resolve({ exists: false });
+      else if (identifier === "8888888888")
         resolve({
-          userType: "STAFF",
-          name: "Staff Member",
-          dairy: { id: "D01", name: "Nandanvan Dairy", isVerified: true },
-          nextStep: "CONFIRMATION", // Goes to Screen B first [cite: 144]
-        });
-      }
-      // SCENARIO 2: ADMIN
-      else if (id.includes("@")) {
-        resolve({
-          userType: "ADMIN",
-          name: "Dairy Owner",
-          dairy: { id: "D02", name: "Shree Dairy", isVerified: true },
-          nextStep: "PASSWORD", // Admins skip confirmation usually, or can show it
-        });
-      }
-      // SCENARIO 3: CUSTOMER (Multi-Dairy) -> Try entering '8888888888'
-      else if (id === "8888888888") {
-        resolve({
-          userType: "CUSTOMER",
+          exists: true,
           membership: "MULTIPLE",
           dairies: [
-            { id: "D01", name: "Nandanvan Dairy", location: "Pune" },
-            { id: "D02", name: "Pune Fresh Dairy", location: "Mumbai" },
+            { id: "D01", name: "Nandanvan Farms" },
+            { id: "D02", name: "Pune Fresh Dairy" },
           ],
-          nextStep: "SELECT_DAIRY", // Triggers Modal [cite: 122]
         });
-      }
-      // SCENARIO 4: NEW USER -> Try entering '9999999999'
-      else if (id === "9999999999") {
-        resolve({
-          userType: "CUSTOMER",
-          membership: "NONE",
-          nextStep: "EXPLORE", // Redirects to profile creation [cite: 128]
-        });
-      }
-      // SCENARIO 5: CUSTOMER (Single Dairy) -> Any other 10 digit number
-      else if (id.length === 10) {
-        resolve({
-          userType: "CUSTOMER",
-          membership: "SINGLE",
-          dairy: { id: "D01", name: "Nandanvan Dairy", isVerified: true },
-          nextStep: "OTP", // Standard Customer Flow [cite: 111]
-        });
-      } else {
-        resolve(null);
-      }
-    }, 1200);
+      else if (identifier.includes("@"))
+        resolve({ exists: true, role: "ADMIN" });
+      else if (identifier.toUpperCase().startsWith("STF"))
+        resolve({ exists: true, role: "STAFF" });
+      else resolve({ exists: true, role: "CUSTOMER" });
+    }, 900);
   });
+
+const STEP = {
+  IDENTIFIER: "IDENTIFIER",
+  PASSWORD: "PASSWORD",
+  OTP: "OTP",
+  SELECT_DAIRY: "SELECT_DAIRY",
 };
 
 const LoginPage = () => {
+  const { login } = useAuth();
   const navigate = useNavigate();
+  const inputRef = useRef(null);
 
-  // Logic States
-  const [step, setStep] = useState("IDENTIFIER"); // IDENTIFIER | CONFIRMATION | SELECT_DAIRY | PASSWORD | OTP
+  const [step, setStep] = useState(STEP.IDENTIFIER);
   const [identifier, setIdentifier] = useState("");
-  const [detectedUser, setDetectedUser] = useState(null);
-  const [selectedDairy, setSelectedDairy] = useState(null);
-
-  // Input States
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  // UI States
+  const [dairies, setDairies] = useState([]);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [otpTimer, setOtpTimer] = useState(30);
 
-  // --- HANDLER: SMART DETECT ---
-  const handleIdentifierSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
 
-    // 1. Strict Validation [cite: 140-142]
-    const isEmail = identifier.includes("@");
-    const isStaffId = identifier.toUpperCase().startsWith("STF");
-    const isMobile = /^\d{10}$/.test(identifier);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [step]);
 
-    if (!isEmail && !isStaffId && !isMobile) {
-      setError(
-        "Please enter a valid Email, 10-digit Mobile, or Staff ID (STF...)",
-      );
+  const resetFlow = () => {
+    setStep(STEP.IDENTIFIER);
+    setPassword("");
+    setOtp("");
+    setRole(null);
+    setDairies([]);
+  };
+  useEffect(() => {
+  if (step === STEP.OTP && otpTimer > 0) {
+    const interval = setInterval(() => {
+      setOtpTimer((t) => t - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }
+}, [step, otpTimer]);
+
+  const handleContinue = async () => {
+    if (!identifier.trim()) {
+      toast.error("Enter a valid mobile, email, or staff ID");
+      setOtpTimer(30);
+      setStep(STEP.OTP);
       return;
     }
 
     setLoading(true);
+    const res = await mockDetectAPI(identifier);
 
-    try {
-      const response = await mockDetectAPI(identifier);
-
-      if (response) {
-        setDetectedUser(response);
-
-        // Handle New User immediately [cite: 128, 179]
-        if (response.nextStep === "EXPLORE") {
-          navigate("/register", { state: { mobile: identifier } }); // Or /customer/setup-profile
-          return;
-        }
-
-        // Handle Single Dairy Auto-Select
-        if (response.dairy) {
-          setSelectedDairy(response.dairy);
-        }
-
-        setStep(response.nextStep);
-      } else {
-        setError("Account not found. Please register first.");
-      }
-    } catch {
-      setError("Connection error. Please try again.");
-    } finally {
+    if (!res.exists) {
+      toast.error("You are not registered. Redirecting…");
+      setTimeout(() => navigate("/register"), 1500);
       setLoading(false);
+      return;
     }
+
+    if (res.membership === "MULTIPLE") {
+      setDairies(res.dairies);
+      setStep(STEP.SELECT_DAIRY);
+    } else {
+      setRole(res.role);
+      setStep(res.role === "CUSTOMER" ? STEP.OTP : STEP.PASSWORD);
+    }
+
+    setLoading(false);
   };
 
-  // --- HANDLER: DAIRY SELECTION (For Multi-Dairy Users) ---
-  const handleDairySelect = (dairy) => {
-    setSelectedDairy(dairy);
-    setStep("OTP"); // After selecting, go to OTP [cite: 227]
+  const handleLoginSuccess = () => {
+  const userData = {
+    role: role,        // "CUSTOMER" | "STAFF" | "ADMIN"
+    identifier,
   };
 
-  // --- HANDLER: FINAL LOGIN ---
-  const handleFinalLogin = (e) => {
-    e.preventDefault();
-    setLoading(true);
+  // Update auth context
+  login(userData);
 
-    setTimeout(() => {
-      setLoading(false);
-      // Routing Logic [cite: 236-238]
-      const role = detectedUser.userType;
-      localStorage.setItem("userRole", role);
-      localStorage.setItem("dairyId", selectedDairy?.id);
+  // Persist role for route guards
+  localStorage.setItem("userRole", role);
 
-      if (role === "CUSTOMER") navigate("/customer-dashboard");
-      else if (role === "STAFF") navigate("/staff/home");
-      else if (role === "ADMIN") navigate("/admin/dashboard");
-    }, 1000);
-  };
+  toast.success("Login successful");
 
-  // --- HELPER: RESET ---
-  const handleReset = () => {
-    setStep("IDENTIFIER");
-    setDetectedUser(null);
-    setPassword("");
-    setOtp("");
-    setSelectedDairy(null);
-  };
+  // 🔁 ROLE-BASED REDIRECT
+  if (role === "CUSTOMER") {
+    navigate("/customer-dashboard", { replace: true });
+  } 
+  else if (role === "STAFF") {
+    navigate("/agent-dashboard", { replace: true });
+  } 
+  else if (role === "ADMIN") {
+    navigate("/admin/AdminDashboard", { replace: true });
+  }
+};
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50">
-      {/* --- LEFT SIDE: BRANDING --- */}
-      <div className="hidden md:flex w-1/2 bg-blue-600 items-center justify-center p-12 relative overflow-hidden">
-        <div className="relative z-10 text-white max-w-lg">
-          <h1 className="text-5xl font-bold mb-6 tracking-tight">
-            Dairy Automation
-          </h1>
-          <p className="text-xl text-blue-100 mb-8 leading-relaxed">
-            The complete fresh milk delivery system. Manage customers, track
-            deliveries, and automate billing.
-          </p>
-          <div className="flex gap-4">
-            {/* Button 1: Register New Dairy */}
-            <Link
-              to="/register-dairy"
-              className="flex items-center gap-2 bg-blue-500/40 px-4 py-2 rounded-lg backdrop-blur-md border border-blue-400/30 hover:bg-blue-500/60 transition-all text-white hover:text-white no-underline"
-            >
-              <ShieldCheck size={20} />
-              <span>Register New Dairy</span>
-            </Link>
+    <div className="min-h-screen bg-background grid lg:grid-cols-2">
+      {/* ================= LEFT BRAND ================= */}
+      <div className="hidden lg:flex flex-col justify-center px-20 bg-surface border-r border-border">
+        <h1 className="text-4xl font-bold text-text-primary tracking-tight">
+          DairyStream
+        </h1>
 
-            {/* Button 2: Nearby Dairies */}
-            <Link
-              to="/explore"
-              className="flex items-center gap-2 bg-blue-500/40 px-4 py-2 rounded-lg backdrop-blur-md border border-blue-400/30 hover:bg-blue-500/60 transition-all text-white hover:text-white no-underline"
-            >
-              <MapPin size={20} />
-              <span>Nearby Dairies</span>
-            </Link>
-          </div>
-        </div>
-        <div className="absolute -bottom-40 -right-20 w-96 h-96 bg-blue-400/30 rounded-full blur-3xl"></div>
+        <div className="w-12 h-1 bg-brand rounded-full mt-4 mb-6" />
+
+        <p className="text-lg text-text-secondary max-w-md">
+          Manage milk deliveries, subscriptions, billing, and customer access
+          from one calm, reliable platform.
+        </p>
+
+        <ul className="mt-8 space-y-3 text-text-secondary">
+          <li>✓ Automated daily deliveries</li>
+          <li>✓ Subscription & billing management</li>
+          <li>✓ Staff & customer access</li>
+        </ul>
       </div>
 
-      {/* --- RIGHT SIDE: LOGIN FORM --- */}
-      <div className="w-full md:w-1/2 flex flex-col justify-center items-center p-6 md:p-12 bg-white">
-        <div className="w-full max-w-md">
+      {/* ================= LOGIN CARD ================= */}
+      <div className="flex items-center justify-center px-4">
+        <div className="relative w-full max-w-md bg-surface border border-border rounded-card shadow-card p-8">
+          {/* Top accent */}
+          <div className="absolute inset-x-0 top-0 h-1 bg-brand rounded-t-card" />
+
           {/* HEADER */}
-          <div className="text-center mb-8">
-            <img
-              src={dairyImage}
-              alt="Dairy"
-              className="h-16 w-auto mx-auto mb-4 object-contain"
-            />
-            <h2 className="text-2xl font-bold text-gray-900">
-              {step === "IDENTIFIER" ? "Welcome Back" : "Sign In"}
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">
-              {step === "IDENTIFIER" && "Enter your Email, Mobile, or Staff ID"}
-              {step === "CONFIRMATION" && "Verify your account details"}
-              {step === "SELECT_DAIRY" && "Select a dairy to continue"}
-              {step === "OTP" && `Verifying ${identifier}`}
-            </p>
+          <div className="flex justify-between items-center mb-6">
+            {step !== STEP.IDENTIFIER ? (
+              <button
+                onClick={resetFlow}
+                className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary"
+              >
+                <ArrowLeft size={16} /> Back
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <span className="text-xs text-text-muted">Step 1 of 2</span>
           </div>
 
-          {/* ERROR ALERT */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm flex items-center gap-2">
-              <AlertCircle size={16} /> {error}
-            </div>
-          )}
+          <h2 className="text-2xl font-semibold text-text-primary">
+            Sign in to DairyStream
+          </h2>
+          <p className="mt-1 mb-6 text-sm text-text-secondary">
+            Use your registered details to continue
+          </p>
 
-          {/* --- STEP 1: IDENTIFIER --- */}
-          {step === "IDENTIFIER" && (
-            <form onSubmit={handleIdentifierSubmit} className="space-y-5">
+          {/* ================= IDENTIFIER ================= */}
+          {step === STEP.IDENTIFIER && (
+            <div className="space-y-5">
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                  <User size={18} />
-                </div>
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
-                  type="text"
+                  ref={inputRef}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="e.g. 9876543210 or STF1023 or admin@gmail.com"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  autoFocus
+                  placeholder="Mobile, email, or staff ID"
+                  className="
+                    w-full pl-10 py-3
+                    bg-surface border border-border rounded-xl
+                    text-text-primary placeholder:text-text-muted
+                    focus:ring-2 focus:ring-brand-soft
+                    focus:border-brand outline-none
+                  "
                 />
               </div>
+
+              {/* 🔥 CONTINUE BUTTON (RESTORED) */}
               <button
-                type="submit"
+                onClick={handleContinue}
                 disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-sm transition-all flex justify-center items-center gap-2"
+                className="
+                  w-full bg-brand hover:bg-brand-hover
+                  text-white py-3 rounded-xl font-semibold
+                  flex items-center justify-center gap-2
+                  transition
+                "
               >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  "Continue"
-                )}
+                {loading ? <Loader2 className="animate-spin" /> : "Continue"}
+                {!loading && <ArrowRight size={18} />}
               </button>
-            </form>
-          )}
 
-          {/* --- STEP 1.5: CONFIRMATION (Screen B) [cite: 144] --- */}
-          {step === "CONFIRMATION" && selectedDairy && (
-            <div className="space-y-6">
-              <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center">
-                <p className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-2">
-                  Signing in to
-                </p>
-                <h3 className="text-xl font-bold text-gray-900 mb-1">
-                  {selectedDairy.name}
-                </h3>
-                {selectedDairy.isVerified && (
-                  <div className="inline-flex items-center gap-1 text-green-600 text-sm font-medium bg-green-100 px-3 py-1 rounded-full mt-2">
-                    <ShieldCheck size={14} /> Verified Business
-                  </div>
-                )}
-                <div className="mt-6 pt-6 border-t border-blue-200/50">
-                  <p className="text-sm text-gray-500 mb-1">
-                    Account Identifier
-                  </p>
-                  <p className="font-mono font-medium text-gray-800">
-                    {identifier}
-                  </p>
-                </div>
+              <p className="text-sm text-center text-text-secondary">
+                New here?{" "}
+                <Link
+                  to="/register"
+                  className="text-brand font-medium hover:underline"
+                >
+                  Create an account
+                </Link>
+              </p>
+
+              <div className="pt-4 border-t border-border text-center text-sm text-text-muted">
+                <Link to="/register-dairy" className="hover:underline">
+                  Register your dairy
+                </Link>{" "}
+                ·{" "}
+                <Link to="/explore" className="hover:underline">
+                  Find nearby dairies
+                </Link>
               </div>
-
-              <button
-                onClick={() =>
-                  setStep(
-                    detectedUser.userType === "CUSTOMER" ? "OTP" : "PASSWORD",
-                  )
-                }
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-sm"
-              >
-                Continue to Login
-              </button>
-              <button
-                onClick={handleReset}
-                className="w-full text-gray-500 text-sm hover:text-gray-700"
-              >
-                Change Account
-              </button>
             </div>
           )}
 
-          {/* --- STEP 2: MULTI-DAIRY SELECTION [cite: 220] --- */}
-          {step === "SELECT_DAIRY" && (
-            <div className="space-y-4">
-              <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
-                {detectedUser.dairies.map((dairy) => (
-                  <div
-                    key={dairy.id}
-                    onClick={() => handleDairySelect(dairy)}
-                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all flex items-center justify-between group"
-                  >
-                    <div>
-                      <h4 className="font-semibold text-gray-900">
-                        {dairy.name}
-                      </h4>
-                      <p className="text-sm text-gray-500">{dairy.location}</p>
-                    </div>
-                    <ChevronRight
-                      className="text-gray-300 group-hover:text-blue-500"
-                      size={20}
-                    />
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={handleReset}
-                className="w-full text-gray-500 text-sm hover:text-gray-700 mt-4"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {/* --- STEP 3: PASSWORD --- */}
-          {step === "PASSWORD" && (
-            <form onSubmit={handleFinalLogin} className="space-y-5">
+          {/* ================= PASSWORD ================= */}
+          {step === STEP.PASSWORD && (
+            <div className="space-y-5">
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                  <Lock size={18} />
-                </div>
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
+                  ref={inputRef}
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter Password"
-                  className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  autoFocus
+                  placeholder="Password"
+                  className="
+                    w-full pl-10 pr-10 py-3
+                    bg-surface border border-border rounded-xl
+                    focus:ring-2 focus:ring-brand-soft
+                    focus:border-brand outline-none
+                  "
                 />
                 <button
-                  type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff /> : <Eye />}
                 </button>
               </div>
+
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-sm flex justify-center items-center gap-2"
+                onClick={handleLoginSuccess}
+                className="
+                  w-full bg-brand hover:bg-brand-hover
+                  text-white py-3 rounded-xl font-semibold
+                "
               >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  "Login"
-                )}
+                Login
               </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="w-full text-gray-500 text-sm hover:text-gray-700"
-              >
-                Back
-              </button>
-            </form>
+            </div>
           )}
 
-          {/* --- STEP 4: OTP --- */}
-          {step === "OTP" && (
-            <form onSubmit={handleFinalLogin} className="space-y-5">
+
+          {/* ================= OTP ================= */}
+          {step === STEP.OTP && (
+            <div className="space-y-5">
+              {/* Instruction */}
               <div className="text-center">
-                <input
-                  type="text"
-                  maxLength="6"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="000000"
-                  className="w-full text-center text-3xl font-bold tracking-[0.5em] py-4 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  autoFocus
-                />
-                <p className="text-xs text-gray-400 mt-3">
-                  Resend OTP in 00:30
+                <p className="text-sm text-text-secondary">
+                  Enter the 6-digit OTP sent to your registered contact
+                </p>
+                <p className="text-xs text-text-muted mt-1">
+                  Please check your messages
                 </p>
               </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-sm flex justify-center items-center gap-2"
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={20} />
+
+              {/* OTP Input */}
+              <input
+                ref={inputRef}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                maxLength={6}
+                inputMode="numeric"
+                placeholder="••••••"
+                className="
+                    w-full text-center text-2xl tracking-widest py-3
+                    bg-surface border border-border rounded-xl
+                    text-text-primary
+                    placeholder:text-text-muted
+                    focus:ring-2 focus:ring-brand-soft
+                    focus:border-brand
+                    outline-none
+                  "
+              />
+
+              {/* Timer / Resend */}
+              <div className="text-center">
+                {otpTimer > 0 ? (
+                  <p className="text-xs text-text-muted">
+                    Resend OTP in <span className="font-medium">00:{otpTimer.toString().padStart(2, "0")}</span>
+                  </p>
                 ) : (
-                  "Verify & Login"
+                  <button
+                    onClick={() => {
+                      setOtp("");
+                      setOtpTimer(30);
+                      toast.success("OTP resent");
+                    }}
+                    className="text-sm text-brand font-medium hover:underline"
+                  >
+                    Resend OTP
+                  </button>
                 )}
-              </button>
+              </div>
+
+              {/* Verify Button */}
               <button
-                type="button"
-                onClick={handleReset}
-                className="w-full text-gray-500 text-sm hover:text-gray-700"
+                onClick={handleLoginSuccess}
+                className="
+                    w-full bg-success hover:bg-success
+                    text-white py-3 rounded-xl font-semibold
+                  "
               >
-                Change Number
+                Verify & Login
               </button>
-            </form>
+            </div>
           )}
 
-          {/* FOOTER LINKS (Only on first step) */}
-          {step === "IDENTIFIER" && (
-            <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-              <div className="flex justify-center gap-6 text-sm text-gray-500 mb-6">
-                <Link
-                  to="/register-dairy"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg backdrop-blur-md border border-blue-400/30 hover:bg-blue-500/60 transition-all text-black hover:text-white no-underline"
+
+          {/* ================= SELECT DAIRY ================= */}
+          {step === STEP.SELECT_DAIRY && (
+            <div className="space-y-3">
+              {dairies.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={handleLoginSuccess}
+                  className="
+                    w-full p-4 bg-surface
+                    border border-border rounded-xl
+                    hover:bg-brand-soft text-left
+                  "
                 >
-                  <ShieldCheck size={20} />
-                  <span>Register New Dairy</span>
-                </Link>
-                <Link
-                  to="/explore"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg backdrop-blur-md border border-blue-400/30 hover:bg-blue-500/60 transition-all text-black hover:text-white no-underline"
-                >
-                  <MapPin size={20} />
-                  <span>Nearby Dairies</span>
-                </Link>
-              </div>
-              <div className="text-xs text-gray-400">
-                <a href="#" className="hover:underline">
-                  Terms
-                </a>{" "}
-                &bull;{" "}
-                <a href="#" className="hover:underline">
-                  Privacy
-                </a>
-              </div>
+                  {d.name}
+                </button>
+              ))}
             </div>
           )}
         </div>

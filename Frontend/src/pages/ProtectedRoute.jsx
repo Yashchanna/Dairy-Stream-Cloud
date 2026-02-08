@@ -1,24 +1,29 @@
 // src/components/ProtectedRoute.jsx
-import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate } from "react-router-dom";
+import {useAuth} from "./hooks/useAuth.jsx";
+
+const DEFAULT_REDIRECT = "/";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  // 1. Get the role from storage
-  const userRole = localStorage.getItem("userRole"); 
-  
-  // 2. If not logged in, send to Login Page
+  const { user, loading } = useAuth();
+
+  // ⏳ Wait until auth state is restored
+  if (loading) {
+    return null; // or a spinner component later
+  }
+
+  const userRole = user?.role || localStorage.getItem("userRole");
+
+  // 🔒 Not logged in
   if (!userRole) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={DEFAULT_REDIRECT} replace />;
   }
 
-  // 3. (Optional) Role-Based Access Control
-  // If the user's role is not in the 'allowedRoles' list, redirect them
+  // 🔐 Role-based protection
   if (allowedRoles && !allowedRoles.includes(userRole)) {
-     // You can redirect to a "Not Authorized" page or their dashboard
-     return <Navigate to="/" replace />; 
+    return <Navigate to={DEFAULT_REDIRECT} replace />;
   }
 
-  // 4. If all checks pass, render the page
   return children;
 };
 

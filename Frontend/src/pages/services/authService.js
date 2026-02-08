@@ -1,42 +1,59 @@
 // services/authService.js
 
+const MOCK_DELAY = (ms = 500) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const MOCK_CUSTOMERS = {
+  "8888888888": {
+    userType: "CUSTOMER",
+    dairies: [
+      { id: "D01", name: "Nandanvan Dairy", location: "Pune" },
+      { id: "D02", name: "Shree Dairy", location: "Mumbai" },
+    ],
+  },
+  "1234567890": {
+    userType: "CUSTOMER",
+    dairies: [{ id: "D01", name: "Nandanvan Dairy", location: "Pune" }],
+  },
+};
+
+const MOCK_STAFF = {
+  id: "STF001",
+  password: "admin123",
+};
+
+const MOCK_ADMIN = {
+  email: "admin@gmail.com",
+  password: "admin123",
+};
+
 export const authService = {
-  // Customer Login (Mobile)
+  // 🔹 Customer Login (Mobile)
   detectCustomer: async (mobile) => {
-    // 🔹 Replace with real API later
-    if (mobile === "8888888888") {
-      return {
-        userType: "CUSTOMER",
-        dairies: [
-          { id: "D01", name: "Nandanvan Dairy", location: "Pune" },
-          { id: "D02", name: "Shree Dairy", location: "Mumbai" },
-        ],
-      };
-    }
-
-    if (mobile === "1234567890") {
-      return {
-        userType: "CUSTOMER",
-        dairies: [{ id: "D01", name: "Nandanvan Dairy", location: "Pune" }],
-      };
-    }
-
-    return null;
+    await MOCK_DELAY();
+    return MOCK_CUSTOMERS[mobile] || null;
   },
 
-  // OTP Verification
+  // 🔹 OTP Verification
   verifyOtp: async (mobile, otp) => {
-    // 🔹 Replace with real API
+    await MOCK_DELAY(400);
     return otp === "123456";
   },
 
-  // Staff Login
+  // 🔹 Staff Login
   staffLogin: async (staffId, password) => {
-    return staffId === "STF001" && password === "admin123";
+    await MOCK_DELAY();
+    return (
+      staffId === MOCK_STAFF.id && password === MOCK_STAFF.password
+    );
   },
 
-  // Admin Login
+  // 🔹 Admin Login
   adminLogin: async (email, password) => {
-    return email === "admin@gmail.com" && password === "admin123";
+    await MOCK_DELAY();
+    return (
+      email === MOCK_ADMIN.email &&
+      password === MOCK_ADMIN.password
+    );
   },
 };

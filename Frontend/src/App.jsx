@@ -38,7 +38,7 @@ function App() {
         path="/customer/deliveries"
         element={
           <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-            <Deliveries/>
+            <Deliveries />
           </ProtectedRoute>
         }
       />
@@ -52,20 +52,28 @@ function App() {
         }
       />
 
-       <Route
+      <Route
         path="/customer/payments"
         element={
           <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-            <Payments/>
+            <Payments />
           </ProtectedRoute>
         }
       />
 
-         <Route
+      <Route
         path="/customer/profile"
         element={
           <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-            <Profile/>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent-dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["STAFF"]}>
+            <AgentDashboard />
           </ProtectedRoute>
         }
       />
@@ -75,10 +83,7 @@ function App() {
         element={<RegisterNewuserPage></RegisterNewuserPage>}
       ></Route>
 
-      <Route
-        path="/customer-dashboard"
-        element={<CustomerDashboard></CustomerDashboard>}
-      ></Route>
+
       <Route
         path="admin/AdminDashboard"
         element={<AdminDashboard></AdminDashboard>}
@@ -96,10 +101,7 @@ function App() {
         path="/customerDashbord"
         element={<DairyCustomerDashboard></DairyCustomerDashboard>}
       ></Route>
-      <Route
-        path="agent/AgentDashboard"
-        element={<AgentDashboard></AgentDashboard>}
-      ></Route>
+
 
       <Route
         path="/register-dairy"

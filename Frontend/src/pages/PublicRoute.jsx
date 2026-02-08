@@ -1,13 +1,23 @@
 // src/components/PublicRoute.jsx
-import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate } from "react-router-dom";
+import { useAuth } from "./hooks/useAuth.jsx";
+
+const ROLE_REDIRECT_MAP = {
+  CUSTOMER: "/customer-dashboard",
+  ADMIN: "/admin/AdminDashboard",
+  STAFF: "/staff-dashboard",
+};
 
 const PublicRoute = ({ children }) => {
-  const userRole = localStorage.getItem("userRole");
+  const { user, loading } = useAuth();
 
-  if (userRole === 'CUSTOMER') return <Navigate to="/customer-dashboard" replace />;
-  if (userRole === 'ADMIN') return <Navigate to="/admin/AdminDashboard" replace />;
-  if (userRole === 'STAFF') return <Navigate to="/staff-dashboard" replace />;
+  if (loading) return null;
+
+  const userRole = user?.role || localStorage.getItem("userRole");
+
+  if (userRole && ROLE_REDIRECT_MAP[userRole]) {
+    return <Navigate to={ROLE_REDIRECT_MAP[userRole]} replace />;
+  }
 
   return children;
 };
