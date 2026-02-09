@@ -7,7 +7,7 @@ dotenv.config();
 
 import { supabase } from "./config.js";
 import customerRoutes from "./routes/customer.routes.js";
-import routes from "./routes/index.js";
+import routes from "./routes/index.route.js";
 // Load environment variables
 dotenv.config();
 

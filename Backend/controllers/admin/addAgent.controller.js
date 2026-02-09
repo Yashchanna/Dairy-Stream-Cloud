@@ -1,5 +1,5 @@
-const { supabase } = require('../config');
-const verifyEmail = require('../utils/verifyEmail');
+const { supabase } = require('../../config');
+const verifyEmail = require('../../utils/verifyEmail');
 const bcrypt = require('bcryptjs');
 
 exports.addAgent = async (req, res) => {

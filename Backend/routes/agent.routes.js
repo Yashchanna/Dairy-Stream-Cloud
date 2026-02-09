@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config');
-const AgentController = require('../controller/AgentController');       
+const AgentController = require('../controllers/admin/addAgent.controller');       
 
 // Endpoint: http://localhost:4000/api/buildings
 router.get('/buildings', async (req, res) => {
