@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterNewuserPage from "./pages/RegisterNewuserPage";
 import RegisterDairyPage from "./pages/RegisterDairyPage";
 import ExploreDairiesPage from "./pages/public/ExploreDairiesPage";
+import DairyDetailsPage from "./pages/public/DairyDetailsPage";
 import CustomerDashboard from "./pages/customer/CustomerDashboard";
 import Deliveries from "./pages/customer/Deliveries";
 import Subscription from "./pages/customer/Subscription";
@@ -69,6 +70,10 @@ function App() {
           </ProtectedRoute>
         }
       />
+
+      <Route path="/" element={<ExploreDairiesPage />} />
+      <Route path="/join/:id" element={<DairyDetailsPage />} />
+
       <Route
         path="/agent-dashboard"
         element={
