@@ -5,6 +5,9 @@ import {
   ArrowRight, ArrowLeft, CheckCircle, Loader2, AlertCircle, ShieldCheck 
 } from "lucide-react";
 import dairyImage from "../assets/dairyproduct.png";
+import { registerCustomer } from "../api/customer.auth";
+
+
 
 const CustomerRegister = () => {
   const navigate = useNavigate();
@@ -13,13 +16,15 @@ const CustomerRegister = () => {
   // --- STATE ---
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
-    customerName: "",
-    phoneNumber: "", // Primary ID
-    buildingName: "",
-    wing: "",
-    roomNo: "",
-    defaultMilkQuantityLiters: 1.0,
-    billingCycle: "Monthly",
+   customerName: "",
+  email: "",
+  password: "",
+  phoneNumber: "",
+  buildingName: "",
+  wing: "",
+  roomNo: "",
+  defaultMilkQuantityLiters: 1.0,
+  billingCycle: "Monthly",
   });
 
   const [loading, setLoading] = useState(false);
@@ -38,10 +43,15 @@ const CustomerRegister = () => {
   };
 
   const validateStep1 = () => {
-    if (!formData.customerName.trim()) return "Please enter your Full Name";
-    if (!formData.phoneNumber.trim() || formData.phoneNumber.length !== 10) return "Valid 10-digit Mobile Number is required";
-    return null;
-  };
+  if (!formData.customerName.trim()) return "Please enter your Full Name";
+  if (!formData.email.trim()) return "Email is required";
+  if (!formData.password || formData.password.length < 6)
+    return "Password must be at least 6 characters";
+  if (!formData.phoneNumber || formData.phoneNumber.length !== 10)
+    return "Valid 10-digit Mobile Number is required";
+  return null;
+};
+
 
   const validateStep2 = () => {
     if (!formData.buildingName.trim()) return "Building Name is required";
@@ -60,17 +70,45 @@ const CustomerRegister = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    const err = validateStep2();
-    if (err) { setError(err); return; }
+  e.preventDefault();
 
-    setLoading(true);
-    // Simulate API Call
-    setTimeout(() => {
-        setLoading(false);
-        navigate("/", { state: { successMessage: "Account created! Please login." } });
-    }, 1500);
-  };
+  try {
+    const payload = {
+      customerName: formData.customerName,
+      email: formData.email,
+      phoneNumber: formData.phoneNumber,
+      buildingName: formData.buildingName,
+      wing: formData.wing,
+      roomNo: formData.roomNo,
+      password: formData.password,
+      defaultMilkQuantityLiters: formData.defaultMilkQuantityLiters,
+      billingCycle: formData.billingCycle,
+    };
+
+    console.log("📤 SENDING PAYLOAD:", payload);
+
+    const res = await fetch("http://localhost:4000/api/customer/addCustomer", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+   
+  } catch (err) {
+    console.error("Register error:", err);
+    alert("Something went wrong");
+  }
+  navigate("/", {
+  state: {
+    message: "Account created successfully. Please login.",
+  },
+});
+};
+
+
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
@@ -153,6 +191,30 @@ const CustomerRegister = () => {
                   <p className="text-xs text-gray-400 mt-1">This will be your login ID.</p>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="rahul@gmail.com"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
+                  />
+                </div>
+
                 <button type="submit" className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-all">
                   Next Step <ArrowRight size={18} />
                 </button>
@@ -221,6 +283,7 @@ const CustomerRegister = () => {
                    </button>
                 </div>
               </div>
+              
             )}
 
           </form>

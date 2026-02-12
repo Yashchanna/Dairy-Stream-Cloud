@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "./useAuth.jsx";
 
 export const useCustomerDashboard = () => {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -11,8 +13,14 @@ export const useCustomerDashboard = () => {
         // 🔧 TEMP DATA (until backend API exists)
         const mockResponse = {
           customer: {
-            name: "Rahul",
-            dairy: "Nandanvan Farms",
+            id: user?.user?.id ?? null,
+            name:
+              user?.user?.customer_name ||
+              user?.user?.name ||
+              "Customer",
+            email: user?.user?.email || "-",
+            phone: user?.user?.phone_number || user?.user?.phone || "-",
+            dairy: user?.user?.dairy || "Not assigned",
           },
           todayDelivery: {
             status: "DELIVERED",
@@ -43,7 +51,7 @@ export const useCustomerDashboard = () => {
     };
 
     loadDashboard();
-  }, []);
+  }, [user]);
 
   return { data, loading, error };
 };

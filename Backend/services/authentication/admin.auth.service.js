@@ -1,45 +1,46 @@
-import { supabase } from "../../config.js"
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import bcrypt from "bcryptjs";
+import { supabase } from "../../config/supabase.js";
+import { generateToken } from "../../utils/jwt.js";
 
-export const adminLoginService = async (email, password) => {
-  // 1. Find Admin
-  const { data: admin, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', email)
+// ===============================
+// ADMIN / STAFF LOGIN SERVICE
+// ===============================
+export const adminStaffLoginService = async ({ identifier, password }) => {
+  const isAdmin = identifier.includes("@");
+  const table = isAdmin ? "admins" : "agents";
+  const column = isAdmin ? "email" : "agent_id";
+
+  const { data: user } = await supabase
+    .from(table)
+    .select("*")
+    .eq(column, identifier)
     .single();
 
-  if (!admin || error) {
-    throw new Error("Admin not found.");
+  if (!user) {
+    throw new Error("User not found");
   }
 
-  // 2. Check Password
-  const isMatch = await bcrypt.compare(password, admin.password_hash);
-  if (!isMatch) {
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
     throw new Error("Incorrect Password");
   }
 
-  // 3. Find Dairy Context
-  const { data: dairy } = await supabase
-    .from('dairies')
-    .select('id')
-    .eq('owner_id', admin.id)
-    .maybeSingle();
+  const role = isAdmin ? "ADMIN" : "STAFF";
 
-  // 4. Generate Token
-  const token = jwt.sign(
-    { 
-      id: admin.id, 
-      role: 'ADMIN', 
-      dairyId: dairy ? dairy.id : null 
+  const token = generateToken({
+    id: user.id,
+    email: user.email,
+    role,
+    dairyId: user.dairy_id,
+  });
+
+  return {
+    token,
+    role,
+    user: {
+      id: user.id,
+      name: user.name || user.email,
+      email: user.email,
     },
-    process.env.JWT_SECRET || 'secret',
-    { expiresIn: '1d' }
-  );
-
-  return { 
-    token, 
-    user: { name: admin.full_name, role: 'ADMIN' } 
   };
 };

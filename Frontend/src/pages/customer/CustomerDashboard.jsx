@@ -68,6 +68,26 @@ const CustomerDashboard = () => {
           </button>
         </header>
 
+        <section className="bg-surface border border-border rounded-card shadow-card p-4">
+          <h3 className="text-sm font-semibold text-text-muted uppercase mb-3">
+            Your Details
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div>
+              <p className="text-text-muted">Customer ID</p>
+              <p className="font-semibold text-text-primary">{customer.id ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-text-muted">Email</p>
+              <p className="font-semibold text-text-primary break-all">{customer.email || "-"}</p>
+            </div>
+            <div>
+              <p className="text-text-muted">Mobile</p>
+              <p className="font-semibold text-text-primary">{customer.phone || "-"}</p>
+            </div>
+          </div>
+        </section>
+
         {/* ================= TODAY STATUS ================= */}
         <TodayStatusCard data={todayDelivery} />
 

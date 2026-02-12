@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 import { AuthProvider } from "./pages/hooks/useAuth.jsx";
+import debugAdmin from "./utils/adminDebug.js";
+
+// Expose debug utility globally for development
+window.__debugAdmin = debugAdmin;
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -25,4 +29,5 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
       );
   });
 }
+
 

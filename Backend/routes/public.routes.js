@@ -1,11 +1,9 @@
-import express from 'express';
-import { checkUserStatus } from '../controllers/authentication/check.auth.js';
+import express from "express";
+import { detectUser } from "../controllers/authentication/customer/auth.controller.js";
 
 const router = express.Router();
 
-// The Gatekeeper (Smart Detect)
-router.post('/detect', checkUserStatus);
-
-// Future: router.get('/explore', exploreController.getDairies);
+// Smart Detect (Gatekeeper)
+router.post("/detect", detectUser);
 
 export default router;
