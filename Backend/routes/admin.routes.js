@@ -10,14 +10,14 @@ import { registerDairy } from "../controllers/admin/dairy.controller.js";
 
 const router = express.Router();
 
-router.post("/login", adminLogin);
+router.post("/", adminLogin);
 router.post("/register-dairy", registerDairy);
-router.get("/customers", verifyAdmin, fetchAdminCustomers);
+router.get("/customers", verifyAdmin, fetchAdminCustomers); //need to work on this route, where we just fetch the customer data from the db, if no customer just a banner "you dont have any customer now, add you customer"
 router.get("/customers/:id", verifyAdmin, fetchAdminCustomerById);
 router.get("/dashboard", verifyAdmin, getDashboard);
 
 router.get("/health", (req, res) => {
-  res.json({ status: "ok", time: new Date() });
+  res.json({ status: "ok", time: new Date() }); //dont get any output
 });
 
 export default router;
