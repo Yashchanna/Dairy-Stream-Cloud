@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth.jsx';
 import { 
   Search, MapPin, Filter, Star, ShieldCheck, 
-  Clock, Truck, ChevronDown, User 
+  Clock, Truck, ChevronDown, User, LogOut 
 } from 'lucide-react';
 
 // --- EXPANDED MOCK DATA ---
@@ -89,6 +90,7 @@ const MOCK_DAIRIES = [
 
 const ExploreDairiesPage = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [dairies, _setDairies] = useState(MOCK_DAIRIES);
 
@@ -97,6 +99,17 @@ const ExploreDairiesPage = () => {
     dairy.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     dairy.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const isLoggedIn = Boolean(user?.token || user?.role || localStorage.getItem("user"));
+
+  const handleAuthAction = () => {
+    if (isLoggedIn) {
+      logout();
+      navigate("/", { replace: true });
+      return;
+    }
+    navigate("/");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -137,8 +150,9 @@ const ExploreDairiesPage = () => {
 
              {/* Login Button */}
              <div className="hidden md:block">
-                <button onClick={() => navigate('/')} className="flex items-center gap-2 font-semibold text-gray-700 hover:text-blue-600 transition">
-                   <User size={20} /> Login
+                <button onClick={handleAuthAction} className="flex items-center gap-2 font-semibold text-gray-700 hover:text-blue-600 transition">
+                   {isLoggedIn ? <LogOut size={20} /> : <User size={20} />}
+                   {isLoggedIn ? "Logout" : "Login"}
                 </button>
              </div>
           </div>

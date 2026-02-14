@@ -1,13 +1,23 @@
-import express from 'express';
-import { adminLogin } from '../controllers/authentication/admin/auth.controller.js';
+import express from "express";
+import { adminLogin } from "../controllers/authentication/admin/auth.controller.js";
+import { verifyAdmin } from "../middleware/admin.middleware.js";
+import { getDashboard } from "../controllers/admin/dashboard.controller.js";
+import {
+  fetchAdminCustomers,
+  fetchAdminCustomerById,
+} from "../controllers/admin/adminCustomers.controller.js";
+import { registerDairy } from "../controllers/admin/dairy.controller.js";
 
 const router = express.Router();
 
-// --- Auth ---
-router.post('/login', adminLogin); // URL: /api/admin/login
+router.post("/login", adminLogin);
+router.post("/register-dairy", registerDairy);
+router.get("/customers", verifyAdmin, fetchAdminCustomers);
+router.get("/customers/:id", verifyAdmin, fetchAdminCustomerById);
+router.get("/dashboard", verifyAdmin, getDashboard);
 
-// --- Protected Routes (Future) ---
-// router.get('/dashboard', adminMiddleware, getDashboardStats);
-// router.post('/staff/add', adminMiddleware, addStaff);
+router.get("/health", (req, res) => {
+  res.json({ status: "ok", time: new Date() });
+});
 
 export default router;

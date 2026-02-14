@@ -1,80 +1,175 @@
-import { supabase } from "../../config.js";
-import jwt from 'jsonwebtoken';
+import { supabase } from "../../config/supabase.js";
+import { generateToken } from "../../utils/jwt.js";
 
-const FIXED_OTP = "123456"; // DEV ONLY
+const normalizeIdentifier = (value) => String(value ?? "").trim();
+const otpStore = new Map();
 
-export const verifyLoginService = async (mobile, otp) => {
-  if (otp !== FIXED_OTP) {
-    throw new Error("Invalid OTP");
+const buildOtpKey = (identifier, dairyId) =>
+  `${normalizeIdentifier(identifier)}::${dairyId == null ? "null" : String(dairyId)}`;
+
+const purgeExpiredOtps = () => {
+  const now = Date.now();
+  for (const [key, value] of otpStore.entries()) {
+    if (!value?.expiresAt || value.expiresAt <= now) {
+      otpStore.delete(key);
+    }
+  }
+};
+
+const buildPhoneVariants = (identifier) => {
+  const raw = normalizeIdentifier(identifier);
+  const digitsOnly = raw.replace(/\D/g, "");
+  const variants = new Set([raw]);
+
+  if (digitsOnly) {
+    variants.add(digitsOnly);
+    if (digitsOnly.length > 10) variants.add(digitsOnly.slice(-10));
   }
 
-  // 1. Get User
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('mobile', mobile)
-    .single();
+  return [...variants].filter(Boolean);
+};
 
-  if (!user || error) {
-    throw new Error("User not found. Please Register.");
+const buildLoosePhonePattern = (identifier) => {
+  const digitsOnly = normalizeIdentifier(identifier).replace(/\D/g, "");
+  const last10 = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly;
+  if (last10.length < 10) return null;
+  return `%${last10.slice(0, 5)}%${last10.slice(5)}%`;
+};
+
+const sendOtp = async ({ identifier, otp }) => {
+  // SMS provider removed; OTP is stored in DB for verification flow.
+  console.log(`[OTP] Identifier: ${identifier}, OTP: ${otp}`);
+};
+
+// ===============================
+// DETECT USER
+// ===============================
+export const detectUserService = async (identifier) => {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+
+  if (normalizedIdentifier.includes("@")) {
+    return { userType: "ADMIN", nextStep: "PASSWORD" };
   }
 
-  // 2. Generate Token
-  const token = jwt.sign(
-    { id: user.id, role: 'CUSTOMER', mobile: user.mobile },
-    process.env.JWT_SECRET || 'secret',
-    { expiresIn: '30d' }
-  );
+  if (normalizedIdentifier.toUpperCase().startsWith("STF")) {
+    return { userType: "STAFF", nextStep: "PASSWORD" };
+  }
 
-  return { 
-    token, 
-    user: { name: user.full_name, role: 'CUSTOMER' } 
+  const phoneVariants = buildPhoneVariants(normalizedIdentifier);
+
+  const { data } = await supabase
+    .from("customers")
+    .select("id")
+    .in("phone_number", phoneVariants);
+
+  if (!data || data.length === 0) {
+    return { userType: "CUSTOMER", nextStep: "EXPLORE" };
+  }
+
+  if (data.length === 1) {
+    return {
+      userType: "CUSTOMER",
+      nextStep: "OTP",
+    };
+  }
+
+  return {
+    userType: "CUSTOMER",
+    dairies: data.map((c) => ({ id: c.id })),
+    nextStep: "SELECT_DAIRY",
   };
 };
 
-export const registerCustomerService = async (data) => {
-  const { 
-    customerName, phoneNumber, buildingName, 
-    roomNo, defaultMilkQuantityLiters, billingCycle 
-  } = data;
+// ===============================
+// OTP
+// ===============================
+export const generateCustomerOtp = async ({ identifier, dairyId }) => {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000;
 
-  // 1. Create User Identity
-  const { data: newUser, error: userError } = await supabase
-    .from('users')
-    .insert([{ 
-      mobile: phoneNumber, 
-      full_name: customerName, 
-      role: 'CUSTOMER' 
-    }])
-    .select()
-    .single();
+  purgeExpiredOtps();
+  const key = buildOtpKey(normalizedIdentifier, dairyId);
+  otpStore.set(key, {
+    identifier: normalizedIdentifier,
+    dairy_id: dairyId ?? null,
+    otp,
+    expiresAt,
+  });
 
-  if (userError) throw new Error("Registration failed: " + userError.message);
+  await sendOtp({ identifier: normalizedIdentifier, otp });
+};
 
-  // 2. Create Membership
-  const { error: memberError } = await supabase
-    .from('memberships')
-    .insert([{
-      user_id: newUser.id,
-      building_name: buildingName,
-      room_no: roomNo,
-      default_milk_qty: defaultMilkQuantityLiters,
-      billing_cycle: billingCycle,
-      role: 'CUSTOMER',
-      status: 'ACTIVE'
-    }]);
+export const verifyCustomerOtp = async ({ identifier, otp, dairyId }) => {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  const normalizedOtp = String(otp ?? "").trim();
 
-  if (memberError) {
-    // Rollback: Delete user if membership fails
-    await supabase.from('users').delete().eq('id', newUser.id);
-    throw new Error("Membership creation failed: " + memberError.message);
+  if (!normalizedOtp) {
+    throw new Error("OTP is required");
   }
 
-  // 3. Generate Token
-  const token = jwt.sign(
-    { id: newUser.id, role: 'CUSTOMER', mobile: newUser.mobile },
-    process.env.JWT_SECRET || 'secret'
-  );
+  purgeExpiredOtps();
 
-  return { token };
+  const candidates = [];
+  for (const [key, value] of otpStore.entries()) {
+    if (value.identifier !== normalizedIdentifier) continue;
+    if (dairyId !== undefined) {
+      const expectedDairy = dairyId ?? null;
+      if (value.dairy_id !== expectedDairy) continue;
+    }
+    candidates.push({ key, ...value });
+  }
+
+  candidates.sort((a, b) => b.expiresAt - a.expiresAt);
+  const latestOtp = candidates[0];
+
+  if (!latestOtp) throw new Error("Invalid or expired OTP");
+  if (latestOtp.otp !== normalizedOtp) throw new Error("Invalid OTP");
+
+  otpStore.delete(latestOtp.key);
+
+  return latestOtp;
+};
+
+// ===============================
+// LOGIN
+// ===============================
+export const customerOtpLoginService = async ({ identifier, dairyId }) => {
+  const phoneVariants = buildPhoneVariants(identifier);
+  const exactQuery = supabase
+    .from("customers")
+    .select("*")
+    .in("phone_number", phoneVariants);
+
+  const { data: exactCustomer } = await exactQuery.limit(1).maybeSingle();
+
+  let customer = exactCustomer;
+
+  if (!customer) {
+    const loosePattern = buildLoosePhonePattern(identifier);
+    if (loosePattern) {
+      const looseQuery = supabase
+        .from("customers")
+        .select("*")
+        .ilike("phone_number", loosePattern);
+
+      const { data: looseCustomer } = await looseQuery.limit(1).maybeSingle();
+      customer = looseCustomer;
+    }
+  }
+
+  if (!customer) throw new Error("Customer not found");
+
+  const token = generateToken({
+    id: customer.id,
+    email: customer.email ?? null,
+    role: "CUSTOMER",
+    dairyId,
+  });
+
+  return {
+    token,
+    role: "CUSTOMER",
+    user: customer,
+  };
 };

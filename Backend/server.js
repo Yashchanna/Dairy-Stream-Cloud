@@ -57,6 +57,9 @@ app.listen(PORT, () => {
 });
 
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 app.get("/supabase-health", async (req, res) => {
   try {
@@ -77,4 +80,4 @@ app.get("/supabase-health", async (req, res) => {
 
 // setInterval(() => {
 //   console.log("🟢 Server still alive");
-// }, 5000);
+// }, 4000);

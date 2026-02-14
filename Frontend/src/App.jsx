@@ -11,11 +11,13 @@ import LoginPage from "./pages/LoginPage";
 import RegisterNewuserPage from "./pages/RegisterNewuserPage";
 import RegisterDairyPage from "./pages/RegisterDairyPage";
 import ExploreDairiesPage from "./pages/public/ExploreDairiesPage";
+import DairyDetailsPage from "./pages/public/DairyDetailsPage";
 import CustomerDashboard from "./pages/customer/CustomerDashboard";
 import Deliveries from "./pages/customer/Deliveries";
 import Subscription from "./pages/customer/Subscription";
 import Payments from "./pages/customer/Payments";
 import Profile from "./pages/customer/Profile";
+import AdminCustomers from "./pages/admin/AdminCustomers";
 
 function App() {
   return (
@@ -69,6 +71,10 @@ function App() {
           </ProtectedRoute>
         }
       />
+
+      <Route path="/" element={<ExploreDairiesPage />} />
+      <Route path="/join/:id" element={<DairyDetailsPage />} />
+
       <Route
         path="/agent-dashboard"
         element={
@@ -79,7 +85,16 @@ function App() {
       />
 
       <Route
-        path="/register"
+        path="/admin/customers"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminCustomers />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="customer/register"
         element={<RegisterNewuserPage></RegisterNewuserPage>}
       ></Route>
 

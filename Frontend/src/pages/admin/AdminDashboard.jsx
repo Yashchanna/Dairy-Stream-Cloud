@@ -1,116 +1,113 @@
-import React from "react";
-import { Card, Row, Col, Table, Badge } from "react-bootstrap";
+import { useEffect, useState } from "react";
+import { fetchAdminDashboard } from "../../api/admin.api";
 
-const AdminDashboard = () => {
+import AdminSidebar from "../../components/admin/layout/AdminSidebar";
+import AdminMobileTopbar from "../../components/admin/layout/AdminMobileTopbar";
+
+import AdminHeader from "../../components/admin/sections/AdminHeader";
+import AdminKpis from "../../components/admin/sections/AdminKpis";
+import AdminOperations from "../../components/admin/sections/AdminOperations";
+import AdminFinancialAlert from "../../components/admin/sections/AdminFinancialAlert";
+import AdminActivity from "../../components/admin/sections/AdminActivity";
+import AdminDashboardSkeleton from "../../components/admin/skeletons/AdminDashboardSkeleton";
+
+export default function AdminDashboard() {
+  // ---- UI state
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const [uiReady, setUiReady] = useState(false);
+
+
+  // ---- Admin name (SYNC, SAFE)
+  const adminUserStr = localStorage.getItem("adminUser");
+  const adminName = adminUserStr
+    ? JSON.parse(adminUserStr).name
+    : "Admin";
+
+  // ---- Dashboard data (SAFE DEFAULTS)
+  const [data, setData] = useState({
+    totalCustomers: 0,
+    totalAgents: 0,
+    activeAgents: 0,
+    deliveriesToday: 0,
+    pendingPayments: 0,
+  });
+
+  // ---- Fetch dashboard
+    useEffect(() => {
+      let isMounted = true;
+
+      const loadDashboard = async () => {
+        try {
+          const res = await fetchAdminDashboard();
+          if (isMounted) {
+            setData(res);
+            requestAnimationFrame(() => {
+              setUiReady(true);
+            });
+          }
+        } catch (err) {
+          if (isMounted) setError(err.message);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      };
+
+      loadDashboard();
+
+      return () => {
+        isMounted = false;
+      };
+    }, []);
+
+
+  // ---- Error UI
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center px-4">
+        <div className="bg-red-50 border border-red-200 p-5 rounded-xl text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Main UI
   return (
-    <div className="container-fluid p-4" style={{ background: "#f5f8ff", minHeight: "100vh" }}>
-      <h2 className="fw-bold text-primary mb-1">Admin Dashboard</h2>
-      <p className="text-secondary mb-4">Welcome back! Monitor your dairy business operations.</p>
+    <div className="min-h-screen bg-gray-50">
+      <AdminMobileTopbar
+        adminName={adminName}
+        onMenu={() => setSidebarOpen(true)}
+      />
 
-      {/* ===== Stats Cards ===== */}
-      <Row className="g-3 mb-4">
-        <Col lg={3} md={6}>
-          <Card className="shadow-sm stat-card border-0">
-            <Card.Body>
-              <i className="bi bi-people-fill text-primary fs-2"></i>
-              <h5 className="mt-2">Total Customers</h5>
-              <h2 className="fw-bold text-primary">128</h2>
-            </Card.Body>
-          </Card>
-        </Col>
+      <AdminSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-        <Col lg={3} md={6}>
-          <Card className="shadow-sm stat-card border-0">
-            <Card.Body>
-              <i className="bi bi-truck text-success fs-2"></i>
-              <h5 className="mt-2">Delivery Agents</h5>
-              <h2 className="fw-bold text-success">12</h2>
-            </Card.Body>
-          </Card>
-        </Col>
+      <main className="lg:ml-64 px-4 sm:px-6 lg:px-10 py-8">
+      <AdminHeader adminName={adminName} />
 
-        <Col lg={3} md={6}>
-          <Card className="shadow-sm stat-card border-0">
-            <Card.Body>
-              <i className="bi bi-calendar-check text-warning fs-2"></i>
-              <h5 className="mt-2">Deliveries Today</h5>
-              <h2 className="fw-bold text-warning">524</h2>
-            </Card.Body>
-          </Card>
-        </Col>
+{/* Phase 1: Skeleton / KPIs */}
+        {!uiReady ? (
+          <AdminDashboardSkeleton />
+        ) : (
+          <AdminKpis data={data} />
+        )}
 
-        <Col lg={3} md={6}>
-          <Card className="shadow-sm stat-card border-0">
-            <Card.Body>
-              <i className="bi bi-cash-coin text-danger fs-2"></i>
-              <h5 className="mt-2">Pending Payments</h5>
-              <h2 className="fw-bold text-danger">₹ 32,870</h2>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+        {/* Phase 2: Heavy sections */}
+        {uiReady && (
+          <>
+            <AdminOperations data={data} />
+            <AdminFinancialAlert amount={data.pendingPayments} />
+            <AdminActivity />
+          </>
+        )}
 
-      {/* ===== Recent Orders / Activities ===== */}
-      <Row className="g-4">
-        <Col lg={8}>
-          <Card className="shadow-sm border-0">
-            <Card.Header className="bg-white fw-bold text-primary fs-5">
-              Recent Deliveries
-            </Card.Header>
-            <Card.Body className="p-0">
-              <Table striped hover responsive className="mb-0 text-center">
-                <thead className="table-light">
-                  <tr>
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th>Qty (L)</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>05 Oct 2025</td>
-                    <td>Amit Patil</td>
-                    <td>1.0</td>
-                    <td><Badge bg="success">Delivered</Badge></td>
-                  </tr>
-                  <tr>
-                    <td>05 Oct 2025</td>
-                    <td>Shaikh Household</td>
-                    <td>0.5</td>
-                    <td><Badge bg="warning">Paused</Badge></td>
-                  </tr>
-                  <tr>
-                    <td>04 Oct 2025</td>
-                    <td>Nimbalkar Society</td>
-                    <td>1.0</td>
-                    <td><Badge bg="danger">Missed</Badge></td>
-                  </tr>
-                </tbody>
-              </Table>
-            </Card.Body>
-          </Card>
-        </Col>
 
-        {/* Activities Panel */}
-        <Col lg={4}>
-          <Card className="shadow-sm border-0">
-            <Card.Header className="bg-white fw-bold text-primary fs-5">
-              Recent Activities
-            </Card.Header>
-            <Card.Body>
-              <ul className="list-unstyled">
-                <li className="mb-3"><i className="bi bi-plus-circle text-primary"></i> New customer registered — <strong>Amit Patil</strong></li>
-                <li className="mb-3"><i className="bi bi-person-plus text-success"></i> Delivery agent added — <strong>Suresh Kumar</strong></li>
-                <li className="mb-3"><i className="bi bi-wallet text-warning"></i> Payment received — <strong>₹590</strong></li>
-                <li className="mb-2"><i className="bi bi-x-circle text-danger"></i> Delivery skipped — <strong>Flat 304</strong></li>
-              </ul>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+      </main>
     </div>
   );
-};
-
-export default AdminDashboard;
+}
