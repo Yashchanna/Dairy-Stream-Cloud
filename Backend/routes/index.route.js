@@ -1,8 +1,9 @@
 import express from 'express';
 import publicRoutes from './public.routes.js';
 import adminRoutes from './admin.routes.js';
-import authRoutes from './authroutes.js';
+import authRoutes from './auth.routes.js';
 import customerRoutes from './CustomerRoutes.js';
+import agentRoutes from './agent.routes.js';
 
 const router = express.Router();
 
@@ -13,9 +14,13 @@ router.use('/', publicRoutes);
 router.use('/customer', customerRoutes);
  
 // 3. Admin Routes (Base: /api/admin)
-router.use('/admin', adminRoutes);
+router.use('/admin', adminRoutes);  // add addagent route in admin routes cause admin create the agent
+//agent routes (/api/agent)
+router.use('/agent', agentRoutes);
 
 // 4. Auth Routes (Base: /api/auth)
 router.use('/auth', authRoutes);
+
+
 
 export default router;
