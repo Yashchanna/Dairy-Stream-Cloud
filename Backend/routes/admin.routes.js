@@ -10,7 +10,6 @@ import { registerDairy } from "../controllers/admin/dairy.controller.js";
 import { addAgent } from "../controllers/admin/addAgent.controller.js";
 import { getUniqueBuildings } from "../controllers/shared/building.controller.js";
 import { fetchAdminAgents, fetchAdminAgentById } from "../controllers/admin/adminagent.controller.js";
-import { fetchAdminAgentsById } from "../../Frontend/src/api/admin.api.js";
 const router = express.Router();
 
 router.post("/", adminLogin);
