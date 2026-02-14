@@ -206,7 +206,7 @@ const LoginPage = () => {
       // Redirect
       if (role === "CUSTOMER") navigate("/customer-dashboard", { replace: true });
       else if (role === "STAFF") navigate("/staff/home", { replace: true });
-      else if (role === "ADMIN") navigate("/admin/dashboard", { replace: true });
+      else if (role === "ADMIN") navigate("/admin/Admindashboard", { replace: true });
     }, 1000);
   };
 
