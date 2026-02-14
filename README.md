@@ -4,7 +4,7 @@
 
 **New to the project?** → Read in this order:
 
-1. **[QUICK_START.md](QUICK_START.md)** (8 pages) ⭐ **READ FIRST**
+1. **[QUICK_START.md](project_details_&_project_setup/QUICK_START.md)** (8 pages) ⭐ **READ FIRST**
    - Setup instructions
    - How to run the project
    - First-time troubleshooting
