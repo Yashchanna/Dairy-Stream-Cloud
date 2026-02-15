@@ -4,25 +4,25 @@
 
 **New to the project?** → Read in this order:
 
-1. **[QUICK_START.md](QUICK_START.md)** (8 pages) ⭐ **READ FIRST**
+1. **[QUICK_START.md](project_details_&_project_setup/QUICK_START.md)** (8 pages) ⭐ **READ FIRST**
    - Setup instructions
    - How to run the project
    - First-time troubleshooting
    - Takes 15 minutes
 
-2. **[TEAM_DISTRIBUTION.md](TEAM_DISTRIBUTION.md)** (8 pages) ⭐ **READ SECOND**
+2. **[TEAM_DISTRIBUTION.md](project_details_&_project_setup/TEAM_DISTRIBUTION.md)** (8 pages) ⭐ **READ SECOND**
    - Your task assignments
    - What you need to build
    - Timeline and responsibilities
    - Take 20 minutes to review your part
 
-3. **[SUPABASE_SETUP_GUIDE.md](SUPABASE_SETUP_GUIDE.md)** (10 pages) ⭐ **READ THIRD**
+3. **[SUPABASE_SETUP_GUIDE.md](project_details_&_project_setup/SUPABASE_SETUP_GUIDE.md)** (10 pages) ⭐ **READ THIRD**
    - Database setup (5 minutes)
    - SQL scripts to create tables
    - Troubleshooting database issues
    - How to use Supabase
 
-4. **[CODE_REVIEW.md](CODE_REVIEW.md)** (12 pages)
+4. **[CODE_REVIEW.md](project_details_&_project_setup/CODE_REVIEW.md)** (12 pages)
    - What was improved
    - Code examples
    - Best practices
@@ -33,22 +33,22 @@
 ## 📖 Documentation by Purpose
 
 ### 🚀 Getting Started (5-15 minutes)
-- **[QUICK_START.md](QUICK_START.md)** - Setup & first run
-- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - What was done
+- **[QUICK_START.md](project_details_&_project_setup/QUICK_START.md)** - Setup & first run
+- **[PROJECT_SUMMARY.md](project_details_&_project_setup/PROJECT_SUMMARY.md)** - What was done
 
 ### 👨‍💼 Team Coordination (20-30 minutes)
-- **[TEAM_DISTRIBUTION.md](TEAM_DISTRIBUTION.md)** - Task assignments
-- **[COMPLETION_REPORT.md](COMPLETION_REPORT.md)** - Overall status
+- **[TEAM_DISTRIBUTION.md](project_details_&_project_setup/TEAM_DISTRIBUTION.md)** - Task assignments
+- **[COMPLETION_REPORT.md](project_details_&_project_setup/COMPLETION_REPORT.md)** - Overall status
 
 ### 🗄️ Database & Backend (30-45 minutes)
-- **[SUPABASE_SETUP_GUIDE.md](SUPABASE_SETUP_GUIDE.md)** - Database setup
-- **[CODE_REVIEW.md](CODE_REVIEW.md)** - Backend improvements
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design
+- **[SUPABASE_SETUP_GUIDE.md](project_details_&_project_setup/SUPABASE_SETUP_GUIDE.md)** - Database setup
+- **[CODE_REVIEW.md](project_details_&_project_setup/CODE_REVIEW.md)** - Backend improvements
+- **[ARCHITECTURE.md](project_details_&_project_setup/ARCHITECTURE.md)** - System design
 
 ### 🏗️ Understanding the System (30-45 minutes)
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture
-- **[CODE_REVIEW.md](CODE_REVIEW.md)** - Code examples
-- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - Improvements made
+- **[ARCHITECTURE.md](project_details_&_project_setup/ARCHITECTURE.md)** - System architecture
+- **[CODE_REVIEW.md](project_details_&_project_setup/CODE_REVIEW.md)** - Code examples
+- **[PROJECT_SUMMARY.md](project_details_&_project_setup/PROJECT_SUMMARY.md)** - Improvements made
 
 ---
 

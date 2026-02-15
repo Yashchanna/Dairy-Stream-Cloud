@@ -4,7 +4,7 @@ import { fetchAdminAgents } from "../../api/admin.api";
 // Layout Components
 import AdminSidebar from "../../components/admin/layout/AdminSidebar";
 import AdminMobileTopbar from "../../components/admin/layout/AdminMobileTopbar";
-// import AgentDrawer from "../../components/admin/agents/AgentDrawer"; 
+import AgentDrawer from "../../components/admin/agents/AgentDrawer"; 
 
 export default function AdminAgents() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,6 +15,7 @@ export default function AdminAgents() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Drawer State
   const [selectedAgent, setSelectedAgent] = useState(null);
@@ -53,7 +54,7 @@ export default function AdminAgents() {
 
     load();
     return () => (active = false);
-  }, [page, search]);
+  }, [page, search, refreshKey]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -197,12 +198,13 @@ export default function AdminAgents() {
       </main>
 
       {/* Drawer */}
-      {/* {selectedAgent && (
+      {selectedAgent && (
         <AgentDrawer
           agentId={selectedAgent}
           onClose={() => setSelectedAgent(null)}
+          onChanged={() => setRefreshKey((k) => k + 1)}
         />
-      )} */}
+      )}
     </div>
   );
 }

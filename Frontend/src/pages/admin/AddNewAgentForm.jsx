@@ -26,7 +26,7 @@ function AddNewAgentForm() {
 
   // --- Helper to get Token ---
   const getAuthHeader = () => {
-    const token = localStorage.getItem("token"); // ⚠️ Ensure your login saves the token as "token"
+    const token = localStorage.getItem("adminToken"); // Use admin token
     return {
       headers: {
         Authorization: `Bearer ${token}` 
@@ -82,14 +82,14 @@ function AddNewAgentForm() {
       await axios.post(apiurlAddAgent, agent, getAuthHeader());
       
       alert("✅ Delivery Agent added successfully!");
-      navigate("/agents"); 
+      navigate("/admin/agents");
     } catch (error) {
       console.error("Error adding agent:", error);
       
       // Handle Unauthorized specifically
       if (error.response && error.response.status === 401) {
         alert("Session expired. Please login again.");
-        navigate("/login");
+        navigate("/admin/login");
         return;
       }
 
@@ -296,7 +296,7 @@ function AddNewAgentForm() {
                   <button 
                     type="button" 
                     className="btn btn-light border"
-                    onClick={() => navigate('/agents')}
+                    onClick={() => navigate('/admin/agents')}
                   >
                     Cancel
                   </button>

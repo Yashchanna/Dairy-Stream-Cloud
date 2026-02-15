@@ -46,7 +46,7 @@ export const fetchAdminDashboard = async () => {
     return dashboardCache;
   }
 
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("adminToken");
   if (!token) throw new Error("Admin token missing");
 
   const res = await fetch(`${BASE_URL}/api/admin/dashboard`, {
@@ -72,7 +72,7 @@ export const fetchAdminCustomers = async ({
   limit = 10,
   search = "",
 }) => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("adminToken");
   if (!token) throw new Error("Admin token missing");
 
   const params = new URLSearchParams({
@@ -97,7 +97,7 @@ export const fetchAdminCustomers = async ({
 };
 
 export const fetchAdminCustomerById = async (id) => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("adminToken");
   if (!token) throw new Error("Admin token missing");
 
   const res = await fetch(
@@ -153,7 +153,7 @@ export const fetchAdminAgents = async ({
   limit = 10,
   search = "",
 }) => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("adminToken");
   if (!token) throw new Error("Admin token missing");
 
   const params = new URLSearchParams({
@@ -178,7 +178,7 @@ export const fetchAdminAgents = async ({
 };
 
 export const fetchAdminAgentsById = async (id) => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("adminToken");
   if (!token) throw new Error("Admin token missing");
 
   const res = await fetch(
@@ -194,4 +194,72 @@ export const fetchAdminAgentsById = async (id) => {
   if (!res.ok) throw new Error(text);
 
   return JSON.parse(text);
+};
+
+export const updateAdminCustomer = async (id, payload) => {
+  const token = localStorage.getItem("adminToken");
+  if (!token) throw new Error("Admin token missing");
+
+  const res = await fetch(`${BASE_URL}/api/admin/customers/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return JSON.parse(text);
+};
+
+export const deleteAdminCustomer = async (id) => {
+  const token = localStorage.getItem("adminToken");
+  if (!token) throw new Error("Admin token missing");
+
+  const res = await fetch(`${BASE_URL}/api/admin/customers/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return text ? JSON.parse(text) : {};
+};
+
+export const updateAdminAgent = async (id, payload) => {
+  const token = localStorage.getItem("adminToken");
+  if (!token) throw new Error("Admin token missing");
+
+  const res = await fetch(`${BASE_URL}/api/admin/agents/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return JSON.parse(text);
+};
+
+export const deleteAdminAgent = async (id) => {
+  const token = localStorage.getItem("adminToken");
+  if (!token) throw new Error("Admin token missing");
+
+  const res = await fetch(`${BASE_URL}/api/admin/agents/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return text ? JSON.parse(text) : {};
 };

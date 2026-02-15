@@ -1,4 +1,9 @@
-import { getAdminCustomers } from "../../services/admin/adminCustomers.service.js";
+import {
+  getAdminCustomers,
+  getCustomerDetails,
+  updateCustomerById,
+  deleteCustomerById,
+} from "../../services/admin/adminCustomers.service.js";
 
 export const fetchAdminCustomers = async (req, res) => {
   try {
@@ -17,8 +22,6 @@ export const fetchAdminCustomers = async (req, res) => {
   }
 };
 
-import { getCustomerDetails } from "../../services/admin/adminCustomers.service.js";
-
 export const fetchAdminCustomerById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -31,5 +34,27 @@ export const fetchAdminCustomerById = async (req, res) => {
     res.status(500).json({
       message: "Failed to load customer details",
     });
+  }
+};
+
+export const updateAdminCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await updateCustomerById(id, req.body);
+    res.json({ success: true, customer: updated });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER UPDATE ERROR:", err.message);
+    res.status(500).json({ message: "Failed to update customer" });
+  }
+};
+
+export const deleteAdminCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteCustomerById(id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER DELETE ERROR:", err.message);
+    res.status(500).json({ message: "Failed to delete customer" });
   }
 };
