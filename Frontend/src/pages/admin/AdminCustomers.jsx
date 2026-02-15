@@ -13,6 +13,7 @@ export default function AdminCustomers() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // ✅ MUST be inside component
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -35,7 +36,7 @@ export default function AdminCustomers() {
 
     load();
     return () => (active = false);
-  }, [page, search]);
+  }, [page, search, refreshKey]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -159,6 +160,7 @@ export default function AdminCustomers() {
         <CustomerDrawer
           customerId={selectedCustomer}
           onClose={() => setSelectedCustomer(null)}
+          onChanged={() => setRefreshKey((k) => k + 1)}
         />
       )}
     </div>

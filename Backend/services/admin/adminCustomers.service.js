@@ -81,3 +81,36 @@ export const getCustomerDetails = async (customerId) => {
     dairy,
   };
 };
+
+export const updateCustomerById = async (customerId, updates) => {
+  const allowed = [
+    "customer_name",
+    "phone_number",
+    "email",
+    "building_name",
+    "wing",
+    "room_no",
+  ];
+
+  const payload = {};
+  for (const key of allowed) {
+    if (updates[key] !== undefined) payload[key] = updates[key];
+  }
+
+  const { data, error } = await supabase
+    .from("customers")
+    .update(payload)
+    .eq("id", customerId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  return data;
+};
+
+export const deleteCustomerById = async (customerId) => {
+  const { error } = await supabase.from("customers").delete().eq("id", customerId);
+  if (error) throw error;
+  return { success: true };
+};
