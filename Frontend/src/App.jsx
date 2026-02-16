@@ -164,7 +164,7 @@ function App() {
           🚚 AGENT ROUTES (Protected)
       ============================== */}
       <Route
-        path="/agent-dashboard"
+        path="/agent/dashboard"
         element={
           <ProtectedRoute allowedRoles={["STAFF"]}>
             <AgentDashboard />

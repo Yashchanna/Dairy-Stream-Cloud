@@ -12,6 +12,8 @@ import {
 import { adminLogin }
 from "../controllers/authentication/adminAuth.controller.js";
 
+import { agentLogin } from "../controllers/authentication/agentAuth.controller.js";
+
 const router = express.Router();
 
 // ================= AUTH ROUTES =================
@@ -20,5 +22,7 @@ router.post("/admin/login", adminLogin);
 router.post("/login/password", passwordLogin);
 router.post("/login/otp", requestOtp);
 router.post("/login/otp/verify", verifyOtpLogin);
+
+router.post("/agent/login", agentLogin)
 
 export default router;
