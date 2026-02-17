@@ -1,7 +1,8 @@
 import { supabase } from "../../config/supabase.js";
 import { getSubscriptionByCustomerId } from "./subscription.service.js";
+import { getTodayDeliverySnapshot } from "./deliveries.service.js";
 
-const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+const DASHBOARD_CACHE_TTL_MS = 10 * 1000;
 const dashboardCache = new Map();
 
 const isMissingColumnError = (error) => {
@@ -91,6 +92,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
   const quantityLabel = isActiveSubscription && subscription?.quantity_liters
     ? `${subscription.quantity_liters} L`
     : "-";
+  const { todayDelivery } = await getTodayDeliverySnapshot(customerId, { subscription });
 
   const legacyDairyName =
     customer?.dairy_name ??
@@ -126,12 +128,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
           status: subscription.status || "ACTIVE",
         }
       : null,
-    todayDelivery: {
-      status: isActiveSubscription ? "PENDING" : "NOT_SUBSCRIBED",
-      time: subscription?.delivery_slot === "Evening" ? "06:00 PM" : "07:00 AM",
-      product: isActiveSubscription ? (subscription?.milk_type || "Milk") : "Milk",
-      quantity: quantityLabel,
-    },
+    todayDelivery,
     tomorrowDelivery: {
       quantity: quantityLabel,
       slot: subscription?.delivery_slot || "-",

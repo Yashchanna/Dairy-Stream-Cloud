@@ -1,8 +1,23 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:4000").trim();
-const CUSTOMER_DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+const CUSTOMER_DASHBOARD_CACHE_TTL_MS = 10 * 1000;
 const customerDashboardCache = new Map();
 
 const getCustomerDashboardCacheKey = (token) => String(token || "");
+const syncDashboardTodayDeliveryCache = (token, todayDelivery) => {
+  if (!todayDelivery) return;
+  const cacheKey = getCustomerDashboardCacheKey(token);
+  const cached = customerDashboardCache.get(cacheKey);
+  if (!cached?.payload) return;
+
+  customerDashboardCache.set(cacheKey, {
+    ...cached,
+    at: Date.now(),
+    payload: {
+      ...cached.payload,
+      todayDelivery,
+    },
+  });
+};
 
 export const fetchCustomerDashboard = async (token, { force = false } = {}) => {
   const cacheKey = getCustomerDashboardCacheKey(token);
@@ -100,6 +115,7 @@ export const fetchCustomerDeliveries = async (token) => {
     throw new Error(data?.message || "Failed to fetch deliveries");
   }
 
+  syncDashboardTodayDeliveryCache(token, data?.todayDelivery);
   return data;
 };
 

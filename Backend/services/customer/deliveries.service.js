@@ -1,4 +1,5 @@
 import { supabase } from "../../config/supabase.js";
+import { getSubscriptionByCustomerId } from "./subscription.service.js";
 
 const toTitleStatus = (status) => {
   const value = String(status || "").toUpperCase();
@@ -90,6 +91,24 @@ const getTodayDeliveryFromRows = (rows) => {
   };
 };
 
+const getTodayDeliveryFallback = (subscription) => {
+  const isActiveSubscription =
+    subscription && String(subscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+
+  const quantityLabel = isActiveSubscription && subscription?.quantity_liters
+    ? `${subscription.quantity_liters} L`
+    : "-";
+
+  return {
+    status: isActiveSubscription ? "NOT_SCHEDULED" : "NOT_SUBSCRIBED",
+    time: null,
+    product: isActiveSubscription ? (subscription?.milk_type || "Milk") : "Milk",
+    quantity: quantityLabel,
+    agent: null,
+    canTrackAgent: false,
+  };
+};
+
 const tryFetchFromTable = async (table, customerId) => {
   const { data, error } = await supabase
     .from(table)
@@ -109,16 +128,30 @@ const tryFetchFromTable = async (table, customerId) => {
   return data || [];
 };
 
-export const getCustomerDeliveries = async (customerId) => {
-  // Try common table names used across variants of this project.
+export const getTodayDeliverySnapshot = async (customerId, { subscription } = {}) => {
   const rows =
     (await tryFetchFromTable("deliveries", customerId)) ??
     (await tryFetchFromTable("milk_deliveries", customerId)) ??
     [];
 
+  const todayFromRows = getTodayDeliveryFromRows(rows);
+  const resolvedSubscription =
+    subscription === undefined
+      ? await getSubscriptionByCustomerId(customerId)
+      : subscription;
+
+  return {
+    todayDelivery: todayFromRows || getTodayDeliveryFallback(resolvedSubscription),
+    rows,
+  };
+};
+
+export const getCustomerDeliveries = async (customerId) => {
+  const subscription = await getSubscriptionByCustomerId(customerId);
+  const { rows, todayDelivery } = await getTodayDeliverySnapshot(customerId, { subscription });
   const mappedRows = rows.map((row, index) => mapDeliveryRow(row, index, null, null));
   return {
     deliveries: mappedRows,
-    todayDelivery: getTodayDeliveryFromRows(rows),
+    todayDelivery,
   };
 };

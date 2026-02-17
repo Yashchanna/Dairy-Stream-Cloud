@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
 import { Droplet, Clock, Edit, PauseCircle, PlayCircle, Store, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   fetchCustomerSubscription,
   saveCustomerSubscription,
@@ -60,6 +60,7 @@ const toSavePayload = (model, overrides = {}) => {
 
 const Subscribe = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [subscription, setSubscription] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -95,6 +96,21 @@ const Subscribe = () => {
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const shouldOpenUpdateFromDashboard =
+      Boolean(location.state?.openUpdateModal) && location.state?.editMode === "next-day-delivery";
+
+    if (!shouldOpenUpdateFromDashboard || loading) return;
+
+    if (subscription) {
+      setShowUpdateModal(true);
+    } else {
+      showToastMessage('error', 'No active subscription found for next day delivery edit');
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, loading, subscription, navigate, location.pathname]);
 
   const showToastMessage = (type, message) => {
     setToast({ type, message });

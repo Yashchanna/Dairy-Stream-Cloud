@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import CustomerLayout from "../../components/customer/layouts/CustomerLayout";
 import { useCustomerDashboard } from "../hooks/useCustomerDashboard";
 import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
+import { fetchCustomerDashboard, saveCustomerSubscription } from "../../api/customer.api.js";
 
 import {
   CheckCircle,
@@ -11,10 +13,24 @@ import {
   Banknote,
   ChevronRight,
   Droplets,
+  Loader2,
+  X,
 } from "lucide-react";
 
 const CustomerDashboard = () => {
   const { data, loading, error } = useCustomerDashboard();
+  const [dashboardData, setDashboardData] = useState(null);
+  const [showEditTomorrowModal, setShowEditTomorrowModal] = useState(false);
+  const [savingTomorrow, setSavingTomorrow] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [editTomorrowForm, setEditTomorrowForm] = useState({
+    quantity: "1",
+    slot: "Morning",
+  });
+
+  useEffect(() => {
+    if (data) setDashboardData(data);
+  }, [data]);
 
   if (loading) {
     return (
@@ -33,7 +49,53 @@ const CustomerDashboard = () => {
   }
 
   /* ---------- DATA FROM BACKEND ---------- */
-  const { customer, todayDelivery, tomorrowDelivery, billing } = data;
+  const resolvedData = dashboardData || data;
+  const { customer, todayDelivery, tomorrowDelivery, billing, subscription } = resolvedData;
+
+  const openTomorrowEdit = () => {
+    if (!subscription?.dairyId) {
+      setActionError("No active subscription found to edit tomorrow delivery.");
+      return;
+    }
+
+    const numericQty = Number(subscription.quantity || 1);
+    setEditTomorrowForm({
+      quantity: Number.isFinite(numericQty) && numericQty > 0 ? String(numericQty) : "1",
+      slot: subscription.slot || "Morning",
+    });
+    setActionError("");
+    setShowEditTomorrowModal(true);
+  };
+
+  const saveTomorrowDelivery = async () => {
+    try {
+      setSavingTomorrow(true);
+      setActionError("");
+
+      const storedUser = localStorage.getItem("user");
+      const token = storedUser ? JSON.parse(storedUser)?.token : localStorage.getItem("token");
+      if (!token) throw new Error("Customer token missing");
+
+      await saveCustomerSubscription(token, {
+        dairyId: subscription.dairyId,
+        milkType: subscription.milkType || "Milk",
+        quantity: Number(editTomorrowForm.quantity || 1),
+        slot: editTomorrowForm.slot,
+        startDate: subscription.startDate || undefined,
+        address: subscription.address || "",
+        paymentMethod: subscription.paymentMethod || "UPI",
+        status: subscription.status || "ACTIVE",
+      });
+
+      const freshDashboard = await fetchCustomerDashboard(token, { force: true });
+      setDashboardData(freshDashboard);
+      setShowEditTomorrowModal(false);
+    } catch (err) {
+      setActionError(err?.message || "Failed to update tomorrow delivery.");
+    } finally {
+      setSavingTomorrow(false);
+    }
+  };
 
   return (
     <CustomerLayout>
@@ -53,10 +115,6 @@ const CustomerDashboard = () => {
               </span>
             </div>
           </div>
-
-          <button className="self-start sm:self-auto text-sm font-semibold text-brand hover:underline">
-            Switch
-          </button>
         </header>
 
         {/* ================= TODAY STATUS ================= */}
@@ -72,10 +130,28 @@ const CustomerDashboard = () => {
 
         {/* TOMORROW + BILLING */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          <TomorrowDeliveryCard data={tomorrowDelivery} />
+          <TomorrowDeliveryCard
+            data={tomorrowDelivery}
+            onEdit={openTomorrowEdit}
+          />
           <BillingSummaryCard data={billing} />
         </div>
 
+        {actionError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {actionError}
+          </div>
+        )}
+
+        {showEditTomorrowModal && (
+          <EditTomorrowModal
+            form={editTomorrowForm}
+            saving={savingTomorrow}
+            onClose={() => setShowEditTomorrowModal(false)}
+            onChange={(next) => setEditTomorrowForm((prev) => ({ ...prev, ...next }))}
+            onSave={saveTomorrowDelivery}
+          />
+        )}
       </div>
     </CustomerLayout>
   );
@@ -84,10 +160,22 @@ const CustomerDashboard = () => {
 /* TODAY CARD */
 const TodayStatusCard = ({ data = {} }) => {
   const isDelivered = data.status === "DELIVERED";
+  const isPending = data.status === "PENDING";
+  const isNotScheduled =
+    data.status === "NOT_SCHEDULED" || data.status === "NOT_SUBSCRIBED";
+  const title = isDelivered
+    ? "Delivered Successfully"
+    : isPending
+      ? "Delivery Pending"
+      : "No Delivery Scheduled Today";
 
   return (
     <div className={`p-4 md:p-6 rounded-card border ${
-      isDelivered ? "bg-success-soft border-border" : "bg-brand-soft border-border"
+      isDelivered
+        ? "bg-success-soft border-border"
+        : isPending
+          ? "bg-brand-soft border-border"
+          : "bg-gray-50 border-border"
     }`}>
       <h3 className="text-xs sm:text-sm font-semibold text-text-muted uppercase mb-4">
         Today's Delivery
@@ -96,14 +184,18 @@ const TodayStatusCard = ({ data = {} }) => {
 
         <div className="flex gap-4">
           <div className={`p-3 rounded-full ${
-            isDelivered ? "bg-success text-white" : "bg-brand text-white"
+            isDelivered
+              ? "bg-success text-white"
+              : isPending
+                ? "bg-brand text-white"
+                : "bg-gray-300 text-gray-700"
           }`}>
             {isDelivered ? <CheckCircle size={22}/> : <AlertCircle size={22}/>}
           </div>
 
           <div>
             <h3 className="text-base md:text-lg font-bold text-text-primary">
-              {isDelivered ? "Delivered Successfully" : "Delivery Pending"}
+              {title}
             </h3>
 
             <p className="text-sm text-text-secondary mt-1">
@@ -119,6 +211,12 @@ const TodayStatusCard = ({ data = {} }) => {
             {isDelivered && (
               <p className="text-xs text-text-muted mt-2">
                 Dropped at Doorstep • {data.time || "-"}
+              </p>
+            )}
+
+            {isNotScheduled && (
+              <p className="text-xs text-text-muted mt-2">
+                A delivery will appear here when it is scheduled in backend.
               </p>
             )}
           </div>
@@ -142,7 +240,7 @@ const TodayStatusCard = ({ data = {} }) => {
 };
 
 /* TOMORROW */
-const TomorrowDeliveryCard = ({ data = {} }) => (
+const TomorrowDeliveryCard = ({ data = {}, onEdit }) => (
   <div className="bg-surface border border-border rounded-card shadow-card p-4 md:p-6">
     <h3 className="text-xs sm:text-sm font-semibold text-text-muted uppercase mb-4">
       Tomorrow
@@ -161,10 +259,66 @@ const TomorrowDeliveryCard = ({ data = {} }) => (
         <p className="text-sm text-text-secondary">{data.slot || "-"}</p>
       </div>
 
-      <button className="text-sm font-semibold text-brand border border-border px-3 py-1 rounded-lg">
+      <button
+        onClick={onEdit}
+        className="text-sm font-semibold text-brand border border-border px-3 py-1 rounded-lg"
+      >
         Edit
       </button>
 
+    </div>
+  </div>
+);
+
+const EditTomorrowModal = ({ form, saving, onClose, onChange, onSave }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-card">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-text-primary">Edit Next Day Delivery</h3>
+        <button onClick={onClose} className="rounded-lg p-1 text-text-secondary hover:bg-background">
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Quantity (L)</label>
+          <input
+            type="number"
+            min="0.5"
+            step="0.5"
+            value={form.quantity}
+            onChange={(e) => onChange({ quantity: e.target.value })}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-text-primary"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Delivery Slot</label>
+          <select
+            value={form.slot}
+            onChange={(e) => onChange({ slot: e.target.value })}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-text-primary"
+          >
+            <option>Morning</option>
+            <option>Evening</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-6 flex justify-end gap-3">
+        <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium">
+          Cancel
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        >
+          {saving && <Loader2 size={14} className="animate-spin" />}
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
     </div>
   </div>
 );
