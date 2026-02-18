@@ -10,11 +10,17 @@ const API = axios.create({
   },
 });
 
+// ===============================
+// 1. DETECT USER
+// ===============================
 export const detectUserApi = async (identifier) => {
   const { data } = await API.post("/auth/detect", { identifier });
   return data;
 };
 
+// ===============================
+// 2. CUSTOMER OTP FLOW
+// ===============================
 export const requestOtpApi = async (payload) => {
   const { data } = await API.post("/auth/login/otp", payload);
   return data;
@@ -25,7 +31,22 @@ export const verifyOtpApi = async (payload) => {
   return data;
 };
 
+// ===============================
+// 3. ADMIN LOGIN (Updated)
+// ===============================
 export const adminLoginApi = async (payload) => {
-  const { data } = await API.post("/auth/login/password", payload);
+  // ✅ FIX: Point to the new specific Admin route
+  // OLD: /auth/login/password 
+  // NEW: /auth/admin/login
+  const { data } = await API.post("/auth/admin/login", payload);
+  return data;
+};
+
+// ===============================
+// 4. AGENT LOGIN (Added)
+// ===============================
+export const agentLoginApi = async (payload) => {
+  // ✅ NEW: Specific route for Agents
+  const { data } = await API.post("/auth/agent/login", payload);
   return data;
 };

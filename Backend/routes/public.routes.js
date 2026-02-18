@@ -1,11 +1,12 @@
 import express from "express";
-import { detectUserAuth } from "../middleware/customer/auth.handlers.middleware.js";
+
+// ✅ UPDATE IMPORT
+import { detectUser } from "../controllers/authentication/detectUser.controller.js";
 import { getPublicDairies, getPublicDairy } from "../controllers/public/dairies.controller.js";
 
 const router = express.Router();
 
-// Smart Detect (Gatekeeper)
-router.post("/detect", detectUserAuth);
+// Public Dairy Listings
 router.get("/dairies", getPublicDairies);
 router.get("/dairies/:id", getPublicDairy);
 

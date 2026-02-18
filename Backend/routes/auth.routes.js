@@ -1,27 +1,37 @@
 import express from "express";
 
+// ✅ 1. DETECT USER (The Gateway)
+import { detectUser } from "../controllers/authentication/detectUser.controller.js";
+
+// ✅ 2. ADMIN AUTH
+import { adminLogin } from "../controllers/authentication/adminAuth.controller.js";
+
+// ✅ 3. AGENT AUTH
+import { agentLogin } from "../controllers/authentication/agentAuth.controller.js";
+
+// ✅ 4. CUSTOMER AUTH (Shared OTP Routes)
+// If your frontend calls /api/auth/login/otp, we need these here
 import {
-  detectUserAuth,
-  passwordLoginAuth,
   requestOtpAuth,
   verifyOtpLoginAuth,
-} from "../middleware/customer/auth.handlers.middleware.js";
-
-// ✅ ADMIN AUTH
-import { adminLogin }
-from "../controllers/authentication/adminAuth.controller.js";
-
-import { agentLogin } from "../controllers/authentication/agentAuth.controller.js";
+  // loginCustomerAuth
+} from "../controllers/authentication/customer/customerAuth.controller.js";
 
 const router = express.Router();
 
 // ================= AUTH ROUTES =================
-router.post("/detect", detectUserAuth);
-router.post("/admin/login", adminLogin);
-router.post("/login/password", passwordLoginAuth);
-router.post("/login/otp", requestOtpAuth);
-router.post("/login/otp/verify", verifyOtpLoginAuth);
 
-router.post("/agent/login", agentLogin)
+// 1. Who are you?
+router.post("/detect", detectUser);
+
+// 2. Specialized Logins
+router.post("/admin/login", adminLogin);
+router.post("/agent/login", agentLogin);
+
+// 3. Customer/Shared Login Methods
+// These are often called by the generic login page
+// router.post("/login/password", loginCustomerAuth); // Handles Customer Password Login
+router.post("/login/otp", requestOtpAuth);         // Request OTP
+router.post("/login/otp/verify", verifyOtpLoginAuth); // Verify OTP
 
 export default router;
