@@ -1,55 +1,15 @@
-// import { supabase } from "../../config/supabase.js"; // Adjust path to config.js
-// import bcrypt from "bcryptjs";
-// import verifyEmail from "../../utils/verifyEmail.js"; // Adjust path to utils
-
-// export const createAgentService = async (agentData) => {
-//   const { email, password, agentName, phoneNumber, building } = agentData;
-
-//   // 1. Validate Email
-//   const isEmailValid = await verifyEmail(email);
-//   if (!isEmailValid) {
-//     throw new Error("Invalid or undeliverable email address");
-//   }
-
-//   // 2. Hash Password
-//   const hashedPassword = await bcrypt.hash(password, 10);
-
-//   // 3. Map to Database Columns (snake_case)
-//   const agentRecord = {
-//     email,
-//     password: hashedPassword,
-//     agent_name: agentName,
-//     phone_number: phoneNumber,
-//     building
-//   };
-
-//   // 4. Insert into Supabase
-//   const { data, error } = await supabase
-//     .from('agents')
-//     .insert([agentRecord])
-//     .select()
-//     .single(); // .single() returns one object instead of an array
-
-//   if (error) {
-//     throw new Error(error.message || "Failed to add agent");
-//   }
-
-//   return data;
-// };
-
-
 import { supabase } from "../../config/supabase.js";
 import bcrypt from "bcryptjs";
 import verifyEmail from "../../utils/verifyEmail.js";
 
-// Helper: Generate STF123456
+// Helper: Generate STF123456 (Fallback)
 const generateStaffId = () => {
   const randomNum = Math.floor(100000 + Math.random() * 900000);
   return `STF${randomNum}`;
 };
 
 export const createAgentService = async (agentData) => {
-  const { email, password, agentName, phoneNumber, building, dairyId } = agentData;
+  const { email, password, agentName, phoneNumber, building, dairyId, agentId } = agentData;
 
   // 1. Validate Email
   const isEmailValid = await verifyEmail(email);
@@ -58,33 +18,40 @@ export const createAgentService = async (agentData) => {
   // 2. Hash Password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // 3. Generate Unique agent_id
-  let newAgentId = generateStaffId();
+  // 3. Determine Agent ID (Use Frontend's ID if provided, else generate)
+  let finalAgentId = agentId || generateStaffId();
+  
+  // 4. Ensure Uniqueness (Double Check)
+  // If the ID coming from frontend is taken, we regenerate it to prevent crash
   let isUnique = false;
-
   while (!isUnique) {
     const { data } = await supabase
-      .from("agents") // ✅ Query 'agents' table
+      .from("agents")
       .select("agent_id")
-      .eq("agent_id", newAgentId)
+      .eq("agent_id", finalAgentId)
       .maybeSingle();
 
-    if (!data) isUnique = true;
-    else newAgentId = generateStaffId();
+    if (!data) {
+      isUnique = true;
+    } else {
+      // Collision found! Generate a new one automatically
+      finalAgentId = generateStaffId(); 
+    }
   }
 
-  // 4. Insert into 'agents' table
+  // 5. Insert into DB
   const { data, error } = await supabase
-    .from("agents") // ✅ Correct Table
+    .from("agents")
     .insert([
       {
-        agent_id: newAgentId, // ✅ Saves to the column in your screenshot
+        agent_id: finalAgentId, // ✅ Uses the ID visible on frontend
         email,
         password: hashedPassword,
         agent_name: agentName,
         phone_number: phoneNumber,
         building,
-        dairy_id: dairyId || null, // Ensure they are linked to a dairy
+        dairy_id: dairyId || null,
+        // role: 'AGENT'
       },
     ])
     .select()

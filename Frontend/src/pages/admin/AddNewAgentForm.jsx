@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, Phone, MapPin, Mail, Briefcase, Loader2 } from 'lucide-react';
+import { User, Lock, Phone, MapPin, Mail, Briefcase, Loader2, RefreshCw } from 'lucide-react';
 
 function AddNewAgentForm() {
   const [agent, setAgent] = useState({
-    agentID: '',       
+    agentId: '',       // ✅ Renamed from agentID to agentId to match Backend
     password: '',      
     agentName: '',
     phoneNumber: '',   
@@ -26,7 +26,7 @@ function AddNewAgentForm() {
 
   // --- Helper to get Token ---
   const getAuthHeader = () => {
-    const token = localStorage.getItem("adminToken"); // Use admin token
+    const token = localStorage.getItem("adminToken"); 
     return {
       headers: {
         Authorization: `Bearer ${token}` 
@@ -34,12 +34,22 @@ function AddNewAgentForm() {
     };
   };
 
+  // ✅ NEW: Generate Random Staff ID on Mount
+  useEffect(() => {
+    generateNewAgentId();
+  }, []);
+
+  const generateNewAgentId = () => {
+    const randomNum = Math.floor(100000 + Math.random() * 900000); // 6 Random Digits
+    const newId = `STF${randomNum}`;
+    setAgent(prev => ({ ...prev, agentId: newId }));
+  };
+
   // --- Fetch Building Names ---
   useEffect(() => {
     const fetchBuildings = async () => {
       try {
         setIsLoading(true);
-        // ✅ FIX 1: Add getAuthHeader() to the GET request
         const response = await axios.get(apiurlFetchBuildings, getAuthHeader());
         setBuildingNames(response.data);
         setFetchError(null);
@@ -72,21 +82,21 @@ function AddNewAgentForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!agent.agentID || !agent.password || !agent.agentName || !agent.phoneNumber || !agent.building) {
+    // ✅ Updated check to use agentId
+    if (!agent.agentId || !agent.password || !agent.agentName || !agent.phoneNumber || !agent.building) {
       alert("Please fill in all required fields.");
       return;
     }
 
     try {
-      // ✅ FIX 2: Add getAuthHeader() to the POST request (3rd argument)
       await axios.post(apiurlAddAgent, agent, getAuthHeader());
       
-      alert("✅ Delivery Agent added successfully!");
+      // Show the ID in the success message so admin can note it down
+      alert(`✅ Delivery Agent Created Successfully!\n\nAgent ID: ${agent.agentId}\n(Please share this ID with the agent for login)`);
       navigate("/admin/agents");
     } catch (error) {
       console.error("Error adding agent:", error);
       
-      // Handle Unauthorized specifically
       if (error.response && error.response.status === 401) {
         alert("Session expired. Please login again.");
         navigate("/admin/login");
@@ -98,7 +108,6 @@ function AddNewAgentForm() {
     }
   };
 
-  // ... (REST OF THE JSX REMAINS EXACTLY THE SAME) ...
   return (
     <div className="container py-5">
       <div className="row justify-content-center">
@@ -119,21 +128,32 @@ function AddNewAgentForm() {
                 
                 <div className="row g-3 mb-4">
                   <div className="col-md-6">
-                    <label htmlFor="agentID" className="form-label fw-bold">
+                    <label htmlFor="agentId" className="form-label fw-bold">
                       Staff ID <span className="text-danger">*</span>
                     </label>
                     <div className="input-group">
                       <span className="input-group-text bg-light"><User size={18}/></span>
                       <input
                         type="text"
-                        id="agentID"
-                        name="agentID"
-                        placeholder="e.g., STF-2024-01"
-                        value={agent.agentID}
-                        onChange={inputHandler}
-                        className="form-control text-uppercase fw-bold"
+                        id="agentId"
+                        name="agentId" // ✅ Updated Name
+                        value={agent.agentId}
+                        readOnly // 🔒 BLOCKED EDITING
+                        className="form-control text-uppercase fw-bold bg-light text-secondary cursor-not-allowed" // ✅ Visually disabled
                         required
                       />
+                      {/* Optional: Button to regenerate if needed */}
+                      <button 
+                        type="button" 
+                        className="btn btn-outline-secondary" 
+                        onClick={generateNewAgentId}
+                        title="Generate new ID"
+                      >
+                        <RefreshCw size={16} />
+                      </button>
+                    </div>
+                    <div className="form-text text-muted small">
+                      Auto-generated ID. Used for Agent Login.
                     </div>
                   </div>
 
