@@ -19,7 +19,7 @@ export const createAgentService = async (agentData) => {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   // 3. Determine Agent ID (Use Frontend's ID if provided, else generate)
-  let finalAgentId = agentId || generateStaffId();
+  let finalAgentId = agentId ? agentId.trim().toUpperCase() : generateStaffId();
   
   // 4. Ensure Uniqueness (Double Check)
   // If the ID coming from frontend is taken, we regenerate it to prevent crash

@@ -25,7 +25,7 @@ export const detectUserService = async (identifier) => {
     const { data: agent } = await supabase
       .from("agents")
       .select("agent_id, agent_name")
-      .eq("agent_id", agentIdUpper)
+      .ilike("agent_id", agentIdUpper)
       .maybeSingle();
 
     if (agent) {

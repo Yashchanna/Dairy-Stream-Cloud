@@ -1,262 +1,98 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:4000").trim();
+import client from "./client";
 
 /* =========================
    ADMIN LOGIN
 ========================= */
-export const adminApiLogin = async (email, password) => {
-  const res = await fetch(`${BASE_URL}/api/admin/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
+// export const adminApiLogin = async (email, password) => {
+//   const { data } = await client.post("/admin/login", { email, password });
 
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(text || "Admin login failed");
-  }
+//   if (!data.token) throw new Error("No token received from server");
 
-  const data = JSON.parse(text);
+//   localStorage.setItem("adminToken", data.token);
+//   if (data.admin) {
+//     localStorage.setItem("adminUser", JSON.stringify(data.admin));
+//   }
 
-  if (!data.token) {
-    throw new Error("No token received from server");
-  }
-
-  localStorage.setItem("adminToken", data.token);
-
-  if (data.admin) {
-    localStorage.setItem("adminUser", JSON.stringify(data.admin));
-  }
-
-  return data;
-};
+//   return data;
+// };
 
 /* =========================
-   DASHBOARD (CACHED)
+   DASHBOARD (WITH CACHE)
 ========================= */
 let dashboardCache = null;
 let cacheTime = 0;
 
 export const fetchAdminDashboard = async () => {
   const now = Date.now();
-
-  // 60 seconds cache
   if (dashboardCache && now - cacheTime < 60000) {
     return dashboardCache;
   }
 
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const res = await fetch(`${BASE_URL}/api/admin/dashboard`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || "Failed to fetch dashboard");
-
-  const data = JSON.parse(text);
-
+  const { data } = await client.get("/admin/dashboard");
   dashboardCache = data;
   cacheTime = now;
-
   return data;
 };
 
-// fetch customer in admin dashboard
-export const fetchAdminCustomers = async ({
-  page = 1,
-  limit = 10,
-  search = "",
-}) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const params = new URLSearchParams({
-    page,
-    limit,
-    search,
+/* =========================
+   CUSTOMER MANAGEMENT
+========================= */
+export const fetchAdminCustomers = async ({ page = 1, limit = 10, search = "" }) => {
+  const { data } = await client.get("/admin/customers", {
+    params: { page, limit, search },
   });
-
-  const res = await fetch(
-    `${BASE_URL}/api/admin/customers?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-
-  return JSON.parse(text);
+  return data;
 };
 
 export const fetchAdminCustomerById = async (id) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const res = await fetch(
-    `${BASE_URL}/api/admin/customers/${id}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-
-  return JSON.parse(text);
-};
-
-/* =========================
-   REGISTER DAIRY
-========================= */
-export const registerDairyApi = async (dairyData) => {
-  const res = await fetch(`${BASE_URL}/api/admin/register-dairy`, {
-    method: "POST",
-    body: dairyData,
-  });
-
-  const text = await res.text();
-  let payload = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = null;
-  }
-
-  if (!res.ok) {
-    throw new Error(
-      payload?.error || payload?.message || text || "Failed to register dairy"
-    );
-  }
-
-  return payload ?? {};
-};
-
-
-/* =========================
-   FETCH AGENTS (DELIVERY STAFF)
-========================= */
-export const fetchAdminAgents = async ({
-  page = 1,
-  limit = 10,
-  search = "",
-}) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const params = new URLSearchParams({
-    page,
-    limit,
-    search,
-  });
-
-  const res = await fetch(
-    `${BASE_URL}/api/admin/agents?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-
-  return JSON.parse(text);
-};
-
-export const fetchAdminAgentsById = async (id) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const res = await fetch(
-    `${BASE_URL}/api/admin/agents/${id}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-
-  return JSON.parse(text);
+  const { data } = await client.get(`/admin/customers/${id}`);
+  return data;
 };
 
 export const updateAdminCustomer = async (id, payload) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const res = await fetch(`${BASE_URL}/api/admin/customers/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-  return JSON.parse(text);
+  const { data } = await client.put(`/admin/customers/${id}`, payload);
+  return data;
 };
 
 export const deleteAdminCustomer = async (id) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
+  const { data } = await client.delete(`/admin/customers/${id}`);
+  return data;
+};
 
-  const res = await fetch(`${BASE_URL}/api/admin/customers/${id}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+/* =========================
+   AGENT MANAGEMENT
+========================= */
+export const fetchAdminAgents = async ({ page = 1, limit = 10, search = "" }) => {
+  const { data } = await client.get("/admin/agents", {
+    params: { page, limit, search },
   });
+  return data;
+};
 
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-  return text ? JSON.parse(text) : {};
+export const fetchAdminAgentsById = async (id) => {
+  const { data } = await client.get(`/admin/agents/${id}`);
+  return data;
 };
 
 export const updateAdminAgent = async (id, payload) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const res = await fetch(`${BASE_URL}/api/admin/agents/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-  return JSON.parse(text);
+  const { data } = await client.put(`/admin/agents/${id}`, payload);
+  return data;
 };
 
 export const deleteAdminAgent = async (id) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
+  const { data } = await client.delete(`/admin/agents/${id}`);
+  return data;
+};
 
-  const res = await fetch(`${BASE_URL}/api/admin/agents/${id}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+/* =========================
+   DAIRY REGISTRATION
+========================= */
+export const registerDairyApi = async (dairyData) => {
+  // Use a custom header for multipart/form-data if dairyData is FormData
+  const config = dairyData instanceof FormData 
+    ? { headers: { "Content-Type": "multipart/form-data" } } 
+    : {};
 
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-  return text ? JSON.parse(text) : {};
+  const { data } = await client.post("/admin/register-dairy", dairyData, config);
+  return data;
 };

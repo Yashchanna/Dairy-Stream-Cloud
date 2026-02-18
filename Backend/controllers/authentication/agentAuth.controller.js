@@ -5,13 +5,13 @@ import jwt from "jsonwebtoken";
 export const agentLogin = async (req, res) => {
   try {
     const { agentId, password } = req.body;
-    const normalizedAgentId = agentId.trim().toUpperCase(); // ✅ Standardize input
+    const normalizedAgentId = agentId.trim(); // ✅ Allow flexible input case
 
     // 1. Find Agent in 'agents' table
     const { data: agent } = await supabase
       .from("agents")
       .select("*")
-      .eq("agent_id", normalizedAgentId) // ✅ Query using standardized ID
+      .ilike("agent_id", normalizedAgentId) // ✅ Case-insensitive search
       .maybeSingle();
 
     if (!agent) return res.status(404).json({ success: false, error: "Agent not found" });

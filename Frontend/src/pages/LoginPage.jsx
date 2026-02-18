@@ -18,7 +18,7 @@ import {
   verifyOtpApi,
   adminLoginApi,
   agentLoginApi // ✅ ADDED: Import agent login API
-} from "./services/auth.api.js"; // Adjust path if needed
+} from "../services/auth.api.js"; // Adjust path if needed
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -141,91 +141,61 @@ const LoginPage = () => {
   };
 
   // ================= FINAL LOGIN =================
-  const handleFinalLogin = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+ const handleFinalLogin = async (e) => {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
 
-    try {
-      const role = detectedUser?.userType; // "ADMIN", "AGENT", "CUSTOMER"
+  try {
+    const role = detectedUser?.userType; // This comes from the first 'Detect' step
 
-      // 🛑 CASE 1: ADMIN LOGIN
-      if (role === "ADMIN") {
-        const result = await adminLoginApi({
-          email: identifier,
-          password,
-        });
+    // --- CASE 1: ADMIN ---
+    if (role === "ADMIN") {
+      const result = await adminLoginApi({ email: identifier, password });
+      localStorage.setItem("adminToken", result.token);
+      localStorage.setItem("userRole", "ADMIN");
+      
+      login({ token: result.token, user: { ...result.user, role: "ADMIN" }, role: "ADMIN" });
+      toast.success("Admin Login Successful");
+      navigate("/admin/AdminDashboard", { replace: true });
+    } 
 
-        // Store tokens & role
-        localStorage.setItem("adminToken", result.token);
-        localStorage.setItem("userRole", "ADMIN");
-        if (result.user) localStorage.setItem("adminUser", JSON.stringify(result.user));
+    // --- CASE 2: AGENT (The Fix) ---
+    else if (role === "AGENT") {
+      const result = await agentLoginApi({ agentId: identifier, password });
+      
+      // Store the specific agent token
+      localStorage.setItem("agentToken", result.token);
+      localStorage.setItem("userRole", "AGENT");
 
-        // Update Context
-        login({
-            token: result.token,
-            user: { ...result.user, role: "ADMIN" },
-            role: "ADMIN"
-        });
+      // Update the AuthContext so the ProtectedRoute allows entry
+      login({ 
+        token: result.token, 
+        user: { ...result.user, role: "AGENT" }, 
+        role: "AGENT" 
+      });
 
-        toast.success(`Welcome back, ${result.user?.name || "Admin"}!`);
-        navigate(result.redirect || "/admin/AdminDashboard", { replace: true });
-        return;
-      }
-
-      // 🛑 CASE 2: AGENT LOGIN
-      if (role === "AGENT") {
-        const result = await agentLoginApi({
-          agentId: identifier, // Send STF... ID
-          password,
-        });
-
-        // Store tokens & role
-        localStorage.setItem("agentToken", result.token);
-        localStorage.setItem("userRole", "AGENT");
-        if (result.user) localStorage.setItem("agentUser", JSON.stringify(result.user));
-
-        // Update Context
-        login({
-            token: result.token,
-            user: { ...result.user, role: "AGENT" },
-            role: "AGENT"
-        });
-
-        toast.success(`Welcome Agent ${result.user?.name || ""}!`);
-        navigate("/agent/dashboard", { replace: true });
-        return;
-      }
-
-      // 🛑 CASE 3: CUSTOMER OTP LOGIN
-      if (role === "CUSTOMER") {
-        const result = await verifyOtpApi({
-            identifier,
-            otp,
-            dairyId: selectedDairy?.id,
-        });
-
-        // Store tokens
-        localStorage.setItem("token", result.token);
-        localStorage.setItem("userRole", "CUSTOMER");
-        localStorage.setItem("user", JSON.stringify(result.user));
-
-        // Update Context
-        login(result);
-
-        toast.success(`Welcome back, ${result.user?.name || "User"}!`);
-        navigate(result.redirect || "/customer/dashboard", { replace: true });
-        return;
-      }
-
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || "Login failed");
-      toast.error(err.response?.data?.error || "Login failed");
-    } finally {
-      setLoading(false);
+      toast.success("Agent Login Successful");
+      
+      // ✅ REDIRECT TO AGENT DASHBOARD
+      navigate("/agent/dashboard", { replace: true });
     }
-  };
+
+    // --- CASE 3: CUSTOMER ---
+    else if (role === "CUSTOMER") {
+      const result = await verifyOtpApi({ identifier, otp, dairyId: selectedDairy?.id });
+      localStorage.setItem("token", result.token);
+      localStorage.setItem("userRole", "CUSTOMER");
+      login(result);
+      navigate(result.redirect || "/customer/dashboard", { replace: true });
+    }
+
+  } catch (err) {
+    toast.error(err.response?.data?.error || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ================= IDENTITY BADGE COMPONENT =================
   const IdentityDisplay = () => {
