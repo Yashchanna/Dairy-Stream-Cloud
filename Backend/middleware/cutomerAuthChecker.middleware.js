@@ -11,10 +11,16 @@ export const authenticate = (req, res, next) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // ✅ SECURITY ADDITION: Check if it's actually a customer token
+    if (decoded.role !== "CUSTOMER") {
+        return res.status(403).json({ message: "Access denied. Customers only." });
+    }
+
     req.customer = {
       id: decoded.id,
       email: decoded.email,
       dairyId: decoded.dairyId ?? null,
+      role: decoded.role // Good to keep track of role
     };
 
     next();
