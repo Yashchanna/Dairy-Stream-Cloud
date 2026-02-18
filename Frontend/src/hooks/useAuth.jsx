@@ -6,23 +6,34 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore user on refresh
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem("user");
+      }
     }
     setLoading(false);
   }, []);
 
   const login = (data) => {
-    setUser(data);
-    localStorage.setItem("user", JSON.stringify(data));
+    // We normalize the data so the role is always accessible at the top level
+    const userData = {
+      token: data.token,
+      role: data.role || data.user?.role, 
+      ...data.user,
+    };
+    setUser(userData);
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("userRole", userData.role);
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("user");
+    localStorage.clear(); // Clears all tokens and user data safely
+    window.location.href = "/login"; // Force redirect to login on logout
   };
 
   return (
@@ -32,4 +43,11 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+// ✅ ENSURE THIS IS EXPORTED AS A NAMED EXPORT
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};

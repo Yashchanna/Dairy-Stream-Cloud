@@ -162,25 +162,18 @@ const LoginPage = () => {
 
     // --- CASE 2: AGENT (The Fix) ---
     else if (role === "AGENT") {
-      const result = await agentLoginApi({ agentId: identifier, password });
-      
-      // Store the specific agent token
-      localStorage.setItem("agentToken", result.token);
-      localStorage.setItem("userRole", "AGENT");
+  const result = await agentLoginApi({ agentId: identifier, password });
 
-      // Update the AuthContext so the ProtectedRoute allows entry
-      login({ 
-        token: result.token, 
-        user: { ...result.user, role: "AGENT" }, 
-        role: "AGENT" 
-      });
+  // Use the new standardized login call
+  login({
+    token: result.token,
+    role: "AGENT", // Explicitly set it
+    user: result.user
+  });
 
-      toast.success("Agent Login Successful");
-      
-      // ✅ REDIRECT TO AGENT DASHBOARD
-      navigate("/agent/dashboard", { replace: true });
-    }
-
+  toast.success("Welcome, Agent!");
+  navigate("/agent/dashboard", { replace: true });
+}
     // --- CASE 3: CUSTOMER ---
     else if (role === "CUSTOMER") {
       const result = await verifyOtpApi({ identifier, otp, dairyId: selectedDairy?.id });
