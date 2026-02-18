@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useAuth } from "./hooks/useAuth.jsx"; // ✅ Import useAuth
+import { useAuth } from "./hooks/useAuth.jsx"; // Adjust path if needed
 
 import {
   Loader2, ShieldCheck, MapPin, Eye, EyeOff, Lock, User,
@@ -16,11 +16,12 @@ import {
   detectUserApi,
   requestOtpApi,
   verifyOtpApi,
-  adminLoginApi
-} from "./services/auth.api";
+  adminLoginApi,
+  agentLoginApi // ✅ ADDED: Import agent login API
+} from "./services/auth.api.js"; // Adjust path if needed
 
 const LoginPage = () => {
-  const { login } = useAuth(); // ✅ Get the login function
+  const { login } = useAuth();
   const navigate = useNavigate();
   const inputRef = useRef(null);
 
@@ -82,14 +83,18 @@ const LoginPage = () => {
 
       if (!response.exists) {
         toast("User not found. Please register first");
-        navigate("/customer/register", {
-          state: { identifier }
-        });
+        // If it looks like a mobile number, offer registration
+        if(isMobile) {
+            navigate("/customer/register", { state: { identifier } });
+        } else {
+            setError("User ID not found.");
+        }
         return;
       }
 
       setDetectedUser(response);
 
+      // Routing based on backend "nextStep" instruction
       if (response.nextStep === "EXPLORE") {
         toast("No dairy assigned. Please explore dairies.");
         navigate("/explore", { state: { identifier } });
@@ -100,6 +105,7 @@ const LoginPage = () => {
         setSelectedDairy(response.dairy);
       }
 
+      // If backend says OTP, go straight there (Customer)
       if (response.nextStep === "OTP") {
         setOtpTimer(30);
         setStep("OTP");
@@ -110,7 +116,9 @@ const LoginPage = () => {
         return;
       }
 
-      setStep(response.nextStep);
+      // Otherwise, follow the step (usually PASSWORD for Admin/Agent)
+      setStep(response.nextStep); // e.g., "PASSWORD"
+      
     } catch (err) {
       const backendMessage =
         err.response?.data?.message ||
@@ -125,7 +133,7 @@ const LoginPage = () => {
     }
   };
 
-  // ================= DAIRY SELECT =================
+  // ================= DAIRY SELECT (If multiple) =================
   const handleDairySelect = (dairy) => {
     setSelectedDairy(dairy);
     setOtpTimer(30);
@@ -139,99 +147,116 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const role = detectedUser?.userType;
+      const role = detectedUser?.userType; // "ADMIN", "AGENT", "CUSTOMER"
 
-      // 🛑 ADMIN LOGIN FIX
+      // 🛑 CASE 1: ADMIN LOGIN
       if (role === "ADMIN") {
-        console.log("📨 Attempting admin login...");
-        
         const result = await adminLoginApi({
           email: identifier,
           password,
         });
 
-        console.log("✅ Admin login successful:", result);
-
-        // ✅ Store admin token for admin APIs
+        // Store tokens & role
         localStorage.setItem("adminToken", result.token);
-        localStorage.setItem("userRole", "ADMIN"); // Explicitly set role
-        if (result.user) {
-          localStorage.setItem("adminUser", JSON.stringify(result.user));
-        }
-        
-        // ✅ FIX 2: Call the Auth Context! 
-        // This updates the App state so ProtectedRoute knows we are logged in immediately.
-        // We ensure the object structure matches what useAuth expects.
-        const authData = {
+        localStorage.setItem("userRole", "ADMIN");
+        if (result.user) localStorage.setItem("adminUser", JSON.stringify(result.user));
+
+        // Update Context
+        login({
             token: result.token,
-            user: { ...result.user, role: "ADMIN" }, // Ensure role is present
+            user: { ...result.user, role: "ADMIN" },
             role: "ADMIN"
-        };
-        login(authData);
+        });
 
         toast.success(`Welcome back, ${result.user?.name || "Admin"}!`);
         navigate(result.redirect || "/admin/AdminDashboard", { replace: true });
         return;
       }
 
-      // CUSTOMER / STAFF OTP LOGIN
-      const result = await verifyOtpApi({
-        identifier,
-        otp,
-        dairyId: selectedDairy?.id,
-      });
+      // 🛑 CASE 2: AGENT LOGIN
+      if (role === "AGENT") {
+        const result = await agentLoginApi({
+          agentId: identifier, // Send STF... ID
+          password,
+        });
 
-      // ✅ Login is correctly called here for Customers
-      login(result);
-      
-      // ✅ Also ensure localStorage fallback is set for Customers
-      localStorage.setItem("userRole", result.user?.role || role);
-      localStorage.setItem("user", JSON.stringify(result));
-      if (result.token) {
-        localStorage.setItem("token", result.token);
+        // Store tokens & role
+        localStorage.setItem("agentToken", result.token);
+        localStorage.setItem("userRole", "AGENT");
+        if (result.user) localStorage.setItem("agentUser", JSON.stringify(result.user));
+
+        // Update Context
+        login({
+            token: result.token,
+            user: { ...result.user, role: "AGENT" },
+            role: "AGENT"
+        });
+
+        toast.success(`Welcome Agent ${result.user?.name || ""}!`);
+        navigate("/agent/dashboard", { replace: true });
+        return;
       }
 
-      toast.success(`Welcome back, ${result.user?.name || "User"}!`);
-
+      // 🛑 CASE 3: CUSTOMER OTP LOGIN
       if (role === "CUSTOMER") {
+        const result = await verifyOtpApi({
+            identifier,
+            otp,
+            dairyId: selectedDairy?.id,
+        });
+
+        // Store tokens
+        localStorage.setItem("token", result.token);
+        localStorage.setItem("userRole", "CUSTOMER");
+        localStorage.setItem("user", JSON.stringify(result.user));
+
+        // Update Context
+        login(result);
+
+        toast.success(`Welcome back, ${result.user?.name || "User"}!`);
         navigate(result.redirect || "/customer/dashboard", { replace: true });
-      } else if (role === "STAFF") {
-        navigate("/staff/home", { replace: true });
+        return;
       }
+
     } catch (err) {
       console.error(err);
+      setError(err.response?.data?.error || "Login failed");
       toast.error(err.response?.data?.error || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // ================= IDENTITY BADGE =================
+  // ================= IDENTITY BADGE COMPONENT =================
   const IdentityDisplay = () => {
     if (!detectedUser) return null;
 
     let Icon = User;
     let label = "User";
+    let badgeColor = "bg-blue-200 text-blue-700";
 
     if (detectedUser.userType === "ADMIN") {
       Icon = Mail;
       label = "Admin Email";
-    } else if (detectedUser.userType === "STAFF") {
+      badgeColor = "bg-purple-200 text-purple-700";
+    } else if (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF") {
       Icon = Briefcase;
       label = "Staff ID";
+      badgeColor = "bg-orange-200 text-orange-700";
     } else if (detectedUser.userType === "CUSTOMER") {
       Icon = Smartphone;
       label = "Mobile";
+      badgeColor = "bg-green-200 text-green-700";
     }
 
     return (
-      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-3 rounded-lg mb-6">
+      <div className="flex items-center justify-between bg-gray-50 border border-gray-200 p-3 rounded-lg mb-6">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="bg-blue-200 p-2 rounded-full text-blue-700">
+          <div className={`p-2 rounded-full ${badgeColor}`}>
             <Icon size={16} />
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">
+            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">
               {label}
             </span>
             <span className="text-sm font-semibold text-gray-900 truncate">
@@ -243,6 +268,7 @@ const LoginPage = () => {
           type="button"
           onClick={handleReset}
           className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+          title="Change User"
         >
           <Edit2 size={16} />
         </button>
@@ -254,7 +280,7 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen bg-slate-50 grid lg:grid-cols-2">
 
-      {/* ================= LEFT BRAND ================= */}
+      {/* ================= LEFT BRAND SECTION ================= */}
       <div className="hidden lg:flex flex-col justify-center px-20 bg-blue-600 text-white relative overflow-hidden">
         <div className="relative z-10">
           <h1 className="text-4xl font-bold tracking-tight">DairyStream</h1>
@@ -277,10 +303,11 @@ const LoginPage = () => {
             </Link>
           </div>
         </div>
+        {/* Decorative Blur */}
         <div className="absolute -bottom-40 -right-20 w-96 h-96 bg-blue-500/50 rounded-full blur-3xl"></div>
       </div>
 
-      {/* ================= RIGHT LOGIN FORM ================= */}
+      {/* ================= RIGHT LOGIN FORM SECTION ================= */}
       <div className="flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
 
@@ -297,37 +324,35 @@ const LoginPage = () => {
             <p className="text-gray-500 text-sm mt-1">
               {step === "IDENTIFIER" && "Enter your Email, Mobile, or Staff ID"}
               {step === "CONFIRMATION" && "Verify your account details"}
-              {step === "SELECT_DAIRY" && "Select a dairy to continue"}
               {step === "OTP" && `Verifying ${identifier}`}
               {step === "PASSWORD" && `Enter password for ${identifier}`}
             </p>
 
+            {/* Role Tag */}
             {detectedUser && (
               <div className="flex justify-center mt-3">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border uppercase ${
                   detectedUser.userType === "ADMIN"
                     ? "bg-purple-50 text-purple-700 border-purple-200"
-                    : detectedUser.userType === "STAFF"
+                    : (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF")
                     ? "bg-orange-50 text-orange-700 border-orange-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-green-50 text-green-700 border-green-200"
                 }`}>
-                  {detectedUser.userType === "ADMIN"
-                    ? "Dairy Admin"
-                    : detectedUser.userType === "STAFF"
-                    ? "Staff Member"
-                    : "Customer"}
+                  {detectedUser.userType === "ADMIN" ? "Dairy Admin" : 
+                   (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF") ? "Delivery Agent" : "Customer"}
                 </span>
               </div>
             )}
           </div>
 
+          {/* ERROR ALERT */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm flex items-center gap-2">
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm flex items-center gap-2 animate-pulse">
               <AlertCircle size={16} /> {error}
             </div>
           )}
 
-          {/* IDENTIFIER */}
+          {/* STEP 1: IDENTIFIER INPUT */}
           {step === "IDENTIFIER" && (
             <form onSubmit={handleIdentifierSubmit} className="space-y-5">
               <div className="relative">
@@ -336,126 +361,107 @@ const LoginPage = () => {
                   ref={inputRef}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Mobile, email, or staff ID"
-                  className="w-full pl-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Mobile, email, or staff ID (STF...)"
+                  className="w-full pl-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  autoFocus
                 />
               </div>
               <button
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                disabled={loading || !identifier}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <Loader2 className="animate-spin" /> : "Continue"}
                 {!loading && <ArrowRight size={18} />}
               </button>
             </form>
-            
           )}
 
-          {/* CONFIRMATION */}
-          {step === "CONFIRMATION" && selectedDairy && (
-            <div className="space-y-6">
-              <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center">
-                <p className="text-xs text-blue-600 font-bold uppercase mb-2">
-                  Signing in to
-                </p>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {selectedDairy.name}
-                </h3>
-              </div>
-              <button
-                onClick={() =>
-                  setStep(
-                    detectedUser.userType === "CUSTOMER"
-                      ? "OTP"
-                      : "PASSWORD"
-                  )
-                }
-                className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold"
-              >
-                Continue to Login
-              </button>
-              <button
-                onClick={handleReset}
-                className="w-full text-gray-500 text-sm"
-              >
-                Change Account
-              </button>
-            </div>
-          )}
-
-          {/* SELECT DAIRY */}
-          {step === "SELECT_DAIRY" && (
-            <div className="space-y-3">
-              {detectedUser.dairies.map((dairy) => (
-                <button
-                  key={dairy.id}
-                  onClick={() => handleDairySelect(dairy)}
-                  className="w-full p-4 bg-gray-50 border rounded-xl flex justify-between"
-                >
-                  <div>
-                    <h4 className="font-semibold">{dairy.name}</h4>
-                    <p className="text-sm text-gray-500">{dairy.location}</p>
-                  </div>
-                  <ChevronRight />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* PASSWORD */}
+          {/* STEP 2: PASSWORD INPUT (Admin & Agent) */}
           {step === "PASSWORD" && (
             <form onSubmit={handleFinalLogin} className="space-y-5">
               <IdentityDisplay />
+              
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
-                  className="w-full pl-10 pr-10 py-3 bg-gray-50 border rounded-xl"
+                  placeholder="Enter your password"
+                  className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  autoFocus
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? <EyeOff /> : <Eye />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <button className="w-full bg-blue-600 text-white py-3 rounded-xl">
-                Login
+
+              <button 
+                disabled={loading || !password}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="animate-spin" /> : "Login"}
               </button>
             </form>
           )}
 
-          {/* OTP */}
+          {/* STEP 3: OTP INPUT (Customer) */}
           {step === "OTP" && (
             <form onSubmit={handleFinalLogin} className="space-y-5">
               <IdentityDisplay />
-              <input
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                maxLength={6}
-                className="w-full text-center text-3xl py-4 border rounded-xl"
-              />
-              <button className="w-full bg-green-600 text-white py-3 rounded-xl">
-                Verify & Login
+              
+              <div className="text-center">
+                 <input
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  placeholder="• • • • • •"
+                  className="w-full text-center text-3xl tracking-widest py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-mono"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-400 mt-2">Enter the 6-digit code sent to your mobile</p>
+              </div>
+
+              <button 
+                disabled={loading || otp.length < 4}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="animate-spin" /> : "Verify & Login"}
               </button>
+
+              <div className="text-center">
+                 {otpTimer > 0 ? (
+                    <span className="text-xs text-gray-400">Resend in {otpTimer}s</span>
+                 ) : (
+                    <button 
+                        type="button"
+                        onClick={() => {/* logic to resend */}}
+                        className="text-xs text-blue-600 font-semibold hover:underline"
+                    >
+                        Resend Code
+                    </button>
+                 )}
+              </div>
             </form>
           )}
 
-          <div className="text-center mt-4">
+          {/* FOOTER LINK */}
+          <div className="text-center mt-6 pt-6 border-t border-gray-100">
             <p className="text-sm text-gray-500">
               New user?{" "}
               <Link
                 to="/customer/register"
-                className="text-blue-600 font-medium hover:underline"
+                className="text-blue-600 font-bold hover:underline"
               >
                 Create account
               </Link>
             </p>
           </div>
+
         </div>
       </div>
     </div>

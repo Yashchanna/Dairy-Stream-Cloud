@@ -3,81 +3,65 @@ import { supabase } from "../../config/supabase.js";
 const normalizeIdentifier = (value) => String(value ?? "").trim();
 
 export const detectUserService = async (identifier) => {
-  const id = normalizeIdentifier(identifier);
+  const rawId = normalizeIdentifier(identifier);
+  console.log(`🔍 [DetectUser] Checking: "${rawId}"`);
 
-  // ============================================
-  // 1. ADMIN CHECK (Strictly Email)
-  // ============================================
-  if (id.includes("@")) {
+  // 1. ADMIN CHECK (Email)
+  if (rawId.includes("@")) {
     const { data: admin } = await supabase
       .from("admins")
-      .select("id, email, name")
-      .eq("email", id)
-      .single();
+      .select("email, name")
+      .eq("email", rawId)
+      .maybeSingle();
 
     if (admin) {
-      return {
-        exists: true,
-        userType: "ADMIN",
-        nextStep: "PASSWORD",
-        name: admin.name
-      };
+      return { exists: true, userType: "ADMIN", nextStep: "PASSWORD", name: admin.name };
     }
-    // If email format but not in Admin table, we block it (Admins are internal)
-    return { exists: false, error: "Admin email not found" };
   }
 
-  // ============================================
-  // 2. AGENT CHECK (Strictly Staff ID starting with 'STF')
-  // ============================================
-  if (id.toUpperCase().startsWith("STF")) {
+  // 2. AGENT CHECK (STF...)
+  if (rawId.toUpperCase().startsWith("STF")) {
+    const agentIdUpper = rawId.toUpperCase();
     const { data: agent } = await supabase
       .from("agents")
-      .select("id, full_name, role")
-      .eq("role", "AGENT")
-      .eq("id", id) // Strict ID match
-      .single();
+      .select("agent_id, agent_name")
+      .eq("agent_id", agentIdUpper)
+      .maybeSingle();
 
     if (agent) {
-      return {
-        exists: true,
-        userType: "AGENT",
-        nextStep: "PASSWORD",
-        name: agent.full_name
-      };
+      return { exists: true, userType: "AGENT", nextStep: "PASSWORD", name: agent.agent_name };
     }
-    return { exists: false, error: "Staff ID not found" };
   }
 
-  // ============================================
-  // 3. CUSTOMER CHECK (Strictly Mobile Number)
-  // ============================================
-  // Remove non-digits to ensure it's a phone number
-  const mobile = id.replace(/\D/g, "");
+  // 3. CUSTOMER CHECK (Mobile Number)
+  // ✅ FIX: Clean the number and check the 'customers' table
+  const mobile = rawId.replace(/\D/g, ""); // Removes any non-digits
   
-  if (mobile.length >= 10) { // Basic validation
+  if (mobile.length >= 10) {
+    console.log(`📱 Checking 'customers' table for phone_number: ${mobile}`);
+    
     const { data: customer } = await supabase
-      .from("customers")
-      .select("id, customer_name")
-      .eq("phone_number", mobile) // Strict Mobile match
+      .from("customers") // 👈 Must match your Supabase table name
+      .select("customer_name")
+      .eq("phone_number", mobile) // 👈 Ensure this matches your DB column name
       .maybeSingle();
 
     if (customer) {
-      return {
-        exists: true,
-        userType: "CUSTOMER",
-        nextStep: "OTP", // Strictly OTP for existing customers
-        name: customer.customer_name
+      console.log("✅ Found Customer:", customer.customer_name);
+      return { 
+        exists: true, 
+        userType: "CUSTOMER", 
+        nextStep: "OTP", 
+        name: customer.customer_name 
       };
     }
     
-    // Valid mobile format but not in DB -> Send to Register
-    return {
-      exists: false,
-      userType: "NEW_USER",
-      nextStep: "REGISTER"
-    };
+    // If not found, suggest registration
+    return { exists: false, userType: "NEW_USER", nextStep: "REGISTER" };
   }
 
-  return { exists: false, error: "Invalid identifier format" };
+  return { exists: false, error: "User not found" };
 };
+
+
+

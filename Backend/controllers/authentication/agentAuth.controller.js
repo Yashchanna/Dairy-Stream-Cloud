@@ -4,20 +4,23 @@ import jwt from "jsonwebtoken";
 
 export const agentLogin = async (req, res) => {
   try {
-    const { agentId, password } = req.body; // agentId will be "STF..."
+    const { agentId, password } = req.body;
+    const normalizedAgentId = agentId.trim().toUpperCase(); // ✅ Standardize input
 
     // 1. Find Agent in 'agents' table
     const { data: agent } = await supabase
-      .from("agents") // ✅ Correct Table
+      .from("agents")
       .select("*")
-      .eq("agent_id", agentId) // ✅ Correct Column
-      .single();
+      .eq("agent_id", normalizedAgentId) // ✅ Query using standardized ID
+      .maybeSingle();
 
     if (!agent) return res.status(404).json({ success: false, error: "Agent not found" });
 
     // 2. Verify Password
     const isValid = await bcrypt.compare(password, agent.password);
     if (!isValid) return res.status(401).json({ success: false, error: "Invalid password" });
+
+    // ... rest of the code for token generation
 
     // 3. Generate Token
     const token = jwt.sign(
