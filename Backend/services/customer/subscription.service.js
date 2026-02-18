@@ -20,6 +20,21 @@ const isMissingTableError = (error) => {
   return message.includes("relation") && message.includes("does not exist");
 };
 
+const ensureCustomerDairyAssignment = async ({ customerId, dairyId }) => {
+  if (!customerId) return;
+
+  const { error } = await supabase
+    .from("customers")
+    .update({ dairy_id: dairyId ?? null })
+    .eq("id", customerId);
+
+  if (!error) return;
+  if (isMissingTableError(error) || isMissingColumnError(error) || isUuidSyntaxError(error)) {
+    return;
+  }
+  throw error;
+};
+
 const ensureMembershipLink = async ({ customerId, dairyId }) => {
   if (!customerId || !dairyId) return;
 
@@ -170,6 +185,10 @@ export const upsertSubscription = async (customerId, payload) => {
     customerId,
     dairyId: payload.dairy_id,
   });
+  await ensureCustomerDairyAssignment({
+    customerId,
+    dairyId: payload.dairy_id,
+  });
 
   return data;
 };
@@ -185,6 +204,10 @@ export const clearSubscriptionByCustomerId = async (customerId) => {
 
   const dairyIds = [...new Set((deletedRows || []).map((row) => row?.dairy_id).filter(Boolean))];
   if (dairyIds.length === 0) {
+    await ensureCustomerDairyAssignment({
+      customerId,
+      dairyId: null,
+    });
     return { deleted: 0 };
   }
 
@@ -201,6 +224,11 @@ export const clearSubscriptionByCustomerId = async (customerId) => {
     if (isMissingColumnError(membershipError)) continue;
     throw membershipError;
   }
+
+  await ensureCustomerDairyAssignment({
+    customerId,
+    dairyId: null,
+  });
 
   return { deleted: deletedRows.length };
 };

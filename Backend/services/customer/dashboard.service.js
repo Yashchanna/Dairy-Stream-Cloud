@@ -1,8 +1,9 @@
 import { supabase } from "../../config/supabase.js";
 import { getSubscriptionByCustomerId } from "./subscription.service.js";
+import { getTodayDeliverySnapshot } from "./deliveries.service.js";
 
-const MEMBERSHIP_LINK_COLUMNS = ["customer_id", "customerid", "customerId", "user_id"];
-const MEMBERSHIP_DAIRY_COLUMNS = ["dairy_id", "dairyid", "dairyId"];
+const DASHBOARD_CACHE_TTL_MS = 10 * 1000;
+const dashboardCache = new Map();
 
 const isMissingColumnError = (error) => {
   const message = String(error?.message || "").toLowerCase();
@@ -20,25 +21,23 @@ const isUuidSyntaxError = (error) => {
 };
 
 const getMembershipDairyId = async (customerId) => {
-  for (const linkColumn of MEMBERSHIP_LINK_COLUMNS) {
-    for (const dairyColumn of MEMBERSHIP_DAIRY_COLUMNS) {
-      const { data, error } = await supabase
-        .from("memberships")
-        .select(dairyColumn)
-        .eq(linkColumn, customerId)
-        .limit(1)
-        .maybeSingle();
+  const candidateColumns = ["customer_id", "user_id"];
 
-      if (!error) {
-        const dairyId = data?.[dairyColumn] ?? null;
-        if (dairyId) return dairyId;
-        continue;
-      }
+  for (const linkColumn of candidateColumns) {
+    const { data, error } = await supabase
+      .from("memberships")
+      .select("dairy_id")
+      .eq(linkColumn, customerId)
+      .limit(1)
+      .maybeSingle();
 
-      if (isMissingTableError(error)) return null;
-      if (isMissingColumnError(error) || isUuidSyntaxError(error)) continue;
-      throw error;
+    if (!error) {
+      return data?.dairy_id ?? null;
     }
+
+    if (isMissingTableError(error)) return null;
+    if (isMissingColumnError(error) || isUuidSyntaxError(error)) continue;
+    throw error;
   }
 
   return null;
@@ -54,24 +53,18 @@ const getDairyByIdLoose = async (dairyId) => {
     .limit(1)
     .maybeSingle();
 
-  if (!error && data) return data;
-
-  // Fallback for mixed legacy id types (uuid/bigint) by matching as strings.
-  const { data: allDairies, error: allError } = await supabase
-    .from("dairies")
-    .select("id, dairy_name, address, city, image_url")
-    .limit(5000);
-
-  if (allError) throw allError;
-
-  const matched = (allDairies || []).find(
-    (row) => String(row?.id ?? "") === String(dairyId)
-  );
-
-  return matched || null;
+  if (!error) return data || null;
+  if (isUuidSyntaxError(error)) return null;
+  throw error;
 };
 
 export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
+  const cacheKey = `${customerId}:${dairyId ?? "none"}`;
+  const cached = dashboardCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < DASHBOARD_CACHE_TTL_MS) {
+    return cached.payload;
+  }
+
   const { data: customer, error: customerError } = await supabase
     .from("customers")
     .select("*")
@@ -99,6 +92,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
   const quantityLabel = isActiveSubscription && subscription?.quantity_liters
     ? `${subscription.quantity_liters} L`
     : "-";
+  const { todayDelivery } = await getTodayDeliverySnapshot(customerId, { subscription });
 
   const legacyDairyName =
     customer?.dairy_name ??
@@ -111,7 +105,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
     legacyDairyName ||
     (linkedDairyId ? `Dairy #${linkedDairyId}` : null);
 
-  return {
+  const payload = {
     customer: {
       id: customer.id,
       name: customer.customer_name || customer.name || "Customer",
@@ -134,12 +128,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
           status: subscription.status || "ACTIVE",
         }
       : null,
-    todayDelivery: {
-      status: isActiveSubscription ? "PENDING" : "NOT_SUBSCRIBED",
-      time: subscription?.delivery_slot === "Evening" ? "06:00 PM" : "07:00 AM",
-      product: isActiveSubscription ? (subscription?.milk_type || "Milk") : "Milk",
-      quantity: quantityLabel,
-    },
+    todayDelivery,
     tomorrowDelivery: {
       quantity: quantityLabel,
       slot: subscription?.delivery_slot || "-",
@@ -150,4 +139,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
       dueInDays: 5,
     },
   };
+
+  dashboardCache.set(cacheKey, { payload, at: Date.now() });
+  return payload;
 };

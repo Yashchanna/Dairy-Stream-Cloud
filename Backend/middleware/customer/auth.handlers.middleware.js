@@ -1,15 +1,19 @@
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import {
   generateCustomerOtp,
   verifyCustomerOtp,
-  customerOtpLoginService
-} from "../../../services/authentication/customer.auth.service.js";
-import { generateToken } from "../../../utils/jwt.js";
-
-import { supabase } from "../../../config/supabase.js";
+  customerOtpLoginService,
+} from "../../services/authentication/customer.auth.service.js";
+import { generateToken } from "../../utils/jwt.js";
+import { supabase } from "../../config/supabase.js";
+import { ensureIdentityIsUnique } from "../../services/authentication/identityUniqueness.service.js";
+import cloudinary from "../../config/cloudinary.js";
 
 const normalizeIdentifier = (value) => String(value ?? "").trim();
 const normalizeDigits = (value) => String(value ?? "").replace(/\D/g, "");
+const normalizeEmail = (value) => (value || "").trim().toLowerCase();
+
 let membershipLinkColumnPromise;
 
 const buildPhoneVariants = (identifier) => {
@@ -38,10 +42,7 @@ const resolveMembershipLinkColumn = async () => {
       const compatibleColumns = ["customer_id", "customerid", "customerId", "user_id"];
 
       for (const column of compatibleColumns) {
-        const { error } = await supabase
-          .from("memberships")
-          .select(column)
-          .limit(1);
+        const { error } = await supabase.from("memberships").select(column).limit(1);
 
         if (!error) return column;
 
@@ -129,7 +130,6 @@ const findCustomerByIdentifier = async (identifier) => {
     .limit(1)
     .maybeSingle();
   if (exactError) throw new Error(exactError.message);
-
   if (exactData) return exactData;
 
   const loosePattern = buildLoosePhonePattern(identifier);
@@ -148,8 +148,6 @@ const findCustomerByIdentifier = async (identifier) => {
     if (looseData) return looseData;
   }
 
-  // Final fallback: normalize and compare last 10 digits in app code.
-  // This avoids false misses when DB stores phone with prefixes/spaces/symbols.
   const { data: allCustomers, error: allCustomersError } = await supabase
     .from("customers")
     .select("*")
@@ -168,10 +166,129 @@ const findCustomerByIdentifier = async (identifier) => {
   return matched || null;
 };
 
-// ===============================
-// REQUEST OTP
-// ===============================
-export const requestOtp = async (req, res) => {
+export const addCustomerAuth = async (req, res) => {
+  try {
+    const {
+      customerName,
+      email,
+      phoneNumber,
+      buildingName,
+      wing,
+      roomNo,
+      password,
+      defaultMilkQuantityLiters,
+      billingCycle,
+    } = req.body;
+
+    if (!customerName || !phoneNumber || !roomNo) {
+      return res.status(400).json({
+        message: "customerName, phoneNumber and roomNo are required",
+      });
+    }
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "email and password are required",
+      });
+    }
+
+    await ensureIdentityIsUnique({ email, phone: phoneNumber });
+
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+    let profilePhotoUrl = null;
+    if (req.file) {
+      const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      const uploaded = await cloudinary.uploader.upload(dataUri, {
+        folder: "customers/profile",
+        resource_type: "image",
+      });
+      profilePhotoUrl = uploaded.secure_url;
+    }
+
+    const { data, error } = await supabase
+      .from("customers")
+      .insert([
+        {
+          customer_name: customerName,
+          email: normalizeEmail(email),
+          phone_number: phoneNumber,
+          building_name: buildingName || null,
+          wing: wing || null,
+          room_no: roomNo,
+          password: hashedPassword,
+          default_milk_quantity_liters: defaultMilkQuantityLiters || 1,
+          billing_cycle: billingCycle || "Monthly",
+          profile_photo_url: profilePhotoUrl,
+        },
+      ])
+      .select();
+
+    if (error) {
+      if (error.code === "23505" && error.constraint === "customers_email_key") {
+        return res
+          .status(409)
+          .json({ message: "Email is already used by an existing customer account" });
+      }
+      return res.status(400).json({ message: error.message });
+    }
+
+    return res.status(201).json({
+      message: "Customer registered successfully",
+      customer: data[0],
+    });
+  } catch (err) {
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: statusCode === 409 ? err.message : "Internal Server Error",
+      error: err.message,
+    });
+  }
+};
+
+export const loginCustomerAuth = async (req, res) => {
+  try {
+    const { emailOrPhone, password } = req.body;
+    const filter = `email.eq.${emailOrPhone},phone_number.eq.${emailOrPhone}`;
+    const { data, error } = await supabase.from("customers").select("*").or(filter).limit(1);
+
+    if (error) return res.status(500).json({ message: "Server error" });
+
+    const existingCustomer = data?.[0];
+    if (!existingCustomer) return res.status(404).json({ message: "Customer not found" });
+    if (!existingCustomer.password) {
+      return res.status(400).json({ message: "Password not set for this account" });
+    }
+
+    const isMatch = await bcrypt.compare(password, existingCustomer.password);
+    if (!isMatch) return res.status(401).json({ message: "Invalid password" });
+    if (!process.env.JWT_SECRET) return res.status(500).json({ message: "JWT_SECRET missing in .env" });
+
+    const token = jwt.sign(
+      { id: existingCustomer.id, email: existingCustomer.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    return res.status(200).json({
+      message: "Login successful",
+      token,
+      customer: {
+        id: existingCustomer.id,
+        name: existingCustomer.customer_name,
+        email: existingCustomer.email,
+        phone: existingCustomer.phone_number,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+export const requestOtpAuth = async (req, res) => {
   try {
     let { dairyId } = req.body;
     const identifier = normalizeIdentifier(req.body.identifier);
@@ -184,13 +301,13 @@ export const requestOtp = async (req, res) => {
 
     await generateCustomerOtp({ identifier, dairyId });
 
-    res.json({
+    return res.json({
       success: true,
-      message: "OTP sent successfully"
+      message: "OTP sent successfully",
     });
   } catch (err) {
     const message = err?.message || "Failed to send OTP";
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       error: message,
       message,
@@ -198,10 +315,7 @@ export const requestOtp = async (req, res) => {
   }
 };
 
-// ===============================
-// VERIFY OTP + LOGIN
-// ===============================
-export const verifyOtpLogin = async (req, res) => {
+export const verifyOtpLoginAuth = async (req, res) => {
   try {
     const { otp } = req.body;
     const { dairyId } = req.body;
@@ -227,8 +341,6 @@ export const verifyOtpLogin = async (req, res) => {
     const loginDairyId = verifiedOtp?.dairy_id ?? null;
     const result = await customerOtpLoginService({ identifier, dairyId: loginDairyId });
 
-    // If dairyId is provided, verify membership for that specific dairy.
-    // Otherwise, fallback to checking whether customer has any dairy membership.
     const requestedDairyId = hasDairyId ? dairyId : null;
     const specificMembership = requestedDairyId
       ? await getCustomerMembershipForDairy(result?.user?.id, requestedDairyId)
@@ -257,7 +369,7 @@ export const verifyOtpLogin = async (req, res) => {
       : hasRegistration;
     const redirect = hasRegistration ? "/customer/dashboard" : "/explore";
 
-    res.json({
+    return res.json({
       success: true,
       token: result.token,
       user: result.user,
@@ -265,18 +377,16 @@ export const verifyOtpLogin = async (req, res) => {
       redirect,
     });
   } catch (err) {
-    console.error("verifyOtpLogin error:", err.message);
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       error: err.message,
     });
   }
 };
 
-export const detectUser = async (req, res) => {
+export const detectUserAuth = async (req, res) => {
   try {
     const identifier = normalizeIdentifier(req.body.identifier);
-
     if (!identifier) {
       return res.status(400).json({
         success: false,
@@ -284,11 +394,8 @@ export const detectUser = async (req, res) => {
       });
     }
 
-    // Check if identifier is an email (potential admin)
     const isEmail = identifier.includes("@");
-    
     if (isEmail) {
-      // First check if this email is an admin
       const { data: adminData } = await supabase
         .from("admins")
         .select("id, email, name, dairy_id")
@@ -296,7 +403,6 @@ export const detectUser = async (req, res) => {
         .single();
 
       if (adminData) {
-        console.log(`✅ Admin detected: ${identifier}`);
         return res.json({
           exists: true,
           userType: "ADMIN",
@@ -307,9 +413,7 @@ export const detectUser = async (req, res) => {
       }
     }
 
-    // Check if it's a customer
     const customer = await findCustomerByIdentifier(identifier);
-
     if (!customer) {
       return res.json({
         exists: false,
@@ -325,18 +429,16 @@ export const detectUser = async (req, res) => {
       dairy: null,
     });
   } catch (err) {
-    console.error("detectUser error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to detect user",
     });
   }
 };
 
-export const passwordLogin = async (req, res) => {
+export const passwordLoginAuth = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -344,7 +446,6 @@ export const passwordLogin = async (req, res) => {
       });
     }
 
-    // Check if it's an admin login
     const { data: adminData, error: adminError } = await supabase
       .from("admins")
       .select("*")
@@ -352,9 +453,7 @@ export const passwordLogin = async (req, res) => {
       .single();
 
     if (!adminError && adminData) {
-      // Admin found - verify password
       const isValidPassword = await bcrypt.compare(password, adminData.password);
-
       if (!isValidPassword) {
         return res.status(401).json({
           success: false,
@@ -362,7 +461,6 @@ export const passwordLogin = async (req, res) => {
         });
       }
 
-      // Generate token for admin
       const token = generateToken({
         id: adminData.id,
         email: adminData.email,
@@ -383,14 +481,12 @@ export const passwordLogin = async (req, res) => {
       });
     }
 
-    // If not admin, return error
     return res.status(401).json({
       success: false,
       error: "Invalid email or password",
     });
   } catch (err) {
-    console.error("❌ Password login error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: "Login failed",
     });

@@ -29,10 +29,13 @@ import AdminPayments from "./pages/admin/AdminPayments";
 
 // --- Agent Pages ---
 import AgentDashboard from "./pages/agent/agentDashboard";
+import ThemeToggleButton from "./components/common/ThemeToggleButton.jsx";
 
 
 function App() {
   return (
+    <>
+    <ThemeToggleButton />
     <Routes>
       {/* ==============================
           🔓 PUBLIC ROUTES
@@ -178,6 +181,7 @@ function App() {
       ============================== */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 
