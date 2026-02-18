@@ -1,78 +1,64 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:4000").trim();
+import client from "./client";
+
 const CUSTOMER_DASHBOARD_CACHE_TTL_MS = 10 * 1000;
 const customerDashboardCache = new Map();
 
-const getCustomerDashboardCacheKey = (token) => String(token || "");
-const syncDashboardTodayDeliveryCache = (token, todayDelivery) => {
+// Helper to manage cache keys based on stored token
+const getCacheKey = () => String(localStorage.getItem("token") || "guest");
+
+/* =========================
+   CACHE HELPERS
+========================= */
+const syncDashboardTodayDeliveryCache = (todayDelivery) => {
   if (!todayDelivery) return;
-  const cacheKey = getCustomerDashboardCacheKey(token);
+  const cacheKey = getCacheKey();
   const cached = customerDashboardCache.get(cacheKey);
   if (!cached?.payload) return;
 
   customerDashboardCache.set(cacheKey, {
     ...cached,
     at: Date.now(),
-    payload: {
-      ...cached.payload,
-      todayDelivery,
-    },
+    payload: { ...cached.payload, todayDelivery },
   });
 };
 
-export const fetchCustomerDashboard = async (token, { force = false } = {}) => {
-  const cacheKey = getCustomerDashboardCacheKey(token);
-  const cached = customerDashboardCache.get(cacheKey);
-  if (!force && cached && Date.now() - cached.at < CUSTOMER_DASHBOARD_CACHE_TTL_MS) {
-    return cached.payload;
-  }
-
-  const res = await fetch(`${API_BASE}/api/customer/dashboard`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch dashboard data");
-  }
-
-  const payload = await res.json();
-  customerDashboardCache.set(cacheKey, { payload, at: Date.now() });
-  return payload;
-};
-
-export const invalidateCustomerDashboardCache = (token) => {
+export const invalidateCustomerDashboardCache = () => {
+  const token = localStorage.getItem("token");
   if (!token) {
     customerDashboardCache.clear();
     return;
   }
-  customerDashboardCache.delete(getCustomerDashboardCacheKey(token));
+  customerDashboardCache.delete(getCacheKey());
 };
 
-export const fetchCustomerProfile = async (token) => {
-  const res = await fetch(`${API_BASE}/api/customer/profile`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
+/* =========================
+   CORE API FUNCTIONS
+========================= */
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || data?.error || "Failed to fetch profile");
+// 1. DASHBOARD
+export const fetchCustomerDashboard = async ({ force = false } = {}) => {
+  const cacheKey = getCacheKey();
+  const cached = customerDashboardCache.get(cacheKey);
+
+  if (!force && cached && Date.now() - cached.at < CUSTOMER_DASHBOARD_CACHE_TTL_MS) {
+    return cached.payload;
   }
 
+  const { data } = await client.get("/customer/dashboard");
+  customerDashboardCache.set(cacheKey, { payload: data, at: Date.now() });
   return data;
 };
 
-export const updateCustomerProfile = async (token, payload) => {
-  const hasPhoto = Boolean(payload?.photoFile);
+// 2. PROFILE
+export const fetchCustomerProfile = async () => {
+  const { data } = await client.get("/customer/profile");
+  return data;
+};
 
-  let body;
-  const headers = {
-    Authorization: `Bearer ${token}`,
-  };
+export const updateCustomerProfile = async (payload) => {
+  const hasPhoto = Boolean(payload?.photoFile);
+  let body = payload;
+  let config = {};
 
   if (hasPhoto) {
     const formData = new FormData();
@@ -82,108 +68,46 @@ export const updateCustomerProfile = async (token, payload) => {
     });
     formData.append("image", payload.photoFile);
     body = formData;
-  } else {
-    headers["Content-Type"] = "application/json";
-    body = JSON.stringify(payload);
+    config = { headers: { "Content-Type": "multipart/form-data" } };
   }
 
-  const res = await fetch(`${API_BASE}/api/customer/profile`, {
-    method: "PUT",
-    headers,
-    body,
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || data?.error || "Failed to update profile");
-  }
-
-  invalidateCustomerDashboardCache(token);
+  const { data } = await client.put("/customer/profile", body, config);
+  invalidateCustomerDashboardCache();
   return data;
 };
 
-export const fetchCustomerDeliveries = async (token) => {
-  const res = await fetch(`${API_BASE}/api/customer/deliveries`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || "Failed to fetch deliveries");
-  }
-
-  syncDashboardTodayDeliveryCache(token, data?.todayDelivery);
+// 3. DELIVERIES & PAYMENTS
+export const fetchCustomerDeliveries = async () => {
+  const { data } = await client.get("/customer/deliveries");
+  syncDashboardTodayDeliveryCache(data?.todayDelivery);
   return data;
 };
 
-export const fetchCustomerPayments = async (token) => {
-  const res = await fetch(`${API_BASE}/api/customer/payments`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || data?.error || "Failed to fetch payments");
-  }
-
+export const fetchCustomerPayments = async () => {
+  const { data } = await client.get("/customer/payments");
   return data;
 };
 
-export const fetchCustomerSubscription = async (token) => {
-  const res = await fetch(`${API_BASE}/api/customer/subscription`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch subscription");
-  }
-
-  return res.json();
-};
-
-export const saveCustomerSubscription = async (token, payload) => {
-  const res = await fetch(`${API_BASE}/api/customer/subscription`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.message || "Failed to save subscription");
-  }
-
-  const data = await res.json();
-  invalidateCustomerDashboardCache(token);
+// 4. SUBSCRIPTION MANAGEMENT
+export const fetchCustomerSubscription = async () => {
+  const { data } = await client.get("/customer/subscription");
   return data;
 };
 
-export const clearCustomerSubscription = async (token) => {
-  const res = await fetch(`${API_BASE}/api/customer/subscription`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || "Failed to clear subscription");
-  }
-
-  invalidateCustomerDashboardCache(token);
+export const saveCustomerSubscription = async (payload) => {
+  const { data } = await client.post("/customer/subscription", payload);
+  invalidateCustomerDashboardCache();
   return data;
 };
+
+export const clearCustomerSubscription = async () => {
+  const { data } = await client.delete("/customer/subscription");
+  invalidateCustomerDashboardCache();
+  return data;
+};
+
+/* =========================
+   REGISTRATION
+========================= */
+export const registerCustomer = (data) => 
+  client.post("/customer/addCustomer", data);

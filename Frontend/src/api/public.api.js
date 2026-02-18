@@ -1,18 +1,19 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:4000").trim();
+import client from "./client"; // ✅ Use the centralized client
 
+/**
+ * Fetch all public dairies with optional search filtering.
+ */
 export const fetchPublicDairies = async ({ search = "" } = {}) => {
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
-
-  const res = await fetch(`${BASE_URL}/api/dairies?${params.toString()}`);
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || "Failed to fetch dairies");
-  return JSON.parse(text);
+  const { data } = await client.get("/dairies", {
+    params: { search }, // ✅ Axios automatically builds the query string
+  });
+  return data;
 };
 
+/**
+ * Fetch details for a specific dairy by its ID.
+ */
 export const fetchPublicDairyById = async (id) => {
-  const res = await fetch(`${BASE_URL}/api/dairies/${id}`);
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || "Failed to fetch dairy");
-  return JSON.parse(text);
+  const { data } = await client.get(`/dairies/${id}`);
+  return data;
 };
