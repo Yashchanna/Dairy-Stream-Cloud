@@ -7,7 +7,7 @@ const customerDashboardCache = new Map();
 const getCacheKey = () => String(localStorage.getItem("token") || "guest");
 
 /* =========================
-   CACHE HELPERS
+    CACHE HELPERS
 ========================= */
 const syncDashboardTodayDeliveryCache = (todayDelivery) => {
   if (!todayDelivery) return;
@@ -32,7 +32,7 @@ export const invalidateCustomerDashboardCache = () => {
 };
 
 /* =========================
-   CORE API FUNCTIONS
+    CORE API FUNCTIONS
 ========================= */
 
 // 1. DASHBOARD
@@ -57,21 +57,28 @@ export const fetchCustomerProfile = async () => {
 
 export const updateCustomerProfile = async (payload) => {
   const hasPhoto = Boolean(payload?.photoFile);
-  let body = payload;
-  let config = {};
 
   if (hasPhoto) {
     const formData = new FormData();
+    // ✅ Extract all text fields and append to FormData
     Object.entries(payload || {}).forEach(([key, value]) => {
       if (value === undefined || value === null || key === "photoFile") return;
-      formData.append(key, String(value));
+      formData.append(key, value);
     });
+    
+    // ✅ Append the image file specifically with the key 'image' (must match Multer on backend)
     formData.append("image", payload.photoFile);
-    body = formData;
-    config = { headers: { "Content-Type": "multipart/form-data" } };
+
+    // ✅ Axios handles the boundary automatically when headers are set to multipart/form-data
+    const { data } = await client.put("/customer/profile", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    invalidateCustomerDashboardCache();
+    return data;
   }
 
-  const { data } = await client.put("/customer/profile", body, config);
+  // ✅ If no photo, send as standard JSON (Axios default)
+  const { data } = await client.put("/customer/profile", payload);
   invalidateCustomerDashboardCache();
   return data;
 };
@@ -95,6 +102,7 @@ export const fetchCustomerSubscription = async () => {
 };
 
 export const saveCustomerSubscription = async (payload) => {
+  // ✅ Payload is an object, client.js attaches the token via Interceptor
   const { data } = await client.post("/customer/subscription", payload);
   invalidateCustomerDashboardCache();
   return data;
@@ -107,7 +115,7 @@ export const clearCustomerSubscription = async () => {
 };
 
 /* =========================
-   REGISTRATION
+    REGISTRATION
 ========================= */
 export const registerCustomer = (data) => 
   client.post("/customer/addCustomer", data);

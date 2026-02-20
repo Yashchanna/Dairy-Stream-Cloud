@@ -7,6 +7,9 @@ import {
   ShieldCheck,
   Clock,
   Truck,
+  X,
+  CheckCircle2,
+  ChevronRight
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { fetchPublicDairyById } from "../../api/public.api.js";
@@ -16,6 +19,8 @@ import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
 const DairyDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // State Management
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -34,6 +39,7 @@ const DairyDetailsPage = () => {
     startDate: new Date().toISOString().slice(0, 10),
   });
 
+  // 1. Fetch Dairy Details
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -54,13 +60,15 @@ const DairyDetailsPage = () => {
     return () => { active = false; };
   }, [id]);
 
+  // 2. Fetch Subscription Status (Corrected: No Token Argument)
   useEffect(() => {
     const loadSubscription = async () => {
       try {
         const storedUser = localStorage.getItem("user");
-        const token = storedUser ? JSON.parse(storedUser)?.token : null;
-        if (!token) return;
-        const res = await fetchCustomerSubscription(token);
+        if (!storedUser) return;
+        
+        // ✅ Interceptor handles the token automatically
+        const res = await fetchCustomerSubscription();
         setExistingSubscription(res?.subscription || null);
       } catch {
         setExistingSubscription(null);
@@ -69,6 +77,7 @@ const DairyDetailsPage = () => {
     loadSubscription();
   }, [id]);
 
+  // 3. Load Initial User Address
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
@@ -82,6 +91,7 @@ const DairyDetailsPage = () => {
     }
   }, []);
 
+  // 4. Memoized Dairy Object
   const dairy = useMemo(() => {
     if (!data) return null;
     return {
@@ -97,7 +107,6 @@ const DairyDetailsPage = () => {
       description: data.description || data.dairy_description || "No description provided.",
       phone: data.dairy_phone || data.phone || "-",
       email: data.dairy_email || data.email || "-",
-      createdAt: data.created_at || null,
     };
   }, [data]);
 
@@ -106,6 +115,7 @@ const DairyDetailsPage = () => {
     return String(existingSubscription.dairy_id || existingSubscription.dairyId) === String(id);
   }, [existingSubscription, id]);
 
+  // Handlers
   const handleOpenSubscribe = () => {
     setStep(1);
     setPaymentMethod("UPI");
@@ -113,9 +123,7 @@ const DairyDetailsPage = () => {
     setShowSubscribe(true);
   };
 
-  const handleCloseSubscribe = () => {
-    setShowSubscribe(false);
-  };
+  const handleCloseSubscribe = () => setShowSubscribe(false);
 
   const handleSubscriptionChange = (e) => {
     const { name, value } = e.target;
@@ -138,16 +146,17 @@ const DairyDetailsPage = () => {
     setStep(3);
   };
 
+  // 5. Submit Subscription (Corrected: Token removal prevents JSON Crash)
   const handleConfirmSubscription = async () => {
     try {
       const storedUser = localStorage.getItem("user");
-      const token = storedUser ? JSON.parse(storedUser)?.token : null;
-      if (!token) {
+      if (!storedUser) {
         toast.error("Please login to subscribe");
         return;
       }
 
-      await saveCustomerSubscription(token, {
+      // ✅ FIX: Removed 'token'. Passing ONLY the data object.
+      await saveCustomerSubscription({
         dairyId: dairy.id,
         milkType: subscription.milkType,
         quantity: subscription.quantity,
@@ -160,357 +169,235 @@ const DairyDetailsPage = () => {
 
       toast.success("Subscription successful!");
       setStep(4);
-      setExistingSubscription({
-        dairy_id: dairy.id,
-        dairyId: dairy.id,
-      });
+      setExistingSubscription({ dairy_id: dairy.id, dairyId: dairy.id });
     } catch (err) {
       toast.error(err?.message || "Failed to save subscription");
     }
   };
 
-  if (loading) {
-    return <LoadingIndicator fullScreen message="Loading dairy details..." />;
-  }
-
-  if (error || !dairy) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500">
-        {error || "Dairy not found"}
-      </div>
-    );
-  }
+  if (loading) return <LoadingIndicator fullScreen message="Loading dairy details..." />;
+  if (error || !dairy) return <div className="min-h-screen flex items-center justify-center text-gray-500">{error || "Dairy not found"}</div>;
 
   return (
-    <div className="min-h-screen w-full bg-slate-50">
-      <div className="bg-white border-b sticky top-0 z-20">
-        <div className="w-full px-6 lg:px-10 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-full hover:bg-gray-100"
-          >
-            <ArrowLeft />
-          </button>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold">{dairy.name}</h1>
-            {dairy.isVerified && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded-full">
-                <ShieldCheck size={12} /> Verified
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full px-6 lg:px-10 py-6 grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="w-full h-[420px] bg-gray-100 rounded-2xl overflow-hidden">
-            {dairy.image ? (
-              <img
-                src={dairy.image}
-                alt={dairy.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                No image
-              </div>
-            )}
-          </div>
-
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-2">About this Dairy</h2>
-            <p className="text-gray-600">{dairy.description}</p>
-          </section>
-
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">Contact</h2>
-            <div className="grid sm:grid-cols-2 gap-4 text-sm text-gray-700">
-              <div>
-                <p className="text-xs text-gray-500">Phone</p>
-                <p>{dairy.phone}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Email</p>
-                <p>{dairy.email}</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">Location</h2>
-            <div className="text-sm text-gray-700 flex items-start gap-2">
-              <MapPin size={16} />
-              <span>{dairy.address}</span>
-            </div>
-          </section>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 h-fit lg:sticky lg:top-24">
-          {dairy.rating != null && (
-            <div className="flex items-center gap-2 mb-3">
-              <div className="flex items-center gap-1 bg-green-100 px-2 py-1 rounded text-sm font-bold text-green-700">
-                {dairy.rating}
-                <Star size={14} fill="currentColor" />
-              </div>
-              {dairy.reviews != null && (
-                <span className="text-sm text-gray-500">({dairy.reviews} reviews)</span>
+    <div className="min-h-screen w-full bg-slate-50 font-sans pb-20">
+      {/* Sticky Header */}
+      <div className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-bold text-gray-900 leading-tight">{dairy.name}</h1>
+              {dairy.isVerified && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase tracking-wider">
+                  <ShieldCheck size={10} /> Verified Dairy
+                </span>
               )}
             </div>
-          )}
-
-          <div className="text-sm text-gray-600 flex gap-2 mb-2">
-            <MapPin size={16} />
-            {dairy.address}
           </div>
-
-          {dairy.distance && (
-            <div className="text-sm text-gray-600 flex gap-2 mb-4">
-              <Clock size={16} />
-              {dairy.distance}
-            </div>
-          )}
-
-          {dairy.minPrice != null && (
-            <div className="border-t pt-4 mb-4">
-              <p className="text-sm text-gray-500">Starting at</p>
-              <p className="text-2xl font-bold">Rs {dairy.minPrice}
-                <span className="text-sm text-gray-500"> /L</span>
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Approx Rs {dairy.minPrice * 30}/month (1L daily)
-              </p>
-            </div>
-          )}
-
-          {isSubscribed ? (
-            <button
-              onClick={() => navigate("/customer/subscriptions")}
-              className="w-full bg-green-600 text-white py-3 rounded-xl font-semibold hover:bg-green-700 flex items-center justify-center gap-2"
-            >
-              Subscribed - Manage
-            </button>
-          ) : (
-            <button
-              onClick={handleOpenSubscribe}
-              className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 flex items-center justify-center gap-2"
-            >
-              <Truck size={18} />
-              Subscribe Now
-            </button>
-          )}
         </div>
       </div>
 
-      {showSubscribe && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={handleCloseSubscribe}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden">
-              <div className="p-6 border-b flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold">Subscribe to {dairy.name}</h2>
-                  <p className="text-sm text-gray-500">Step {step} of 4</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid lg:grid-cols-3 gap-8">
+          
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Image Gallery Mockup */}
+            <div className="relative aspect-[16/9] w-full bg-gray-200 rounded-3xl overflow-hidden shadow-inner group">
+              {dairy.image ? (
+                <img src={dairy.image} alt={dairy.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                  <Truck size={48} strokeWidth={1} />
+                  <span className="text-sm mt-2">Image Gallery coming soon</span>
                 </div>
-                <button onClick={handleCloseSubscribe} className="text-gray-400">X</button>
+              )}
+            </div>
+
+            {/* Content Sections */}
+            <section className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">About the Farm</h2>
+              <p className="text-gray-600 leading-relaxed text-base">{dairy.description}</p>
+            </section>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <section className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                   <Clock size={18} className="text-blue-500" /> Availability
+                </h2>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Morning Slot</span><span className="font-medium">6:00 AM - 9:00 AM</span></div>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Evening Slot</span><span className="font-medium">5:00 PM - 8:00 PM</span></div>
+                </div>
+              </section>
+
+              <section className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <MapPin size={18} className="text-red-500" /> Delivery Area
+                </h2>
+                <p className="text-sm text-gray-600 mb-2">{dairy.address}</p>
+                <div className="h-24 w-full bg-slate-50 rounded-xl border border-dashed flex items-center justify-center text-xs text-gray-400">
+                  Map Preview Component
+                </div>
+              </section>
+            </div>
+          </div>
+
+          {/* Booking Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-3xl p-8 shadow-xl border border-blue-50 sticky top-28">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-sm text-gray-500">Starting Price</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-black text-gray-900">₹{dairy.minPrice}</span>
+                    <span className="text-gray-500 text-sm">/Liter</span>
+                  </div>
+                </div>
+                {dairy.rating && (
+                  <div className="bg-green-500 text-white px-3 py-1 rounded-xl flex items-center gap-1 font-bold shadow-lg shadow-green-100">
+                    {dairy.rating} <Star size={14} fill="white" />
+                  </div>
+                )}
               </div>
 
+              <div className="space-y-4 mb-8">
+                 <div className="flex items-center gap-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-2xl">
+                    <ShieldCheck size={18} className="text-blue-600" />
+                    <span>Pure & Untouched Milk</span>
+                 </div>
+                 <div className="flex items-center gap-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-2xl">
+                    <Truck size={18} className="text-blue-600" />
+                    <span>Free Home Delivery</span>
+                 </div>
+              </div>
+
+              {isSubscribed ? (
+                <button 
+                  onClick={() => navigate("/customer/subscription")}
+                  className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-green-100 hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={20} /> Already Subscribed
+                </button>
+              ) : (
+                <button 
+                  onClick={handleOpenSubscribe}
+                  className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
+                >
+                  Subscribe Now <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
+
+              <p className="text-[10px] text-center text-gray-400 mt-4 px-4 uppercase tracking-tighter">
+                Cancel or pause your subscription anytime from dashboard
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Subscription Modal Wrapper */}
+      {showSubscribe && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={handleCloseSubscribe} />
+          <div className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="p-8 border-b flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Configure Plan</h2>
+                <div className="flex gap-1 mt-1">
+                  {[1,2,3,4].map(s => (
+                    <div key={s} className={`h-1.5 rounded-full transition-all ${step >= s ? 'w-6 bg-blue-600' : 'w-2 bg-gray-200'}`} />
+                  ))}
+                </div>
+              </div>
+              <button onClick={handleCloseSubscribe} className="p-2 hover:bg-white rounded-full transition-colors border shadow-sm">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8">
               {step === 1 && (
-                <div className="p-6 space-y-5">
-                  <div>
-                    <label className="text-sm text-gray-600">Milk Type</label>
-                    <select
-                      name="milkType"
-                      value={subscription.milkType}
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">Select Milk Type</label>
+                    <select 
+                      name="milkType" 
+                      value={subscription.milkType} 
                       onChange={handleSubscriptionChange}
-                      className="w-full mt-1 border rounded-lg p-2"
+                      className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-white focus:border-blue-500 outline-none transition-all appearance-none"
                     >
-                      <option>Full Cream</option>
-                      <option>Toned</option>
-                      <option>Double Toned</option>
-                      <option>Buffalo</option>
+                      <option>Full Cream</option><option>Toned</option><option>Double Toned</option><option>Buffalo Milk</option><option>Cow Milk</option>
                     </select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-gray-600">Quantity (L)</label>
-                      <select
-                        name="quantity"
-                        value={subscription.quantity}
-                        onChange={handleSubscriptionChange}
-                        className="w-full mt-1 border rounded-lg p-2"
-                      >
-                        <option value="0.5">0.5</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                      </select>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">Quantity (L)</label>
+                      <input 
+                        type="number" step="0.5" name="quantity" 
+                        value={subscription.quantity} onChange={handleSubscriptionChange}
+                        className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-white focus:border-blue-500 outline-none" 
+                      />
                     </div>
-                    <div>
-                      <label className="text-sm text-gray-600">Delivery Time</label>
-                      <select
-                        name="slot"
-                        value={subscription.slot}
-                        onChange={handleSubscriptionChange}
-                        className="w-full mt-1 border rounded-lg p-2"
-                      >
-                        <option>Morning</option>
-                        <option>Evening</option>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">Slot</label>
+                      <select name="slot" value={subscription.slot} onChange={handleSubscriptionChange} className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-white focus:border-blue-500 outline-none">
+                        <option>Morning</option><option>Evening</option>
                       </select>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-sm text-gray-600">Start Date</label>
-                    <input
-                      type="date"
-                      name="startDate"
-                      value={subscription.startDate}
-                      onChange={handleSubscriptionChange}
-                      className="w-full mt-1 border rounded-lg p-2"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={handleCloseSubscribe}
-                      className="px-4 py-2 border rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleContinueFromStep1}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-                    >
-                      Continue
-                    </button>
-                  </div>
+                  <button onClick={handleContinueFromStep1} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold hover:bg-black transition-colors">
+                    Continue to Address
+                  </button>
                 </div>
               )}
 
               {step === 2 && (
-                <div className="p-6 space-y-5">
-                  <div>
-                    <p className="text-sm text-gray-600">Deliver to</p>
-                    {address && !editAddress ? (
-                      <div className="mt-2 p-4 border rounded-lg bg-gray-50">
-                        <div className="text-sm text-gray-800">{address}</div>
-                        <button
-                          onClick={() => setEditAddress(true)}
-                          className="mt-2 text-blue-600 text-sm"
-                        >
-                          Change Address
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="mt-2">
-                        <textarea
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          rows={3}
-                          className="w-full border rounded-lg p-2"
-                          placeholder="Enter delivery address"
-                        />
-                      </div>
-                    )}
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">Delivery Address</label>
+                    <textarea 
+                      value={address} onChange={(e) => setAddress(e.target.value)} 
+                      className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-white focus:border-blue-500 outline-none" rows={4}
+                      placeholder="Flat No, Building, Area..."
+                    />
                   </div>
-
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setStep(1)}
-                      className="px-4 py-2 border rounded-lg"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleContinueFromStep2}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-                    >
-                      Proceed to Payment
-                    </button>
+                  <div className="flex gap-3">
+                    <button onClick={() => setStep(1)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold hover:bg-gray-200">Back</button>
+                    <button onClick={handleContinueFromStep2} className="flex-[2] bg-gray-900 text-white py-4 rounded-2xl font-bold hover:bg-black">Review & Pay</button>
                   </div>
                 </div>
               )}
 
               {step === 3 && (
-                <div className="p-6 space-y-6">
-                  <div className="border rounded-lg p-4 bg-gray-50">
-                    <p className="text-sm font-semibold">Subscription Summary</p>
-                    <div className="mt-2 text-sm text-gray-700 space-y-1">
-                      <div>Milk Type: {subscription.milkType}</div>
-                      <div>Quantity: {subscription.quantity} L</div>
-                      <div>Delivery Slot: {subscription.slot}</div>
-                      <div>Start Date: {subscription.startDate}</div>
-                      <div>Dairy: {dairy.name}</div>
-                    </div>
+                <div className="space-y-6">
+                  <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 space-y-3">
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Dairy</span><span className="font-bold">{dairy.name}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Subscription</span><span className="font-bold">{subscription.quantity}L {subscription.milkType}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Starts From</span><span className="font-bold">{subscription.startDate}</span></div>
+                    <div className="pt-3 border-t flex justify-between"><span className="font-bold">Total Daily</span><span className="font-black text-blue-600">₹{dairy.minPrice * subscription.quantity}</span></div>
                   </div>
-
-                  <div>
-                    <p className="text-sm font-semibold">Payment Method</p>
-                    <div className="mt-2 space-y-2">
-                      {[
-                        "UPI",
-                        "Card",
-                        "Cash on Delivery",
-                      ].map((method) => (
-                        <label key={method} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="radio"
-                            name="paymentMethod"
-                            value={method}
-                            checked={paymentMethod === method}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                          />
-                          {method}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setStep(2)}
-                      className="px-4 py-2 border rounded-lg"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleConfirmSubscription}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-                    >
-                      Confirm Subscription
-                    </button>
-                  </div>
+                  <button onClick={handleConfirmSubscription} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 shadow-xl shadow-blue-200">
+                    Confirm & Start Delivery
+                  </button>
                 </div>
               )}
 
               {step === 4 && (
-                <div className="p-6 space-y-5 text-center">
-                  <div className="text-green-600 font-semibold text-lg">Subscription Confirmed</div>
-                  <div className="text-sm text-gray-700 space-y-1">
-                    <div>Dairy: {dairy.name}</div>
-                    <div>Start Date: {subscription.startDate}</div>
-                    <div>Quantity: {subscription.quantity} L</div>
-                    <div>Delivery Slot: {subscription.slot}</div>
+                <div className="text-center py-6 space-y-6">
+                  <div className="h-20 w-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 size={40} />
                   </div>
-                  <div className="flex justify-center gap-2">
-                    <button
-                      onClick={() => navigate("/customer/subscriptions")}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-                    >
-                      Go to My Subscriptions
-                    </button>
-                    <button
-                      onClick={() => navigate("/explore")}
-                      className="px-4 py-2 border rounded-lg"
-                    >
-                      Explore More Dairies
-                    </button>
-                  </div>
+                  <h3 className="text-2xl font-black text-gray-900">Subscription Active!</h3>
+                  <p className="text-gray-500">Your first delivery will arrive on {subscription.startDate}</p>
+                  <button onClick={() => navigate("/customer/subscription")} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold">
+                    Go to Dashboard
+                  </button>
                 </div>
               )}
             </div>
