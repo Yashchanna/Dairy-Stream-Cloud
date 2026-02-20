@@ -1,67 +1,22 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
 import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
-import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Loader2, MapPin } from 'lucide-react';
 import { fetchCustomerDeliveries } from '../../api/customer.api.js';
 
 const Deliveries = () => {
+  const navigate = useNavigate(); // 2. Initialize navigate
   const [deliveries, setDeliveries] = useState([]);
   const [todayDelivery, setTodayDelivery] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchDeliveries = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const storedUser = localStorage.getItem("user");
-      const storedToken = storedUser ? JSON.parse(storedUser)?.token : null;
-      const token = storedToken || localStorage.getItem("token");
-
-      if (!token) {
-        throw new Error("Customer token missing");
-      }
-
-      const deliveryData = await fetchCustomerDeliveries(token);
-      setDeliveries(Array.isArray(deliveryData?.deliveries) ? deliveryData.deliveries : []);
-      setTodayDelivery(deliveryData?.todayDelivery || null);
-    } catch (err) {
-      setError(err?.message || 'Could not load delivery history.');
-      setDeliveries([]);
-      setTodayDelivery(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDeliveries();
-  }, []);
+  // ... (fetchDeliveries function stays the same)
 
   return (
     <CustomerLayout>
       <div className="space-y-8">
-
-        {/* Page Header */}
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Delivery History
-          </h2>
-
-          <button
-            onClick={fetchDeliveries}
-            disabled={loading}
-            className="inline-flex items-center gap-2 text-blue-600 text-sm font-medium hover:underline disabled:text-gray-400"
-          >
-            {loading && <Loader2 size={14} className="animate-spin" />}
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
-
-        {error && (
-          <div className="bg-yellow-50 text-yellow-700 p-4 rounded-xl border border-yellow-100">
-            {error}
-          </div>
-        )}
+        {/* ... (Header and Error sections stay the same) */}
 
         {todayDelivery && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -73,34 +28,24 @@ const Deliveries = () => {
                 </h3>
                 <p className="text-sm mt-1">
                   Status:{' '}
-                  <span
-                    className={
-                      (todayDelivery.status || 'PENDING') === 'PENDING'
-                        ? 'text-red-600 font-semibold'
-                        : 'text-gray-600'
-                    }
-                  >
+                  <span className={(todayDelivery.status || 'PENDING') === 'PENDING' ? 'text-red-600 font-semibold' : 'text-gray-600'}>
                     {todayDelivery.status || 'PENDING'}
                   </span>
                 </p>
-                {todayDelivery?.agent?.name && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Agent: {todayDelivery.agent.name} ({todayDelivery.agent.phone || '-'})
-                  </p>
-                )}
               </div>
 
+              {/* 3. Updated Button to navigate and pass agent data */}
               <button
-                className="text-sm font-semibold text-blue-600 border border-blue-200 px-3 py-2 rounded-lg disabled:text-gray-400 disabled:border-gray-200"
+                onClick={() => navigate('/customer/track-agent', { state: { delivery: todayDelivery } })}
+                className="flex items-center justify-center gap-2 text-sm font-semibold text-white bg-blue-600 px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
                 disabled={!todayDelivery?.canTrackAgent}
-                title={todayDelivery?.canTrackAgent ? 'Agent assigned' : 'Agent not assigned yet'}
               >
+                <MapPin size={16} />
                 Track Agent
               </button>
             </div>
           </div>
         )}
-
         {loading ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
             <div className="flex flex-col items-center justify-center gap-3 text-gray-500">

@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { icon: Calendar, label: "Deliveries", path: "/customer/dashboard/deliveries" },
   { icon: ShoppingBag, label: "Subscribe", path: "/customer/dashboard/subscriptions" },
   { icon: CreditCard, label: "Payments", path: "/customer/dashboard/payments" },
+   {icon: CreditCard, label: "Payments", path: "/customer/dashboard/payments" },
   { icon: User, label: "Profile", path: "/customer/dashboard/profile" },
 ];
 
