@@ -9,24 +9,22 @@ import {
 // ==========================================
 // 1. REGISTRATION (Public)
 // ==========================================
+// ==========================================
+// 1. REGISTRATION (Public - No Password/Photo)
+// ==========================================
 export const addCustomerAuth = async (req, res) => {
   try {
-    // 1. Extract Data
+    // 1. Extract Data from req.body (JSON)
     const {
       customerName,
       email,
       phoneNumber,
       buildingName,
-      wing,
       roomNo,
-      // Password is optional/removed if you want OTP-only even for registration,
-      // but usually kept for profile security settings.
-      password, 
-      defaultMilkQuantityLiters,
-      billingCycle,
     } = req.body;
 
     // 2. Validate Required Fields
+    // (Ensure these match what your frontend is sending)
     if (!customerName || !phoneNumber || !roomNo) {
       return res.status(400).json({
         success: false,
@@ -34,9 +32,9 @@ export const addCustomerAuth = async (req, res) => {
       });
     }
 
-    // 3. Call Service (Handles DB Insert & Image Upload)
-    // We pass req.file for the profile image
-    const customer = await registerCustomerService(req.body, req.file);
+    // 3. Call Service
+    // ✅ REMOVED req.file - strictly passing req.body now
+    const customer = await registerCustomerService(req.body);
 
     // 4. Send Response
     return res.status(201).json({
@@ -46,11 +44,15 @@ export const addCustomerAuth = async (req, res) => {
     });
 
   } catch (err) {
-    // Handle specific errors (like duplicate email/phone)
-    const statusCode = err.message.includes("already used") ? 409 : 500;
+    console.error("Registration Controller Error:", err.message);
+    
+    // Handle specific errors (like duplicate email/phone from your uniqueness service)
+    const isDuplicate = err.message.includes("already used") || err.message.includes("unique");
+    const statusCode = isDuplicate ? 409 : 500;
+    
     return res.status(statusCode).json({
       success: false,
-      message: statusCode === 409 ? err.message : "Registration failed",
+      message: isDuplicate ? err.message : "Registration failed",
       error: err.message,
     });
   }
