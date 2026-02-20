@@ -30,6 +30,7 @@ import AdminPayments from "./pages/admin/AdminPayments";
 // --- Agent Pages ---
 import AgentDashboard from "./pages/agent/agentDashboard";
 import ThemeToggleButton from "./components/common/ThemeToggleButton.jsx";
+import TrackAgent from "./pages/customer/TrackAgent.jsx";
 
 
 function App() {
@@ -80,6 +81,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={["CUSTOMER"]}>
             <Payments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/dashboard/track/agent"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <TrackAgent />
           </ProtectedRoute>
         }
       />
