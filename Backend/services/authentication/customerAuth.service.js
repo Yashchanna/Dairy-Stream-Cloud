@@ -234,9 +234,9 @@ const buildPhoneVariants = (identifier) => {
 // ==========================================
 
 /**
- * Register a new customer
+ * Register a new customer (Simplified: No Password/Photo)
  */
-export const registerCustomerService = async (payload, file) => {
+export const registerCustomerService = async (payload) => {
   const {
     customerName,
     email,
@@ -244,29 +244,15 @@ export const registerCustomerService = async (payload, file) => {
     buildingName,
     wing,
     roomNo,
-    password,
     defaultMilkQuantityLiters,
     billingCycle,
   } = payload;
 
-  // 1. Check Uniqueness
+  // 1. Check Uniqueness (Email and Phone must be unique)
   await ensureIdentityIsUnique({ email, phone: phoneNumber });
 
-  // 2. Hash Password
-  const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
-
-  // 3. Upload Image (if exists)
-  let profilePhotoUrl = null;
-  if (file) {
-    const dataUri = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
-    const uploaded = await cloudinary.uploader.upload(dataUri, {
-      folder: "customers/profile",
-      resource_type: "image",
-    });
-    profilePhotoUrl = uploaded.secure_url;
-  }
-
-  // 4. Insert into DB
+  // 2. Insert into DB 
+  // We remove 'password' and 'profile_photo_url' from the insert object
   const { data, error } = await supabase
     .from("customers")
     .insert([
@@ -277,19 +263,21 @@ export const registerCustomerService = async (payload, file) => {
         building_name: buildingName || null,
         wing: wing || null,
         room_no: roomNo,
-        password: hashedPassword,
+        // ✅ Password and Photo are omitted so they stay NULL in DB
         default_milk_quantity_liters: defaultMilkQuantityLiters || 1,
         billing_cycle: billingCycle || "Monthly",
-        profile_photo_url: profilePhotoUrl,
       },
     ])
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("Supabase Error:", error.message);
+    throw new Error(error.message);
+  }
+
   return data;
 };
-
 /**
  * Login with Password
  */

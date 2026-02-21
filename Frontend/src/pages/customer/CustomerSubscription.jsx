@@ -9,9 +9,12 @@ import {
 } from '../../api/customer.api';
 import LoadingIndicator from '../../components/common/LoadingIndicator.jsx';
 
+/* ======================================================
+   HELPERS & CONSTANTS
+====================================================== */
 const EMPTY_FORM = {
   dairyId: null,
-  product: '',
+  product: 'Buffalo Milk',
   quantity: 1,
   slot: 'Morning',
   timeRange: '6:00 - 8:00 AM',
@@ -21,15 +24,9 @@ const EMPTY_FORM = {
   paymentMethod: 'UPI',
 };
 
-const getAuthToken = () => {
-  const storedUser = localStorage.getItem('user');
-  const parsed = storedUser ? JSON.parse(storedUser) : null;
-  return parsed?.token || localStorage.getItem('token') || null;
-};
-
+// ✅ UI Mapper
 const toUiSubscription = (record) => {
   if (!record) return null;
-
   const slot = record.delivery_slot || 'Morning';
   return {
     dairyId: record.dairy_id ?? null,
@@ -44,6 +41,7 @@ const toUiSubscription = (record) => {
   };
 };
 
+// ✅ Payload Mapper
 const toSavePayload = (model, overrides = {}) => {
   const next = { ...model, ...overrides };
   return {
@@ -58,6 +56,9 @@ const toSavePayload = (model, overrides = {}) => {
   };
 };
 
+/* ======================================================
+   MAIN COMPONENT
+====================================================== */
 const Subscribe = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -74,13 +75,14 @@ const Subscribe = () => {
   const [toast, setToast] = useState(null);
   const [closing, setClosing] = useState(false);
 
+  // -----------------------------------------
+  // 1. Initial Data Fetch
+  // -----------------------------------------
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = getAuthToken();
-        if (!token) throw new Error('Token missing');
-
-        const data = await fetchCustomerSubscription(token);
+        // ✅ Token is handled by client.js Interceptor automatically
+        const data = await fetchCustomerSubscription();
         const mapped = toUiSubscription(data?.subscription);
 
         setSubscription(mapped);
@@ -97,6 +99,9 @@ const Subscribe = () => {
     fetchData();
   }, []);
 
+  // -----------------------------------------
+  // 2. Dashboard Redirect Logic
+  // -----------------------------------------
   useEffect(() => {
     const shouldOpenUpdateFromDashboard =
       Boolean(location.state?.openUpdateModal) && location.state?.editMode === "next-day-delivery";
@@ -106,7 +111,7 @@ const Subscribe = () => {
     if (subscription) {
       setShowUpdateModal(true);
     } else {
-      showToastMessage('error', 'No active subscription found for next day delivery edit');
+      showToastMessage('error', 'No active subscription found');
     }
 
     navigate(location.pathname, { replace: true, state: null });
@@ -117,6 +122,9 @@ const Subscribe = () => {
     setTimeout(() => setToast(null), 3500);
   };
 
+  // -----------------------------------------
+  // 3. Update Plan Logic
+  // -----------------------------------------
   const updatePlan = async () => {
     if (!subscription?.dairyId) {
       showToastMessage('error', 'No active subscription found');
@@ -125,11 +133,8 @@ const Subscribe = () => {
 
     setSaving(true);
     try {
-      const token = getAuthToken();
-      if (!token) throw new Error('Token missing');
-
+      // ✅ FIX: Removed token argument. Passing ONLY the payload.
       const result = await saveCustomerSubscription(
-        token,
         toSavePayload(formData, {
           dairyId: subscription.dairyId,
           status: subscription.status,
@@ -151,6 +156,9 @@ const Subscribe = () => {
     }
   };
 
+  // -----------------------------------------
+  // 4. Pause / Resume Logic
+  // -----------------------------------------
   const updateStatus = async (status) => {
     if (!subscription?.dairyId) {
       showToastMessage('error', 'No active subscription found');
@@ -159,11 +167,8 @@ const Subscribe = () => {
 
     setSaving(true);
     try {
-      const token = getAuthToken();
-      if (!token) throw new Error('Token missing');
-
+      // ✅ FIX: Removed token argument.
       const result = await saveCustomerSubscription(
-        token,
         toSavePayload(subscription, { status })
       );
 
@@ -172,7 +177,7 @@ const Subscribe = () => {
       setFormData(mapped || EMPTY_FORM);
       showToastMessage('success', status === 'PAUSED' ? 'Subscription paused' : 'Subscription resumed');
     } catch (err) {
-      showToastMessage('error', err?.message || 'Failed to update subscription');
+      showToastMessage('error', err?.message || 'Failed to update status');
     } finally {
       setSaving(false);
     }
@@ -181,14 +186,14 @@ const Subscribe = () => {
   const pause = () => updateStatus('PAUSED');
   const resume = () => updateStatus('ACTIVE');
 
+  // -----------------------------------------
+  // 5. Cancel Subscription Logic
+  // -----------------------------------------
   const cancelSubscription = async () => {
     setClosing(true);
-
     try {
-      const token = getAuthToken();
-      if (!token) throw new Error('Token missing');
-
-      await clearCustomerSubscription(token);
+      // ✅ FIX: Removed token argument.
+      await clearCustomerSubscription();
       setShowCancelModal(false);
       setSubscription(null);
       setFormData(EMPTY_FORM);
@@ -220,6 +225,7 @@ const Subscribe = () => {
           </div>
         ) : (
           <>
+            {/* Status Card */}
             <div
               className={`w-full rounded-2xl p-8 shadow-sm border transition hover:shadow-md ${
                 !subscription
@@ -236,11 +242,9 @@ const Subscribe = () => {
                   <p className="text-xs uppercase tracking-wide text-gray-500">
                     {subscription ? `${subscription.status} PLAN` : 'NO ACTIVE PLAN'}
                   </p>
-
                   <h3 className="text-2xl font-semibold text-gray-900 mt-1">
                     {subscription ? `${subscription.quantity} Liters ${subscription.product}` : 'No subscription yet'}
                   </h3>
-
                   <p className="text-sm text-gray-600 mt-1">
                     {subscription
                       ? `${subscription.slot} Slot - ${subscription.timeRange}`
@@ -295,6 +299,7 @@ const Subscribe = () => {
               </div>
             </div>
 
+            {/* Stats Grid */}
             {subscription && (
               <div className="grid md:grid-cols-3 gap-6">
                 <StatCard icon={<Droplet size={24} />} label="Daily Quantity" value={`${subscription.quantity} Liters`} />
@@ -312,6 +317,7 @@ const Subscribe = () => {
         )}
       </div>
 
+      {/* Update Modal */}
       {showUpdateModal && subscription && (
         <ModalWrapper>
           <ModalHeader
@@ -319,11 +325,10 @@ const Subscribe = () => {
             subtitle="Manage your milk delivery"
             onClose={() => setShowUpdateModal(false)}
           />
-
           <div className="px-8 py-6 grid md:grid-cols-2 gap-5">
             <InputBlock label="Product">
               <select
-                className="pro-input"
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={formData.product}
                 onChange={(e) => setFormData({ ...formData, product: e.target.value })}
               >
@@ -340,7 +345,7 @@ const Subscribe = () => {
                 type="number"
                 step="0.5"
                 min="0.5"
-                className="pro-input"
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={formData.quantity}
                 onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
               />
@@ -348,7 +353,7 @@ const Subscribe = () => {
 
             <InputBlock label="Delivery Slot">
               <select
-                className="pro-input"
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={formData.slot}
                 onChange={(e) => setFormData({ ...formData, slot: e.target.value })}
               >
@@ -359,13 +364,12 @@ const Subscribe = () => {
 
             <InputBlock label="Time Range">
               <input
-                className="pro-input"
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
                 value={formData.timeRange}
                 onChange={(e) => setFormData({ ...formData, timeRange: e.target.value })}
               />
             </InputBlock>
           </div>
-
           <ModalFooter
             onCancel={() => setShowUpdateModal(false)}
             onConfirm={updatePlan}
@@ -374,15 +378,14 @@ const Subscribe = () => {
         </ModalWrapper>
       )}
 
+      {/* Cancel Modal */}
       {showCancelModal && (
         <ModalWrapper small>
           <div className="p-8">
             <h3 className="text-2xl font-semibold text-gray-900">Close Subscription?</h3>
-
             <p className="text-gray-600 mt-3">
               Are you sure you want to remove your subscription? This will stop deliveries immediately.
             </p>
-
             <div className="flex justify-end gap-4 mt-8">
               <button
                 onClick={() => setShowCancelModal(false)}
@@ -390,7 +393,6 @@ const Subscribe = () => {
               >
                 Keep It
               </button>
-
               <button
                 onClick={cancelSubscription}
                 disabled={closing}
@@ -404,6 +406,7 @@ const Subscribe = () => {
         </ModalWrapper>
       )}
 
+      {/* Custom Toast */}
       {toast && (
         <div className="fixed top-6 right-6 z-50 animate-slide-in">
           <div
@@ -412,7 +415,6 @@ const Subscribe = () => {
             }`}
           >
             <p className="font-medium">{toast.message}</p>
-            <div className="absolute bottom-0 left-0 h-1 bg-white/50 animate-toast-progress"></div>
           </div>
         </div>
       )}
@@ -421,6 +423,10 @@ const Subscribe = () => {
 };
 
 export default Subscribe;
+
+/* ======================================================
+   SUB-COMPONENTS (Styling & Layout)
+====================================================== */
 
 const StatCard = ({ icon, label, value }) => (
   <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition">
@@ -439,26 +445,13 @@ const ExploreOtherDairiesSection = ({ onExplore }) => (
         <div className="p-3 rounded-xl bg-white text-blue-600 border border-blue-100">
           <Store size={22} />
         </div>
-
         <div>
           <h3 className="text-xl font-semibold text-gray-900">Explore Other Dairies</h3>
           <p className="text-sm text-gray-600 mt-1">
             Compare dairies, check plans, and switch to a better option anytime.
           </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <span className="text-xs font-medium text-blue-700 bg-white px-3 py-1 rounded-full border border-blue-100">
-              Compare Plans
-            </span>
-            <span className="text-xs font-medium text-blue-700 bg-white px-3 py-1 rounded-full border border-blue-100">
-              Check Ratings
-            </span>
-            <span className="text-xs font-medium text-blue-700 bg-white px-3 py-1 rounded-full border border-blue-100">
-              Join Instantly
-            </span>
-          </div>
         </div>
       </div>
-
       <button
         onClick={onExplore}
         className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
@@ -501,7 +494,7 @@ const ModalFooter = ({ onCancel, onConfirm, confirmText }) => (
 );
 
 const InputBlock = ({ label, children }) => (
-  <div>
+  <div className="space-y-1">
     <label className="text-sm font-medium text-gray-600">{label}</label>
     {children}
   </div>

@@ -161,7 +161,7 @@ const LoginPage = () => {
     } 
 
     // --- CASE 2: AGENT (The Fix) ---
-    else if (role === "AGENT") {
+    else if (role === "AGENT" || role === "STAFF") {
   const result = await agentLoginApi({ agentId: identifier, password });
 
   // Use the new standardized login call

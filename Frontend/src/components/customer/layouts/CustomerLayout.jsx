@@ -8,6 +8,7 @@ import {
   User,
   Bell,
   LogOut,
+  MapPin
 } from "lucide-react";
 
 /* ================= NAV CONFIG (SINGLE SOURCE) ================= */
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { icon: Calendar, label: "Deliveries", path: "/customer/dashboard/deliveries" },
   { icon: ShoppingBag, label: "Subscribe", path: "/customer/dashboard/subscriptions" },
   { icon: CreditCard, label: "Payments", path: "/customer/dashboard/payments" },
+   { icon:MapPin, label: "Track Agent", path: "/customer/dashboard/track/agent" },
   { icon: User, label: "Profile", path: "/customer/dashboard/profile" },
 ];
 

@@ -12,7 +12,7 @@ import DairyDetailsPage from "./pages/public/DairyDetailsPage";
 
 // --- Customer Pages ---
 import CustomerDashboard from "./pages/customer/CustomerDashboard";
-import Deliveries from "./pages/customer/CustomerDeliveries.jsx";
+import Deliveries from "./pages/customer/CustomerDeliveryHistory.jsx";
 import Subscription from "./pages/customer/CustomerSubscription.jsx";
 import Payments from "./pages/customer/CustomerPayments.jsx";
 import Profile from "./pages/customer/CustomerProfile.jsx";
@@ -30,6 +30,7 @@ import AdminPayments from "./pages/admin/AdminPayments";
 // --- Agent Pages ---
 import AgentDashboard from "./pages/agent/agentDashboard";
 import ThemeToggleButton from "./components/common/ThemeToggleButton.jsx";
+import TrackAgent from "./pages/customer/TrackAgent.jsx";
 
 
 function App() {
@@ -80,6 +81,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={["CUSTOMER"]}>
             <Payments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/dashboard/track/agent"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <TrackAgent />
           </ProtectedRoute>
         }
       />
@@ -169,7 +178,7 @@ function App() {
       <Route
         path="/agent/dashboard"
         element={
-          <ProtectedRoute allowedRoles={["AGENT"]}>
+          <ProtectedRoute allowedRoles={["AGENT", "STAFF"]}>
             <AgentDashboard />
           </ProtectedRoute>
         }

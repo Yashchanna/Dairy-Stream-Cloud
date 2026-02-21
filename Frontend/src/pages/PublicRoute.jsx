@@ -6,7 +6,8 @@ import LoadingIndicator from "../components/common/LoadingIndicator.jsx";
 const ROLE_REDIRECT_MAP = {
   CUSTOMER: "/customer/dashboard",
   ADMIN: "/admin/AdminDashboard",
-  STAFF: "/staff-dashboard",
+  AGENT: "/agent/dashboard",
+  STAFF: "/agent/dashboard",
 };
 
 const PublicRoute = ({ children }) => {

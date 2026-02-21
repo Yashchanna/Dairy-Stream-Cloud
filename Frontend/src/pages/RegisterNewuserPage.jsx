@@ -12,7 +12,6 @@ import {
   Loader2,
   AlertCircle,
   ShieldCheck,
-  Camera,
 } from "lucide-react";
 import dairyImage from "../assets/dairyproduct.png";
 
@@ -24,19 +23,16 @@ const CustomerRegister = () => {
   const [formData, setFormData] = useState({
     customerName: "",
     email: "",
-    password: "",
     phoneNumber: "",
     buildingName: "",
     wing: "",
     roomNo: "",
     defaultMilkQuantityLiters: 1.0,
     billingCycle: "Monthly",
-    photoFile: null,
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [photoPreview, setPhotoPreview] = useState("");
 
   useEffect(() => {
     if (location.state?.mobile) {
@@ -48,19 +44,9 @@ const CustomerRegister = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFormData((prev) => ({ ...prev, photoFile: file }));
-    setPhotoPreview(URL.createObjectURL(file));
-  };
-
   const validateStep1 = () => {
     if (!formData.customerName.trim()) return "Please enter your Full Name";
     if (!formData.email.trim()) return "Email is required";
-    if (!formData.password || formData.password.length < 6) {
-      return "Password must be at least 6 characters";
-    }
     if (!formData.phoneNumber || formData.phoneNumber.length !== 10) {
       return "Valid 10-digit Mobile Number is required";
     }
@@ -84,23 +70,13 @@ const CustomerRegister = () => {
     setError("");
 
     try {
-      const payload = new FormData();
-      payload.append("customerName", formData.customerName);
-      payload.append("email", formData.email);
-      payload.append("phoneNumber", formData.phoneNumber);
-      payload.append("buildingName", formData.buildingName);
-      payload.append("wing", formData.wing || "");
-      payload.append("roomNo", formData.roomNo);
-      payload.append("password", formData.password);
-      payload.append("defaultMilkQuantityLiters", String(formData.defaultMilkQuantityLiters));
-      payload.append("billingCycle", formData.billingCycle);
-      if (formData.photoFile) {
-        payload.append("image", formData.photoFile);
-      }
-
+      // Using JSON payload since there is no photo file anymore
       const res = await fetch("http://localhost:4000/api/customer/addCustomer", {
         method: "POST",
-        body: payload,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
       });
 
       const contentType = res.headers.get("content-type") || "";
@@ -133,6 +109,7 @@ const CustomerRegister = () => {
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+      {/* Left Panel */}
       <div className="hidden md:flex w-1/2 bg-blue-600 items-center justify-center p-12 relative">
         <div className="relative z-10 text-white max-w-lg">
           <h1 className="text-5xl font-bold mb-6 tracking-tight">Join DairyStream</h1>
@@ -153,6 +130,7 @@ const CustomerRegister = () => {
         <div className="absolute -bottom-40 -right-20 w-96 h-96 bg-blue-400/30 rounded-full blur-3xl"></div>
       </div>
 
+      {/* Right Panel */}
       <div className="w-full md:w-1/2 flex flex-col justify-center items-center p-6 bg-white relative">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
@@ -189,22 +167,6 @@ const CustomerRegister = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Profile Photo (Optional)</label>
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={photoPreview || "https://via.placeholder.com/80"}
-                      alt="preview"
-                      className="h-16 w-16 rounded-full object-cover border"
-                    />
-                    <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100 text-sm">
-                      <Camera size={16} />
-                      Upload Photo
-                      <input type="file" accept="image/*" hidden onChange={handlePhotoChange} />
-                    </label>
-                  </div>
-                </div>
-
-                <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Mobile Number</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-3.5 text-gray-400" size={18} />
@@ -231,18 +193,6 @@ const CustomerRegister = () => {
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="rahul@gmail.com"
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="********"
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
                   />
                 </div>
