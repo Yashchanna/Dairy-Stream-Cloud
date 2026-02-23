@@ -55,8 +55,17 @@ const DairyDetailsPage = () => {
         setData(res?.dairy || null);
 
         // Fetch User's current sub (to prevent double subscription)
-        const subRes = await fetchCustomerSubscription(); // ✅ Corrected: No token arg
-        setExistingSubscription(subRes?.subscription || null);
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            const subRes = await fetchCustomerSubscription();
+            setExistingSubscription(subRes?.subscription || null);
+          } catch {
+            setExistingSubscription(null);
+          }
+        } else {
+          setExistingSubscription(null);
+        }
         
         // Load User Address from local storage
         const storedUser = localStorage.getItem("user");
@@ -102,6 +111,11 @@ const DairyDetailsPage = () => {
     return String(existingSubscription.dairy_id) === String(id);
   }, [existingSubscription, id]);
 
+  const hasActiveSubscription = useMemo(() => {
+    if (!existingSubscription) return false;
+    return String(existingSubscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+  }, [existingSubscription]);
+
   // 3. Handlers
   const handleConfirmSubscription = async () => {
     setSaving(true);
@@ -142,6 +156,20 @@ const handleContinueFromStep2 = () => {
   // If valid, move to the next step
   setStep(3);
 };
+
+  const handleSubscribeClick = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Login to take subscription first");
+      return;
+    }
+
+    if (hasActiveSubscription && !isSubscribedToThis) {
+      toast.error("You have active subscription. Close your subscription first.");
+      return;
+    }
+    setShowSubscribe(true);
+  };
   if (loading) return <LoadingIndicator fullScreen message="Fetching farm details..." />;
 
   return (
@@ -202,14 +230,14 @@ const handleContinueFromStep2 = () => {
 
             {isSubscribedToThis ? (
               <button 
-                onClick={() => navigate("/customer/subscription")}
+                onClick={() => navigate("/customer/dashboard/subscriptions")}
                 className="w-full bg-green-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-green-100 flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={20} /> Active Subscription
               </button>
             ) : (
               <button 
-                onClick={() => setShowSubscribe(true)}
+                onClick={handleSubscribeClick}
                 className="w-full bg-blue-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
               >
                 Subscribe Now <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
@@ -379,3 +407,5 @@ const handleContinueFromStep2 = () => {
 };
 
 export default DairyDetailsPage;
+
+

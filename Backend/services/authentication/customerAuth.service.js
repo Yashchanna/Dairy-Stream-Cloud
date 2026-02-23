@@ -371,26 +371,33 @@ export const customerOtpLoginService = async ({ identifier, dairyId }) => {
 };
 
 /**
- * Determine Redirect (Membership Check)
- * This replaces the complex logic previously in the controller
+ * Determine Redirect (Active Subscription Check)
  */
 export const determineRedirectPath = async (userId, requestedDairyId) => {
-  // 1. Check Memberships Table
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("dairy_id")
-    .eq("customer_id", userId) // Ensure column name matches your DB
-    .limit(1)
-    .maybeSingle();
+  const { data: subscriptions, error } = await supabase
+    .from("subscriptions")
+    .select("dairy_id, status")
+    .eq("customer_id", userId);
 
-  const isMemberOfRequested = requestedDairyId && membership?.dairy_id == requestedDairyId;
-  const hasAnyMembership = !!membership;
+  if (error) {
+    throw new Error("Failed to check customer subscription status");
+  }
 
-  // 2. Logic
-  const redirect = hasAnyMembership ? "/customer/dashboard" : "/explore";
-  
+  const activeSubscriptions = (subscriptions || []).filter(
+    (subscription) =>
+      String(subscription?.status || "ACTIVE").toUpperCase() !== "CLOSED"
+  );
+
+  const hasActiveSubscription = activeSubscriptions.length > 0;
+  const isRegisteredToRequestedDairy = !!(
+    requestedDairyId &&
+    activeSubscriptions.some(
+      (subscription) => String(subscription?.dairy_id) === String(requestedDairyId)
+    )
+  );
+
   return {
-    redirect,
-    isRegisteredToRequestedDairy: isMemberOfRequested
+    redirect: hasActiveSubscription ? "/customer/dashboard" : "/explore",
+    isRegisteredToRequestedDairy,
   };
 };
