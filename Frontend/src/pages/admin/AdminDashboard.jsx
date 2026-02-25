@@ -28,12 +28,15 @@ export default function AdminDashboard() {
 
   // ---- Dashboard data (SAFE DEFAULTS)
   const [data, setData] = useState({
+    dairyName: null,
     totalCustomers: 0,
     totalAgents: 0,
     activeAgents: 0,
     deliveriesToday: 0,
     pendingPayments: 0,
   });
+
+  const dashboardDisplayName = data?.dairyName || adminName;
 
   // ---- Fetch dashboard
     useEffect(() => {
@@ -78,7 +81,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminMobileTopbar
-        adminName={adminName}
+        adminName={dashboardDisplayName}
         onMenu={() => setSidebarOpen(true)}
       />
 
@@ -88,7 +91,7 @@ export default function AdminDashboard() {
       />
 
       <main className="lg:ml-64 px-4 sm:px-6 lg:px-10 py-8">
-      <AdminHeader adminName={adminName} />
+      <AdminHeader adminName={dashboardDisplayName} />
 
 {/* Phase 1: Skeleton / KPIs */}
         {!uiReady ? (

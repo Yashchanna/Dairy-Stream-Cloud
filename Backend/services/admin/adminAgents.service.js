@@ -4,6 +4,7 @@ export const getAdminAgents = async ({
   page = 1,
   limit = 10,
   search = "",
+  dairyId = null,
 }) => {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -14,6 +15,10 @@ export const getAdminAgents = async ({
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(from, to);
+
+  if (dairyId) {
+    query = query.eq("dairy_id", dairyId);
+  }
 
   // 2. Apply Search
   if (search) {
@@ -39,13 +44,18 @@ export const getAdminAgents = async ({
   };
 };
 
-export const getAgentDetails = async (agentId) => {
+export const getAgentDetails = async (agentId, { dairyId = null } = {}) => {
   // 1. Fetch Basic Agent Info from Agents table
-  const { data: agent, error: agentError } = await supabase
+  let query = supabase
     .from("agents")
     .select("*")
-    .eq("id", agentId)
-    .single();
+    .eq("id", agentId);
+
+  if (dairyId) {
+    query = query.eq("dairy_id", dairyId);
+  }
+
+  const { data: agent, error: agentError } = await query.single();
 
   if (agentError) throw agentError;
 

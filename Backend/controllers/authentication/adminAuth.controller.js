@@ -1,23 +1,21 @@
-import { adminStaffLoginService } 
-from "../../services/authentication/adminAuth.service.js";
+import { adminStaffLoginService } from "../../services/authentication/adminAuth.service.js";
 
 export const adminLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { identifier, email, password } = req.body || {};
+    const loginIdentifier = String(identifier || email || "").trim();
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
+    if (!loginIdentifier || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Identifier and password are required",
+      });
     }
 
-    console.log(`📨 Admin login request for: ${email}`);
-
-    // ✅ Correct service call
     const result = await adminStaffLoginService({
-      identifier: email,
+      identifier: loginIdentifier,
       password,
     });
-
-    console.log(`✅ Sending login response with token for: ${email}`);
 
     res.json({
       success: true,
@@ -25,12 +23,11 @@ export const adminLogin = async (req, res) => {
       user: result.user,
       redirect: "/admin/AdminDashboard",
     });
-
   } catch (err) {
-    console.error(`❌ Admin login error: ${err.message}`);
     res.status(401).json({
-      error: err.message,
       success: false,
+      error: err.message,
     });
   }
 };
+

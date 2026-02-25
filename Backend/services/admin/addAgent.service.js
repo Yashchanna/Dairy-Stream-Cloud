@@ -10,6 +10,7 @@ const generateStaffId = () => {
 
 export const createAgentService = async (agentData) => {
   const { email, password, agentName, phoneNumber, building, dairyId, agentId } = agentData;
+  if (!dairyId) throw new Error("Invalid admin context: dairy is required");
 
   // 1. Validate Email
   const isEmailValid = await verifyEmail(email);
@@ -50,7 +51,7 @@ export const createAgentService = async (agentData) => {
         agent_name: agentName,
         phone_number: phoneNumber,
         building,
-        dairy_id: dairyId || null,
+        dairy_id: dairyId,
         // role: 'AGENT'
       },
     ])

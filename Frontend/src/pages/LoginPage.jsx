@@ -151,7 +151,7 @@ const LoginPage = () => {
 
     // --- CASE 1: ADMIN ---
     if (role === "ADMIN") {
-      const result = await adminLoginApi({ email: identifier, password });
+      const result = await adminLoginApi({ identifier, password });
       localStorage.setItem("adminToken", result.token);
       localStorage.setItem("userRole", "ADMIN");
       
@@ -200,7 +200,7 @@ const LoginPage = () => {
 
     if (detectedUser.userType === "ADMIN") {
       Icon = Mail;
-      label = "Admin Email";
+      label = "Admin ID";
       badgeColor = "bg-purple-200 text-purple-700";
     } else if (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF") {
       Icon = Briefcase;
@@ -208,7 +208,7 @@ const LoginPage = () => {
       badgeColor = "bg-orange-200 text-orange-700";
     } else if (detectedUser.userType === "CUSTOMER") {
       Icon = Smartphone;
-      label = "Mobile";
+      label = "Email/Mobile";
       badgeColor = "bg-green-200 text-green-700";
     }
 
@@ -386,7 +386,7 @@ const LoginPage = () => {
                   className="w-full text-center text-3xl tracking-widest py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-mono"
                   autoFocus
                 />
-                <p className="text-xs text-gray-400 mt-2">Enter the 6-digit code sent to your mobile</p>
+                <p className="text-xs text-gray-400 mt-2">Enter the 6-digit code sent to your email/mobile</p>
               </div>
 
               <button 

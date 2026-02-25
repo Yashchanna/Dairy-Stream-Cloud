@@ -1,7 +1,6 @@
 import { supabase } from "../../config/supabase.js";
 
-let dashboardCache = null;
-let lastFetchTime = 0;
+const dashboardCache = new Map();
 const CACHE_TTL = 60_000;
 
 const countTable = async (table, filter = {}) => {
@@ -16,12 +15,14 @@ const countTable = async (table, filter = {}) => {
 
 export const getAdminDashboardStats = async ({ dairyId } = {}) => {
   const now = Date.now();
-
-  if (dashboardCache && now - lastFetchTime < CACHE_TTL) {
-    return dashboardCache;
+  const cacheKey = String(dairyId ?? "global");
+  const cached = dashboardCache.get(cacheKey);
+  if (cached && now - cached.at < CACHE_TTL) {
+    return cached.payload;
   }
 
   let totalCustomers = 0;
+  let dairyName = null;
 
   // Try to scope customers by dairy via memberships if available
   if (dairyId) {
@@ -37,7 +38,18 @@ export const getAdminDashboardStats = async ({ dairyId } = {}) => {
   const totalAgents = await countTable("agents");
   const totalDairies = await countTable("dairies");
 
+  if (dairyId) {
+    const { data: dairyRow } = await supabase
+      .from("dairies")
+      .select("dairy_name")
+      .eq("id", dairyId)
+      .limit(1)
+      .maybeSingle();
+    dairyName = dairyRow?.dairy_name || null;
+  }
+
   const stats = {
+    dairyName,
     totalCustomers,
     totalAgents,
     totalDairies,
@@ -46,8 +58,7 @@ export const getAdminDashboardStats = async ({ dairyId } = {}) => {
     pendingPayments: 0,
   };
 
-  dashboardCache = stats;
-  lastFetchTime = now;
+  dashboardCache.set(cacheKey, { payload: stats, at: now });
 
   return stats;
 };

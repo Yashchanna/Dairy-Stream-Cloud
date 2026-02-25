@@ -10,8 +10,9 @@ export const fetchAdminCustomers = async (req, res) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 10);
     const search = req.query.search || "";
+    const dairyId = req.admin?.dairyId ?? null;
 
-    const result = await getAdminCustomers({ page, limit, search });
+    const result = await getAdminCustomers({ page, limit, search, dairyId });
 
     res.json(result);
   } catch (err) {

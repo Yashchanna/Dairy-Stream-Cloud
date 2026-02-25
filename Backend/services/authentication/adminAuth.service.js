@@ -6,26 +6,70 @@ import { generateToken } from "../../utils/jwt.js";
 // ADMIN / STAFF LOGIN SERVICE
 // ===============================
 export const adminStaffLoginService = async ({ identifier, password }) => {
-  const isAdmin = identifier.includes("@");
-  const table = isAdmin ? "admins" : "agents";
-  const column = isAdmin ? "email" : "agent_id";
+  const normalizedIdentifier = String(identifier || "").trim();
+  const isAdminEmail = normalizedIdentifier.includes("@");
+  const isAgentId = normalizedIdentifier.toUpperCase().startsWith("STF");
+  const mobile = normalizedIdentifier.replace(/\D/g, "");
 
-  const { data: user } = await supabase
-    .from(table)
-    .select("*")
-    .eq(column, identifier)
-    .single();
+  let user = null;
+  let role = null;
 
-  if (!user) {
-    throw new Error("User not found");
+  if (isAgentId) {
+    const { data: agentUser, error } = await supabase
+      .from("agents")
+      .select("*")
+      .ilike("agent_id", normalizedIdentifier.toUpperCase())
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    user = agentUser;
+    role = "STAFF";
+  } else {
+    // Admin login via email
+    if (isAdminEmail) {
+      const { data: adminByEmail, error } = await supabase
+        .from("admins")
+        .select("*")
+        .ilike("email", normalizedIdentifier)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      user = adminByEmail;
+    }
+
+    // Admin login via mobile
+    if (!user && mobile.length >= 10) {
+      const candidateColumns = ["phone", "phone_number"];
+      for (const column of candidateColumns) {
+        const { data: adminByPhone, error } = await supabase
+          .from("admins")
+          .select("*")
+          .eq(column, mobile)
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && adminByPhone) {
+          user = adminByPhone;
+          break;
+        }
+
+        if (error) {
+          const msg = String(error.message || "").toLowerCase();
+          const missingColumn = msg.includes("column") && msg.includes("does not exist");
+          if (!missingColumn) throw error;
+        }
+      }
+    }
+
+    role = "ADMIN";
   }
+
+  if (!user) throw new Error("User not found");
 
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) {
     throw new Error("Incorrect Password");
   }
-
-  const role = isAdmin ? "ADMIN" : "STAFF";
 
   const token = generateToken({
     id: user.id,

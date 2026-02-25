@@ -4,9 +4,30 @@ export const getAdminCustomers = async ({
   page = 1,
   limit = 10,
   search = "",
+  dairyId = null,
 }) => {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
+
+  const getActiveSubscribedCustomerIdsForDairy = async (targetDairyId) => {
+    if (!targetDairyId) return null;
+
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("customer_id, status")
+      .eq("dairy_id", targetDairyId);
+
+    if (error) throw error;
+
+    const ids = new Set(
+      (data || [])
+        .filter((row) => String(row?.status || "ACTIVE").toUpperCase() !== "CLOSED")
+        .map((row) => row?.customer_id)
+        .filter(Boolean)
+    );
+
+    return [...ids];
+  };
 
   let query = supabase
     .from("customers")
@@ -14,9 +35,22 @@ export const getAdminCustomers = async ({
     .order("created_at", { ascending: false })
     .range(from, to);
 
+  if (dairyId) {
+    const scopedCustomerIds = await getActiveSubscribedCustomerIdsForDairy(dairyId);
+    if (!scopedCustomerIds || scopedCustomerIds.length === 0) {
+      return {
+        customers: [],
+        total: 0,
+        page,
+        limit,
+      };
+    }
+    query = query.in("id", scopedCustomerIds);
+  }
+
   if (search) {
     query = query.or(
-      `customer_name.ilike.%${search}%,phone_number.ilike.%${search}%`
+      `customer_name.ilike.%${search}%,phone_number.ilike.%${search}%,email.ilike.%${search}%`
     );
   }
 

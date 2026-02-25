@@ -105,7 +105,7 @@ const ExploreDairiesPage = () => {
 
              {/* Logo & Location */}
              <div className="flex items-center justify-between md:justify-start gap-6">
-                <div onClick={() => navigate('/')} className="cursor-pointer font-bold text-2xl text-blue-600 tracking-tight flex items-center gap-2">
+                <div className="font-bold text-2xl text-blue-600 tracking-tight flex items-center gap-2">
                    DairyStream
                 </div>
 
