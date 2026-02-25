@@ -198,7 +198,7 @@ const Subscribe = () => {
       setSubscription(null);
       setFormData(EMPTY_FORM);
       showToastMessage('success', 'Subscription removed successfully');
-      setTimeout(() => navigate('/explore'), 900);
+      setTimeout(() => navigate('/explore', { state: { from: 'customer-subscriptions' } }), 900);
     } catch (err) {
       showToastMessage('error', err?.message || 'Failed to close subscription');
     } finally {
@@ -290,7 +290,7 @@ const Subscribe = () => {
                   </div>
                 ) : (
                   <button
-                    onClick={() => navigate('/explore')}
+                    onClick={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })}
                     className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium"
                   >
                     See Other Dairies
@@ -312,7 +312,7 @@ const Subscribe = () => {
               </div>
             )}
 
-            <ExploreOtherDairiesSection onExplore={() => navigate('/explore')} />
+            <ExploreOtherDairiesSection onExplore={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })} />
           </>
         )}
       </div>

@@ -221,8 +221,11 @@ export const clearSubscriptionByCustomerId = async (customerId) => {
       .in("dairy_id", dairyIds);
 
     if (!membershipError) break;
-    if (isMissingColumnError(membershipError)) continue;
-    throw membershipError;
+    if (isMissingColumnError(membershipError) || isUuidSyntaxError(membershipError)) continue;
+    if (isMissingTableError(membershipError)) break;
+    // Membership cleanup is auxiliary; don't fail clear-subscription for this.
+    console.warn("MEMBERSHIP CLEANUP WARNING:", membershipError.message);
+    break;
   }
 
   await ensureCustomerDairyAssignment({
