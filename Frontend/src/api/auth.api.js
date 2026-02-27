@@ -23,6 +23,16 @@ export const adminLoginApi = async (payload) => {
   return data;
 };
 
+export const requestAdminPasswordResetOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/admin/forgot-password/request-otp", payload);
+  return data;
+};
+
+export const resetAdminPasswordWithOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/admin/forgot-password/reset", payload);
+  return data;
+};
+
 // ==========================================
 // 3. AGENT LOGIN (Staff ID + Password)
 // ==========================================
@@ -34,6 +44,16 @@ export const agentLoginApi = async (payload) => {
     localStorage.setItem("agentToken", data.token);
     localStorage.setItem("userRole", "AGENT");
   }
+  return data;
+};
+
+export const requestAgentPasswordResetOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/agent/forgot-password/request-otp", payload);
+  return data;
+};
+
+export const resetAgentPasswordWithOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/agent/forgot-password/reset", payload);
   return data;
 };
 

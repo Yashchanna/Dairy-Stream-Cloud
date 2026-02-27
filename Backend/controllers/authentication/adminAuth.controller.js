@@ -1,4 +1,8 @@
-import { adminStaffLoginService } from "../../services/authentication/adminAuth.service.js";
+import {
+  adminStaffLoginService,
+  requestAdminResetOtpService,
+  resetAdminPasswordWithOtpService,
+} from "../../services/authentication/adminAuth.service.js";
 
 export const adminLogin = async (req, res) => {
   try {
@@ -31,3 +35,61 @@ export const adminLogin = async (req, res) => {
   }
 };
 
+export const requestAdminResetOtp = async (req, res) => {
+  try {
+    const { identifier, email } = req.body || {};
+    const loginIdentifier = String(identifier || email || "").trim();
+
+    if (!loginIdentifier) {
+      return res.status(400).json({
+        success: false,
+        error: "Identifier is required",
+      });
+    }
+
+    const result = await requestAdminResetOtpService({
+      identifier: loginIdentifier,
+    });
+
+    res.json({
+      success: true,
+      message: "OTP sent to admin email",
+      email: result.email,
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err.message || "Failed to send reset OTP",
+    });
+  }
+};
+
+export const resetAdminPasswordWithOtp = async (req, res) => {
+  try {
+    const { identifier, email, otp, newPassword } = req.body || {};
+    const loginIdentifier = String(identifier || email || "").trim();
+
+    if (!loginIdentifier || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: "Identifier, OTP, and newPassword are required",
+      });
+    }
+
+    await resetAdminPasswordWithOtpService({
+      identifier: loginIdentifier,
+      otp,
+      newPassword,
+    });
+
+    res.json({
+      success: true,
+      message: "Password reset successful",
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err.message || "Failed to reset password",
+    });
+  }
+};

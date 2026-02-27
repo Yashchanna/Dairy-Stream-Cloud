@@ -31,7 +31,7 @@ const isMissingColumnError = (error) => {
 };
 
 const hasEmailConfig = () =>
-  Boolean(process.env.EMAIL_USER) && Boolean(process.env.EMAIL_PASS);
+  Boolean(process.env.EMAIL_USER) && Boolean(process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD);
 
 const normalizeStatus = (status) => {
   const value = String(status || "").trim().toUpperCase();
