@@ -195,7 +195,65 @@ const getPendingPaymentForCustomer = async (customerId, paymentId = null, dairyI
   return data || null;
 };
 
-export const createCustomerPaymentOrder = async ({ customerId, paymentId, dairyId = null }) => {
+const getPendingPaymentsForCustomer = async (customerId, dairyId = null) => {
+  let query = supabase
+    .from("payments")
+    .select("*")
+    .eq("customer_id", customerId)
+    .in("status", ["PENDING", "OVERDUE"])
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
+    query = query.eq("dairy_id", dairyId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+export const createCustomerPaymentOrder = async ({ customerId, paymentId, dairyId = null, payAll = false }) => {
+  if (payAll) {
+    const pendingPayments = await getPendingPaymentsForCustomer(customerId, dairyId);
+    if (!pendingPayments.length) {
+      throw new Error("No pending payment found");
+    }
+
+    const amountInRupees = pendingPayments.reduce(
+      (sum, row) => sum + toNumber(row.amount, 0),
+      0
+    );
+    if (amountInRupees <= 0) {
+      throw new Error("Payment amount must be greater than zero");
+    }
+
+    const firstPending = pendingPayments[0];
+    const razorpay = getRazorpayClient();
+    const beneficiary = await getDairyBankDetails(firstPending?.dairy_id || dairyId);
+    const order = await razorpay.orders.create({
+      amount: Math.round(amountInRupees * 100),
+      currency: "INR",
+      receipt: `cust_${customerId}_payall_${Date.now()}`.slice(0, 40),
+      notes: {
+        customer_id: String(customerId),
+        payment_mode: "ALL",
+        dairy_id: String(firstPending?.dairy_id ?? dairyId ?? ""),
+      },
+    });
+
+    return {
+      keyId: process.env.RAZORPAY_KEY_ID,
+      order,
+      payment: {
+        id: null,
+        amount: amountInRupees,
+        title: "Pending + Overdue Bills",
+      },
+      beneficiary,
+    };
+  }
+
   const pendingPayment = await getPendingPaymentForCustomer(customerId, paymentId, dairyId);
 
   if (!pendingPayment) {
@@ -240,6 +298,7 @@ export const verifyCustomerPayment = async ({
   customerId,
   paymentId,
   dairyId = null,
+  payAll = false,
   razorpayOrderId,
   razorpayPaymentId,
   razorpaySignature,
@@ -255,6 +314,57 @@ export const verifyCustomerPayment = async ({
 
   if (generatedSignature !== razorpaySignature) {
     throw new Error("Payment signature verification failed");
+  }
+
+  if (payAll) {
+    let updateQuery = supabase
+      .from("payments")
+      .update({
+        status: "PAID",
+        method: "RAZORPAY",
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        razorpay_order_id: razorpayOrderId,
+        razorpay_payment_id: razorpayPaymentId,
+        razorpay_signature: razorpaySignature,
+      })
+      .eq("customer_id", customerId)
+      .in("status", ["PENDING", "OVERDUE"]);
+
+    if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
+      updateQuery = updateQuery.eq("dairy_id", dairyId);
+    }
+
+    const { error: updateError } = await updateQuery;
+    if (updateError && isMissingColumnError(updateError)) {
+      let fallbackUpdateQuery = supabase
+        .from("payments")
+        .update({
+          status: "PAID",
+          method: "RAZORPAY",
+          paid_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("customer_id", customerId)
+        .in("status", ["PENDING", "OVERDUE"]);
+
+      if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
+        fallbackUpdateQuery = fallbackUpdateQuery.eq("dairy_id", dairyId);
+      }
+
+      const { error: fallbackError } = await fallbackUpdateQuery;
+      if (fallbackError) throw fallbackError;
+    } else if (updateError) {
+      throw updateError;
+    }
+
+    return {
+      success: true,
+      paymentId: null,
+      razorpayPaymentId,
+      razorpayOrderId,
+      status: "PAID",
+    };
   }
 
   const normalizedPaymentId = normalizePaymentId(paymentId);
@@ -337,13 +447,22 @@ export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
   const pendingCandidates = history.filter(
     (item) => item.status === "PENDING" || item.status === "OVERDUE"
   );
-  const latestPending = pendingCandidates[0] || null;
+  const totalPendingAndOverdue = pendingCandidates.reduce(
+    (sum, item) => sum + toNumber(item.amount, 0),
+    0
+  );
+  const nearestDueInDays = pendingCandidates.reduce((nearest, item) => {
+    const days = diffDaysFromToday(item.dueDate);
+    if (days === null) return nearest;
+    if (nearest === null) return days;
+    return days < nearest ? days : nearest;
+  }, null);
 
   return {
     summary: {
-      monthlyDue: latestPending?.amount || 0,
+      monthlyDue: totalPendingAndOverdue,
       walletBalance: toNumber(walletBalance, 0),
-      dueInDays: latestPending ? diffDaysFromToday(latestPending.dueDate) : null,
+      dueInDays: nearestDueInDays,
       beneficiary,
     },
     history,
