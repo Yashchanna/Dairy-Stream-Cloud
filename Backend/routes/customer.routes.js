@@ -15,6 +15,7 @@ import {
 } from "../controllers/customer/profile.controller.js";
 import { getDashboard } from "../controllers/customer/dashboard.controller.js";
 import {
+  cancelOneTimeOrder,
   createOneTimeOrder,
   getDeliveries,
 } from "../controllers/customer/deliveries.controller.js";
@@ -64,6 +65,7 @@ router.put("/profile", authenticate, uploadSingleImage, updateProfile);
 router.get("/dashboard", authenticate, getDashboard);
 router.get("/deliveries", authenticate, getDeliveries);
 router.post("/orders/one-time", authenticate, createOneTimeOrder);
+router.post("/orders/one-time/cancel", authenticate, cancelOneTimeOrder);
 router.get("/payments", authenticate, getPayments);
 router.post("/payments/order", authenticate, createPaymentOrder);
 router.post("/payments/verify", authenticate, verifyPayment);

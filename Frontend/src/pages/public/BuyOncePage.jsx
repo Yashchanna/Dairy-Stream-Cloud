@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Calendar, Clock3, MapPin, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Calendar, Clock3, MapPin, ShoppingBag, CheckCircle2, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 import { fetchPublicDairyById } from "../../api/public.api.js";
-import { createCustomerOneTimeOrder } from "../../api/customer.api.js";
+import {
+  cancelCustomerOneTimeOrder,
+  createCustomerOneTimeOrder,
+  createCustomerPaymentOrder,
+  verifyCustomerPayment,
+} from "../../api/customer.api.js";
 import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
 
 const toDateInput = (dateValue = new Date()) => {
@@ -75,13 +80,14 @@ const BuyOncePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
   const [dairyRaw, setDairyRaw] = useState(null);
   const [form, setForm] = useState({
     milkType: "Full Cream",
     quantity: 1,
     deliveryDate: getDefaultBuyOnceDate(),
     slot: "Morning",
-    paymentMethod: "UPI",
+    paymentMethod: "PAY_NOW",
     address: "",
   });
 
@@ -95,10 +101,14 @@ const BuyOncePage = () => {
 
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          const nextAddress = parsed?.user?.address || parsed?.address || "";
-          if (nextAddress) {
-            setForm((prev) => ({ ...prev, address: nextAddress }));
+          try {
+            const parsed = JSON.parse(storedUser);
+            const nextAddress = parsed?.user?.address || parsed?.address || "";
+            if (nextAddress) {
+              setForm((prev) => ({ ...prev, address: nextAddress }));
+            }
+          } catch {
+            // ignore malformed localStorage
           }
         }
       } catch {
@@ -138,6 +148,10 @@ const BuyOncePage = () => {
     return dairy.products?.[form.milkType] || 0;
   }, [dairy, form.milkType]);
 
+  const totalPrice = useMemo(
+    () => Number(form.quantity || 0) * pricePerLiter,
+    [form.quantity, pricePerLiter]
+  );
   const slotOptions = useMemo(() => getDeliverySlotOptions(form.deliveryDate), [form.deliveryDate]);
   const hasAvailableSlot = useMemo(() => slotOptions.some((slot) => slot.available), [slotOptions]);
 
@@ -161,7 +175,95 @@ const BuyOncePage = () => {
     navigate("/", { state: { postLoginRedirect: `/buy-once/${id}` } });
   };
 
-  const handleSubmit = async () => {
+  const loadRazorpayCheckoutScript = () =>
+    new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+
+  const processOnlinePayment = async (paymentId) => {
+    if (!paymentId) {
+      throw new Error("Payment reference missing for online payment");
+    }
+
+    const scriptLoaded = await loadRazorpayCheckoutScript();
+    if (!scriptLoaded) {
+      throw new Error("Failed to load payment checkout");
+    }
+
+    const orderPayload = await createCustomerPaymentOrder({ paymentId });
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        key: orderPayload.keyId,
+        amount: orderPayload.order.amount,
+        currency: orderPayload.order.currency,
+        name: "Dairy Stream",
+        description: orderPayload.payment?.title || "One-time Milk Order",
+        order_id: orderPayload.order.id,
+        handler: async (response) => {
+          try {
+            await verifyCustomerPayment({
+              paymentId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            resolve({ paid: true });
+          } catch (err) {
+            const verificationError = new Error(
+              err?.response?.data?.message || err?.message || "Payment verification failed"
+            );
+            verificationError.code = "PAYMENT_VERIFY_FAILED";
+            reject(verificationError);
+          }
+        },
+        modal: {
+          ondismiss: () => resolve({ paid: false, dismissed: true }),
+        },
+        theme: {
+          color: "#2563eb",
+        },
+      };
+
+      const checkout = new window.Razorpay(options);
+      checkout.on("payment.failed", (failedResponse) => {
+        const description = failedResponse?.error?.description || "Payment failed";
+        resolve({ paid: false, failed: true, reason: description });
+      });
+      checkout.open();
+    });
+  };
+
+  const getOrderPaymentId = (response) =>
+    response?.payment?.id ||
+    response?.paymentId ||
+    response?.order?.payment_id ||
+    response?.order?.paymentId ||
+    response?.order?.payment?.id ||
+    null;
+
+  const rollbackCancelledPayNowOrder = async ({ orderId, paymentId }) => {
+    if (!orderId || !paymentId) return false;
+
+    try {
+      await cancelCustomerOneTimeOrder({ orderId, paymentId });
+      return true;
+    } catch (err) {
+      console.error("Failed to rollback cancelled one-time order:", err);
+      return false;
+    }
+  };
+
+  const handleSubmit = async (allowDuplicate = false) => {
     const token = localStorage.getItem("token");
     if (!token) {
       toast.error("Please login to place one-time order");
@@ -197,20 +299,84 @@ const BuyOncePage = () => {
         paymentMethod: form.paymentMethod,
         address: form.address.trim(),
         pricePerLiter,
+        allowDuplicate,
       });
 
       localStorage.setItem("guest_dairy_id", String(dairy.id));
       localStorage.setItem("guest_dairy_name", dairy.name);
+      setShowDuplicateConfirm(false);
 
-      toast.success("One-time order placed. Track status in Deliveries.");
-      navigate("/customer/dashboard/deliveries", {
-        state: {
-          from: "buy-once-created",
-          orderId: response?.order?.id || null,
-        },
-      });
+      if (String(form.paymentMethod).toUpperCase() === "PAY_NOW") {
+        const orderId = response?.order?.id || null;
+        const paymentId = getOrderPaymentId(response);
+        if (!orderId || !paymentId) {
+          const rolledBack = await rollbackCancelledPayNowOrder({ orderId, paymentId });
+          if (rolledBack) {
+            toast.error("Could not start payment. Order was not placed.");
+          } else {
+            toast.error("Could not start payment. Please check Deliveries/Payments once.");
+          }
+          return;
+        }
+
+        let paymentResult = null;
+        try {
+          paymentResult = await processOnlinePayment(paymentId);
+        } catch (paymentErr) {
+          if (paymentErr?.code === "PAYMENT_VERIFY_FAILED") {
+            toast.error("Payment received but verification failed. Check Payments page.");
+            navigate("/customer/dashboard/payments", {
+              state: { from: "buy-once-created", orderId },
+            });
+            return;
+          }
+
+          const rolledBack = await rollbackCancelledPayNowOrder({ orderId, paymentId });
+          if (rolledBack) {
+            toast.error(paymentErr?.message || "Payment cancelled. Order not placed.");
+          } else {
+            toast.error("Payment cancelled, but auto-cancel failed. Please contact support.");
+          }
+          return;
+        }
+
+        if (paymentResult?.paid) {
+          toast.success("Payment successful. Order confirmed.");
+          navigate("/customer/dashboard/deliveries", {
+            state: { from: "buy-once-created", orderId },
+          });
+          return;
+        }
+
+        if (paymentResult?.dismissed || paymentResult?.failed) {
+          const rolledBack = await rollbackCancelledPayNowOrder({ orderId, paymentId });
+          if (rolledBack) {
+            toast.error("Payment cancelled. Order not placed.");
+          } else {
+            toast.error("Payment cancelled, but auto-cancel failed. Please contact support.");
+          }
+          return;
+        }
+
+        const rolledBack = await rollbackCancelledPayNowOrder({ orderId, paymentId });
+        if (rolledBack) {
+          toast.error("Payment not completed. Order not placed.");
+        } else {
+          toast.error("Payment not completed, but auto-cancel failed. Please contact support.");
+        }
+      } else {
+        toast.success("One-time order placed. Track status in Deliveries.");
+        navigate("/customer/dashboard/deliveries", {
+          state: { from: "buy-once-created", orderId: response?.order?.id || null },
+        });
+      }
     } catch (err) {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to place one-time order");
+      const message = err?.response?.data?.message || err?.message || "Failed to place one-time order";
+      if (!allowDuplicate && /already exists/i.test(message)) {
+        setShowDuplicateConfirm(true);
+        return;
+      }
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -221,144 +387,232 @@ const BuyOncePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-10">
-      <div className="bg-white border-b sticky top-0 z-20">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Buy Once</h1>
-            <p className="text-xs text-slate-500">{dairy.name}</p>
+    <div className="min-h-screen bg-slate-50">
+      {/* Sticky Header */}
+      <div className="bg-white border-b sticky top-0 z-30 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+              <ArrowLeft size={20} className="text-slate-600" />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 leading-tight">Instant Order</h1>
+              <p className="text-xs text-blue-600 font-medium">{dairy?.name}</p>
+            </div>
+          </div>
+          <div className="hidden md:block">
+             <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Step 1 of 1: Checkout</span>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <ShoppingBag size={18} /> Choose Product
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-3 mt-4">
-            {Object.keys(dairy.products).map((variant) => (
-              <button
-                key={variant}
-                onClick={() => setForm((prev) => ({ ...prev, milkType: variant }))}
-                className={`p-4 rounded-xl border-2 flex items-center justify-between transition-all ${
-                  form.milkType === variant ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                <span className="font-semibold text-slate-900">{variant}</span>
-                <span className="text-blue-700 font-bold">₹{dairy.products[variant]}/L</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Calendar size={18} /> Delivery Availability
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="text-xs font-semibold uppercase text-slate-500">Quantity (L)</label>
-              <input
-                type="number"
-                min="0.5"
-                step="0.5"
-                value={form.quantity}
-                onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
-                className="mt-1 w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase text-slate-500">Delivery Date</label>
-              <input
-                type="date"
-                min={toDateInput(new Date())}
-                value={form.deliveryDate}
-                onChange={(e) => setForm((prev) => ({ ...prev, deliveryDate: e.target.value }))}
-                className="mt-1 w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 grid sm:grid-cols-2 gap-3">
-            {slotOptions.map((slot) => (
-              <button
-                key={slot.id}
-                onClick={() => slot.available && setForm((prev) => ({ ...prev, slot: slot.id }))}
-                disabled={!slot.available}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  form.slot === slot.id && slot.available
-                    ? "border-blue-600 bg-blue-50"
-                    : slot.available
-                    ? "border-slate-200 hover:border-blue-200"
-                    : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                }`}
-              >
-                <p className="font-semibold text-sm flex items-center gap-2">
-                  <Clock3 size={14} /> {slot.label}
-                </p>
-                <p className="text-xs mt-1">{slot.reason}</p>
-              </button>
-            ))}
-          </div>
-
-          {!hasAvailableSlot && nextAvailableDate && (
-            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              No slots left for this date. Next available delivery starts on {nextAvailableDate}.
-            </p>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold uppercase text-slate-500">Payment Method</label>
-              <select
-                value={form.paymentMethod}
-                onChange={(e) => setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
-                className="mt-1 w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="UPI">UPI</option>
-                <option value="Card">Card</option>
-                <option value="COD">Cash on Delivery</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase text-slate-500">Estimated Total</label>
-              <div className="mt-1 w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-blue-700 font-bold">
-                ₹{(Number(form.quantity || 0) * pricePerLiter).toFixed(2)}
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="flex flex-col lg:flex-row gap-8">
+          
+          {/* Left Column: Selections */}
+          <div className="flex-1 space-y-6">
+            
+            {/* 1. Product Selection */}
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center gap-2">
+                <ShoppingBag size={18} className="text-blue-600" />
+                <h2 className="text-sm font-bold text-slate-700 uppercase tracking-tight">Select Milk Type</h2>
               </div>
+              <div className="p-6 grid grid-cols-2 sm:grid-cols-2 gap-3">
+                {Object.keys(dairy.products).map((variant) => (
+                  <button
+                    key={variant}
+                    onClick={() => setForm((prev) => ({ ...prev, milkType: variant }))}
+                    className={`relative p-4 rounded-xl border-2 text-left transition-all group ${
+                      form.milkType === variant 
+                      ? "border-blue-600 bg-blue-50/50 ring-4 ring-blue-50" 
+                      : "border-slate-100 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    {form.milkType === variant && (
+                      <CheckCircle2 size={18} className="absolute top-2 right-2 text-blue-600" />
+                    )}
+                    <p className={`text-sm font-bold ${form.milkType === variant ? "text-blue-900" : "text-slate-600"}`}>{variant}</p>
+                    <p className="text-lg font-black text-slate-900 mt-1">₹{dairy.products[variant]}<span className="text-[10px] text-slate-400 font-normal">/L</span></p>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* 2. Delivery Details */}
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center gap-2">
+                <Calendar size={18} className="text-blue-600" />
+                <h2 className="text-sm font-bold text-slate-700 uppercase tracking-tight">Delivery Schedule</h2>
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Quantity (Liters)</label>
+                    <div className="relative">
+                      <input
+                        type="number" min="0.5" step="0.5"
+                        value={form.quantity}
+                        onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                        className="w-full pl-4 pr-12 py-3 rounded-xl border border-slate-200 bg-white text-lg font-bold outline-none focus:border-blue-500 transition-all"
+                      />
+                      <span className="absolute right-4 top-3.5 text-slate-400 font-bold">Ltr</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Date</label>
+                    <input
+                      type="date" min={toDateInput(new Date())}
+                      value={form.deliveryDate}
+                      onChange={(e) => setForm((prev) => ({ ...prev, deliveryDate: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white font-semibold outline-none focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Time Slot</label>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {slotOptions.map((slot) => (
+                      <button
+                        key={slot.id}
+                        disabled={!slot.available}
+                        onClick={() => slot.available && setForm((prev) => ({ ...prev, slot: slot.id }))}
+                        className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
+                          form.slot === slot.id && slot.available
+                            ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
+                            : slot.available
+                            ? "border-slate-200 hover:border-blue-200 bg-white"
+                            : "border-slate-100 bg-slate-50 opacity-60 grayscale cursor-not-allowed"
+                        }`}
+                      >
+                        <Clock3 size={20} className={form.slot === slot.id ? "text-blue-600" : "text-slate-400"} />
+                        <div>
+                          <p className="font-bold text-sm text-slate-800">{slot.id}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{slot.label}</p>
+                          <p className={`text-[10px] mt-1 font-bold ${slot.available ? "text-green-600" : "text-red-500"}`}>{slot.reason}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* Right Column: Checkout Summary */}
+          <div className="lg:w-[380px] space-y-6">
+            <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl sticky top-24">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <CreditCard size={20} className="text-blue-400" /> Order Summary
+              </h3>
+              
+              <div className="space-y-4 border-b border-slate-800 pb-6 mb-6">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">{form.milkType} x {form.quantity}L</span>
+                  <span className="font-bold">₹{totalPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Delivery Fee</span>
+                  <span className="text-green-400 font-bold uppercase text-[10px] bg-green-400/10 px-2 py-1 rounded">Free</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-end mb-8">
+                <span className="text-slate-400 text-sm">Grand Total</span>
+                <span className="text-3xl font-black">₹{totalPrice.toFixed(2)}</span>
+              </div>
+
+              {/* Payment Method Toggle */}
+              <div className="space-y-3 mb-8">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Payment Method</label>
+                <div className="flex p-1 bg-slate-800 rounded-xl">
+                  <button 
+                    onClick={() => setForm(p => ({...p, paymentMethod: "PAY_NOW"}))}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${form.paymentMethod === "PAY_NOW" ? "bg-blue-600 text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
+                  >
+                    Online
+                  </button>
+                  <button 
+                    onClick={() => setForm(p => ({...p, paymentMethod: "COD"}))}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${form.paymentMethod === "COD" ? "bg-blue-600 text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
+                  >
+                    Cash
+                  </button>
+                </div>
+              </div>
+
+              {/* Address Field */}
+              <div className="space-y-2 mb-8">
+                <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                  <MapPin size={10} /> Delivery Address
+                </label>
+                <textarea
+                  rows={2} value={form.address}
+                  onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
+                  placeholder="Street, Landmark, City..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              <button
+                onClick={() => handleSubmit(false)}
+                disabled={submitting || !hasAvailableSlot}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all transform active:scale-[0.98] disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
+              >
+                {submitting
+                  ? "Processing..."
+                  : form.paymentMethod === "PAY_NOW"
+                  ? "Pay & Place Order"
+                  : "Place Order (Cash on Delivery)"}
+              </button>
             </div>
-          </div>
 
-          <div>
-            <label className="text-xs font-semibold uppercase text-slate-500 flex items-center gap-1">
-              <MapPin size={12} /> Delivery Address
-            </label>
-            <textarea
-              rows={3}
-              value={form.address}
-              onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-              placeholder="Enter full delivery address"
-              className="mt-1 w-full p-3 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            {/* Availability Alert */}
+            {!hasAvailableSlot && nextAvailableDate && (
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex gap-3">
+                <Clock3 className="text-amber-600 shrink-0" size={18} />
+                <p className="text-[11px] text-amber-800 font-medium">
+                  Cut-off reached for today. Next slot opens on <span className="font-bold">{nextAvailableDate}</span>.
+                </p>
+              </div>
+            )}
           </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !hasAvailableSlot}
-            className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold disabled:bg-slate-300 disabled:cursor-not-allowed"
-          >
-            {submitting ? "Placing Order..." : "Place One-Time Order"}
-          </button>
         </div>
       </div>
+      
+      {showDuplicateConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-6">
+            <h3 className="text-lg font-bold text-slate-900">Same Order Found</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              This is the same order for the selected product/date. Do you want to order again or cancel?
+            </p>
+            <div className="mt-5 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDuplicateConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => {
+                  setShowDuplicateConfirm(false);
+                  handleSubmit(true);
+                }}
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold disabled:bg-slate-400"
+              >
+                {submitting ? "Ordering..." : "Order Again"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default BuyOncePage;
-

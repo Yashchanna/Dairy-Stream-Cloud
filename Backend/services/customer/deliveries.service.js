@@ -15,6 +15,21 @@ const toFiniteNumber = (value, fallback = NaN) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const toPositiveId = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const toBoolean = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+  return false;
+};
+
 const normalizeOneTimeSlot = (value) => {
   const slot = String(value || "").trim().toUpperCase();
   if (slot.startsWith("MOR")) return "MORNING";
@@ -296,6 +311,7 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   const milkType = String(payload?.milkType || "").trim();
   const quantity = toFiniteNumber(payload?.quantity);
   const deliveryDate = String(payload?.deliveryDate || "").trim();
+  const allowDuplicate = toBoolean(payload?.allowDuplicate);
   const paymentMethod = String(payload?.paymentMethod || "UPI").trim().toUpperCase();
   const address = String(payload?.address || "").trim();
   const slot = normalizeOneTimeSlot(payload?.slot);
@@ -350,7 +366,7 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
     .maybeSingle();
 
   if (duplicateError) throw duplicateError;
-  if (duplicate) {
+  if (duplicate && !allowDuplicate) {
     throw new Error("A one-time order for this product/date already exists");
   }
 
@@ -409,5 +425,80 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
       status: createdDelivery.status || "PENDING",
     },
     payment: createdPayment,
+  };
+};
+
+export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}) => {
+  const orderId = toPositiveId(payload?.orderId);
+  const paymentId = toPositiveId(payload?.paymentId);
+
+  if (!orderId) {
+    throw new Error("Valid orderId is required");
+  }
+  if (!paymentId) {
+    throw new Error("Valid paymentId is required");
+  }
+
+  const { data: delivery, error: deliveryFetchError } = await supabase
+    .from("deliveries")
+    .select("id, customer_id, status, notes")
+    .eq("id", orderId)
+    .eq("customer_id", customerId)
+    .limit(1)
+    .maybeSingle();
+
+  if (deliveryFetchError) throw deliveryFetchError;
+  if (!delivery) {
+    throw new Error("Order not found");
+  }
+
+  if (!String(delivery?.notes || "").includes("[ONE_TIME_ORDER]")) {
+    throw new Error("Only one-time orders can be cancelled");
+  }
+
+  if (String(delivery?.status || "PENDING").toUpperCase() !== "PENDING") {
+    throw new Error("Only pending one-time orders can be cancelled");
+  }
+
+  const { data: payment, error: paymentFetchError } = await supabase
+    .from("payments")
+    .select("id, customer_id, status")
+    .eq("id", paymentId)
+    .eq("customer_id", customerId)
+    .limit(1)
+    .maybeSingle();
+
+  if (paymentFetchError) throw paymentFetchError;
+  if (!payment) {
+    throw new Error("Payment record not found");
+  }
+
+  if (String(payment?.status || "PENDING").toUpperCase() === "PAID") {
+    throw new Error("Payment already completed; order cannot be cancelled");
+  }
+
+  const { error: deleteDeliveryError } = await supabase
+    .from("deliveries")
+    .delete()
+    .eq("id", orderId)
+    .eq("customer_id", customerId);
+
+  if (deleteDeliveryError) throw deleteDeliveryError;
+
+  const { error: deletePaymentError } = await supabase
+    .from("payments")
+    .delete()
+    .eq("id", paymentId)
+    .eq("customer_id", customerId);
+
+  if (deletePaymentError) {
+    throw deletePaymentError;
+  }
+
+  return {
+    success: true,
+    cancelled: true,
+    orderId,
+    paymentId,
   };
 };
