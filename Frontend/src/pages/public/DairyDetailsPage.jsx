@@ -56,6 +56,7 @@ const DairyDetailsPage = () => {
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
 
   const [address, setAddress] = useState("");
   const [subscription, setSubscription] = useState({
@@ -130,6 +131,10 @@ const DairyDetailsPage = () => {
   }, [existingSubscription]);
 
   const isSubscriptionBlocked = hasActiveSubscription && !isSubscribedToThis;
+
+  const redirectToLogin = (postLoginRedirect, postLoginState = null) => {
+    navigate("/", { state: { postLoginRedirect, postLoginState } });
+  };
 
   const handleConfirmSubscription = async () => {
     setSaving(true);
@@ -254,7 +259,7 @@ const handleContinueFromStep2 = () => {
               >
                 Subscribe Now <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </button>
-            </div>
+            )}
 
             <p className="mt-4 text-xs text-slate-500">
               Buy once from the dedicated order page, or choose subscription for recurring delivery plans.
