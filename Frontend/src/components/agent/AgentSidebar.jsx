@@ -1,8 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, User, History, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, User, History, X, LogOut } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth.jsx';
 
 const AgentSidebar = ({ isOpen, onClose }) => {
+  const { logout } = useAuth();
+
   const menuItems = [
     { path: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/agent/working', icon: ClipboardList, label: 'Working' },
@@ -24,7 +27,7 @@ const AgentSidebar = ({ isOpen, onClose }) => {
       <aside
         className={`fixed left-0 top-0 h-full bg-white shadow-lg z-50 transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 w-64`}
+        } lg:translate-x-0 w-64 flex flex-col`}
       >
         {/* Header */}
         <div className="p-4 border-b flex items-center justify-between">
@@ -57,6 +60,16 @@ const AgentSidebar = ({ isOpen, onClose }) => {
             ))}
           </ul>
         </nav>
+
+        <div className="mt-auto p-4 border-t">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut size={20} />
+            <span className="font-medium">Logout</span>
+          </button>
+        </div>
       </aside>
     </>
   );

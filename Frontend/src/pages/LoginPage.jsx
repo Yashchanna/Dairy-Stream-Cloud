@@ -17,7 +17,11 @@ import {
   requestOtpApi,
   verifyOtpApi,
   adminLoginApi,
-  agentLoginApi // ✅ ADDED: Import agent login API
+  agentLoginApi, // ✅ ADDED: Import agent login API
+  requestAdminPasswordResetOtpApi,
+  resetAdminPasswordWithOtpApi,
+  requestAgentPasswordResetOtpApi,
+  resetAgentPasswordWithOtpApi
 } from "../services/auth.api.js"; // Adjust path if needed
 
 const LoginPage = () => {
@@ -32,10 +36,24 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [detectedUser, setDetectedUser] = useState(null);
   const [selectedDairy, setSelectedDairy] = useState(null);
   const [otpTimer, setOtpTimer] = useState(30);
+  const [adminResetMode, setAdminResetMode] = useState(false);
+  const [adminResetOtpSent, setAdminResetOtpSent] = useState(false);
+  const [adminResetOtp, setAdminResetOtp] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+  const [adminOtpRequestsRemaining, setAdminOtpRequestsRemaining] = useState(null);
+  const [agentResetMode, setAgentResetMode] = useState(false);
+  const [agentResetOtpSent, setAgentResetOtpSent] = useState(false);
+  const [agentResetOtp, setAgentResetOtp] = useState("");
+  const [newAgentPassword, setNewAgentPassword] = useState("");
+  const [confirmAgentPassword, setConfirmAgentPassword] = useState("");
+  const [agentOtpRequestsRemaining, setAgentOtpRequestsRemaining] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -61,6 +79,18 @@ const LoginPage = () => {
     setOtp("");
     setSelectedDairy(null);
     setError("");
+    setAdminResetMode(false);
+    setAdminResetOtpSent(false);
+    setAdminResetOtp("");
+    setNewAdminPassword("");
+    setConfirmAdminPassword("");
+    setAdminOtpRequestsRemaining(null);
+    setAgentResetMode(false);
+    setAgentResetOtpSent(false);
+    setAgentResetOtp("");
+    setNewAgentPassword("");
+    setConfirmAgentPassword("");
+    setAgentOtpRequestsRemaining(null);
   };
 
   // ================= IDENTIFIER SUBMIT =================
@@ -119,6 +149,12 @@ const LoginPage = () => {
 
       // Otherwise, follow the step (usually PASSWORD for Admin/Agent)
       setStep(response.nextStep); // e.g., "PASSWORD"
+      setAdminResetMode(false);
+      setAdminResetOtpSent(false);
+      setAdminOtpRequestsRemaining(null);
+      setAgentResetMode(false);
+      setAgentResetOtpSent(false);
+      setAgentOtpRequestsRemaining(null);
       
     } catch (err) {
       const backendMessage =
@@ -139,6 +175,172 @@ const LoginPage = () => {
     setSelectedDairy(dairy);
     setOtpTimer(30);
     setStep("OTP");
+  };
+
+  const handleAdminForgotPasswordRequest = async () => {
+    const normalizedIdentifier = String(identifier || "").trim();
+    if (!normalizedIdentifier) {
+      toast.error("Identifier is required");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await requestAdminPasswordResetOtpApi({
+        identifier: normalizedIdentifier,
+      });
+      setAdminResetMode(true);
+      setAdminResetOtpSent(true);
+      setAgentResetMode(false);
+      setAgentResetOtpSent(false);
+      setAdminOtpRequestsRemaining(
+        typeof result?.remainingRequests === "number" ? result.remainingRequests : null
+      );
+      setAgentOtpRequestsRemaining(null);
+      toast.success(result?.message || "OTP sent to registered admin email");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to send OTP";
+      setError(backendMessage);
+      if (typeof err.response?.data?.remainingRequests === "number") {
+        setAdminOtpRequestsRemaining(err.response.data.remainingRequests);
+      }
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdminPasswordReset = async (e) => {
+    e.preventDefault();
+
+    if (!adminResetOtp.trim()) {
+      toast.error("Please enter OTP");
+      return;
+    }
+    if (newAdminPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await resetAdminPasswordWithOtpApi({
+        identifier: String(identifier || "").trim(),
+        otp: adminResetOtp.trim(),
+        newPassword: newAdminPassword,
+      });
+
+      toast.success(result?.message || "Password reset successful. Please login.");
+      setAdminResetMode(false);
+      setAdminResetOtpSent(false);
+      setAdminResetOtp("");
+      setNewAdminPassword("");
+      setConfirmAdminPassword("");
+      setPassword("");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to reset password";
+      setError(backendMessage);
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAgentForgotPasswordRequest = async () => {
+    const normalizedStaffId = String(identifier || "").trim().toUpperCase();
+    if (!normalizedStaffId) {
+      toast.error("Staff ID is required");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await requestAgentPasswordResetOtpApi({
+        agentId: normalizedStaffId,
+      });
+      setAgentResetMode(true);
+      setAgentResetOtpSent(true);
+      setAdminResetMode(false);
+      setAdminResetOtpSent(false);
+      setAgentOtpRequestsRemaining(
+        typeof result?.remainingRequests === "number" ? result.remainingRequests : null
+      );
+      setAdminOtpRequestsRemaining(null);
+      toast.success(result?.message || "OTP sent to registered agent email");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to send OTP";
+      setError(backendMessage);
+      if (typeof err.response?.data?.remainingRequests === "number") {
+        setAgentOtpRequestsRemaining(err.response.data.remainingRequests);
+      }
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAgentPasswordReset = async (e) => {
+    e.preventDefault();
+
+    if (!agentResetOtp.trim()) {
+      toast.error("Please enter OTP");
+      return;
+    }
+    if (newAgentPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    if (newAgentPassword !== confirmAgentPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await resetAgentPasswordWithOtpApi({
+        agentId: String(identifier || "").trim().toUpperCase(),
+        otp: agentResetOtp.trim(),
+        newPassword: newAgentPassword,
+      });
+
+      toast.success(result?.message || "Password reset successful. Please login.");
+      setAgentResetMode(false);
+      setAgentResetOtpSent(false);
+      setAgentResetOtp("");
+      setNewAgentPassword("");
+      setConfirmAgentPassword("");
+      setPassword("");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to reset password";
+      setError(backendMessage);
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ================= FINAL LOGIN =================
@@ -347,34 +549,280 @@ const LoginPage = () => {
 
           {/* STEP 2: PASSWORD INPUT (Admin & Agent) */}
           {step === "PASSWORD" && (
-            <form onSubmit={handleFinalLogin} className="space-y-5">
+            <form
+              onSubmit={
+                adminResetMode
+                  ? handleAdminPasswordReset
+                  : agentResetMode
+                  ? handleAgentPasswordReset
+                  : handleFinalLogin
+              }
+              className="space-y-5"
+            >
               <IdentityDisplay />
-              
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
 
-              <button 
-                disabled={loading || !password}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="animate-spin" /> : "Login"}
-              </button>
+              {!adminResetMode && !agentResetMode ? (
+                <>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+
+                  {(detectedUser?.userType === "ADMIN" ||
+                    detectedUser?.userType === "AGENT" ||
+                    detectedUser?.userType === "STAFF") && (
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (detectedUser?.userType === "ADMIN") {
+                            handleAdminForgotPasswordRequest();
+                          } else {
+                            handleAgentForgotPasswordRequest();
+                          }
+                        }}
+                        className="text-xs text-blue-600 font-semibold hover:underline"
+                        disabled={loading}
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    disabled={loading || !password}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                  >
+                    {loading ? <Loader2 className="animate-spin" /> : "Login"}
+                  </button>
+                </>
+              ) : adminResetMode ? (
+                <>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                    OTP will be sent to your registered admin email, irrespective of email/mobile login method.
+                  </div>
+
+                  {!adminResetOtpSent ? (
+                    <button
+                      type="button"
+                      onClick={handleAdminForgotPasswordRequest}
+                      disabled={loading}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      {loading ? <Loader2 className="animate-spin" /> : "Send OTP"}
+                    </button>
+                  ) : (
+                    <>
+                      {typeof adminOtpRequestsRemaining === "number" && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">
+                            OTP requests remaining: {adminOtpRequestsRemaining}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleAdminForgotPasswordRequest}
+                            disabled={loading || adminOtpRequestsRemaining <= 0}
+                            className="text-blue-600 font-semibold hover:underline disabled:text-gray-400 disabled:no-underline"
+                          >
+                            Resend OTP
+                          </button>
+                        </div>
+                      )}
+                      {adminOtpRequestsRemaining === 0 && (
+                        <p className="text-xs text-red-600 font-medium">
+                          Limit reached. Try after 15 minutes.
+                        </p>
+                      )}
+
+                      <input
+                        value={adminResetOtp}
+                        onChange={(e) => setAdminResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="Enter 6-digit OTP"
+                        className="w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                        autoFocus
+                      />
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newAdminPassword}
+                          onChange={(e) => setNewAdminPassword(e.target.value)}
+                          placeholder="New password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmAdminPassword}
+                          onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <button
+                        disabled={loading || adminResetOtp.length < 6 || !newAdminPassword || !confirmAdminPassword}
+                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="animate-spin" /> : "Reset Password"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminResetMode(false);
+                          setAdminResetOtpSent(false);
+                          setAdminResetOtp("");
+                          setNewAdminPassword("");
+                          setConfirmAdminPassword("");
+                          setAdminOtpRequestsRemaining(null);
+                        }}
+                        className="w-full text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        Back to Login
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                    OTP will be sent to the agent's registered email using your staff ID.
+                  </div>
+
+                  {!agentResetOtpSent ? (
+                    <button
+                      type="button"
+                      onClick={handleAgentForgotPasswordRequest}
+                      disabled={loading}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      {loading ? <Loader2 className="animate-spin" /> : "Send OTP"}
+                    </button>
+                  ) : (
+                    <>
+                      {typeof agentOtpRequestsRemaining === "number" && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">
+                            OTP requests remaining: {agentOtpRequestsRemaining}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleAgentForgotPasswordRequest}
+                            disabled={loading || agentOtpRequestsRemaining <= 0}
+                            className="text-blue-600 font-semibold hover:underline disabled:text-gray-400 disabled:no-underline"
+                          >
+                            Resend OTP
+                          </button>
+                        </div>
+                      )}
+                      {agentOtpRequestsRemaining === 0 && (
+                        <p className="text-xs text-red-600 font-medium">
+                          Limit reached. Try after 15 minutes.
+                        </p>
+                      )}
+
+                      <input
+                        value={agentResetOtp}
+                        onChange={(e) => setAgentResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="Enter 6-digit OTP"
+                        className="w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                        autoFocus
+                      />
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newAgentPassword}
+                          onChange={(e) => setNewAgentPassword(e.target.value)}
+                          placeholder="New password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmAgentPassword}
+                          onChange={(e) => setConfirmAgentPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <button
+                        disabled={loading || agentResetOtp.length < 6 || !newAgentPassword || !confirmAgentPassword}
+                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="animate-spin" /> : "Reset Password"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAgentResetMode(false);
+                          setAgentResetOtpSent(false);
+                          setAgentResetOtp("");
+                          setNewAgentPassword("");
+                          setConfirmAgentPassword("");
+                          setAgentOtpRequestsRemaining(null);
+                        }}
+                        className="w-full text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        Back to Login
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
             </form>
           )}
 
