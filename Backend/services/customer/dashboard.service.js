@@ -20,6 +20,107 @@ const isUuidSyntaxError = (error) => {
   return message.includes("invalid input syntax for type uuid");
 };
 
+const normalizeOneTimeStatus = (status) => {
+  const value = String(status || "").toUpperCase();
+  if (value === "DELIVERED" || value === "COMPLETED") return "DELIVERED";
+  if (value === "SKIPPED" || value === "CANCELLED" || value === "CANCELED") return "SKIPPED";
+  if (value === "PENDING") return "PENDING";
+  return "PENDING";
+};
+
+const parseOneTimeNotes = (notesValue) => {
+  const notes = String(notesValue || "");
+  if (!notes.includes("[ONE_TIME_ORDER]")) {
+    return {
+      isOneTimeOrder: false,
+      slot: null,
+      paymentMethod: null,
+    };
+  }
+
+  const slotMatch = notes.match(/slot=([^;]+)/i);
+  const paymentMatch = notes.match(/payment=([^;]+)/i);
+
+  return {
+    isOneTimeOrder: true,
+    slot: slotMatch?.[1]?.trim() || null,
+    paymentMethod: paymentMatch?.[1]?.trim() || null,
+  };
+};
+
+const getDairyNamesMap = async (dairyIds) => {
+  const ids = [...new Set((dairyIds || []).filter(Boolean))];
+  if (ids.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("dairies")
+    .select("id, dairy_name")
+    .in("id", ids);
+
+  if (error) {
+    if (isMissingTableError(error) || isMissingColumnError(error) || isUuidSyntaxError(error)) {
+      return {};
+    }
+    throw error;
+  }
+
+  return (data || []).reduce((acc, row) => {
+    const key = row?.id;
+    if (key != null) {
+      acc[String(key)] = row?.dairy_name || `Dairy #${key}`;
+    }
+    return acc;
+  }, {});
+};
+
+const getRecentOneTimeOrders = async (customerId) => {
+  const { data, error } = await supabase
+    .from("deliveries")
+    .select("id, dairy_id, delivery_date, milk_type, quantity_liters, status, notes, created_at")
+    .eq("customer_id", customerId)
+    .ilike("notes", "%[ONE_TIME_ORDER]%")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (error) {
+    if (isMissingTableError(error) || isMissingColumnError(error) || isUuidSyntaxError(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  const dairyNamesMap = await getDairyNamesMap(rows.map((row) => row?.dairy_id));
+
+  return rows
+    .map((row) => {
+      const parsedNotes = parseOneTimeNotes(row?.notes);
+      if (!parsedNotes.isOneTimeOrder) return null;
+
+      const quantityValue = Number(row?.quantity_liters);
+      const quantity =
+        Number.isFinite(quantityValue) && quantityValue > 0
+          ? `${quantityValue} L`
+          : "-";
+
+      return {
+        id: row?.id,
+        dairyId: row?.dairy_id ?? null,
+        dairyName:
+          dairyNamesMap[String(row?.dairy_id)] ||
+          (row?.dairy_id ? `Dairy #${row.dairy_id}` : "Dairy"),
+        deliveryDate: row?.delivery_date || null,
+        product: row?.milk_type || "Milk",
+        quantity,
+        status: normalizeOneTimeStatus(row?.status),
+        slot: parsedNotes.slot || "-",
+        paymentMethod: parsedNotes.paymentMethod || "-",
+        createdAt: row?.created_at || null,
+      };
+    })
+    .filter(Boolean);
+};
+
 const getMembershipDairyId = async (customerId) => {
   const candidateColumns = ["customer_id", "user_id", "customerid", "customerId"];
 
@@ -133,6 +234,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
     : "-";
   const { todayDelivery } = await getTodayDeliverySnapshot(customerId, { subscription });
   const upcomingDeliveryAlert = await getUpcomingScheduledDelivery(customerId);
+  const oneTimeOrders = await getRecentOneTimeOrders(customerId);
 
   const legacyDairyName =
     customer?.dairy_name ??
@@ -181,6 +283,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
     alerts: {
       upcomingDelivery: upcomingDeliveryAlert,
     },
+    oneTimeOrders,
   };
 
   dashboardCache.set(cacheKey, { payload, at: Date.now() });

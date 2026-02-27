@@ -19,18 +19,69 @@ import client from "./client";
 /* =========================
    DASHBOARD (WITH CACHE)
 ========================= */
+const DASHBOARD_CACHE_KEY = "adminDashboardCacheV1";
+const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+
 let dashboardCache = null;
 let cacheTime = 0;
 
-export const fetchAdminDashboard = async () => {
+const readPersistedDashboardCache = () => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed?.data || !parsed?.timestamp) return null;
+
+    const isFresh = Date.now() - parsed.timestamp < DASHBOARD_CACHE_TTL_MS;
+    return isFresh ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistDashboardCache = (data, timestamp) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(
+      DASHBOARD_CACHE_KEY,
+      JSON.stringify({ data, timestamp })
+    );
+  } catch {
+    // Ignore storage write failures to keep API flow stable.
+  }
+};
+
+export const getCachedAdminDashboard = () => {
   const now = Date.now();
-  if (dashboardCache && now - cacheTime < 60000) {
+  if (dashboardCache && now - cacheTime < DASHBOARD_CACHE_TTL_MS) {
     return dashboardCache;
   }
 
+  const persisted = readPersistedDashboardCache();
+  if (!persisted) return null;
+
+  dashboardCache = persisted.data;
+  cacheTime = persisted.timestamp;
+  return persisted.data;
+};
+
+export const fetchAdminDashboard = async ({ forceRefresh = false } = {}) => {
+  if (!forceRefresh) {
+    const cachedDashboard = getCachedAdminDashboard();
+    if (cachedDashboard) return cachedDashboard;
+  }
+
   const { data } = await client.get("/admin/dashboard");
+  const now = Date.now();
+
   dashboardCache = data;
   cacheTime = now;
+  persistDashboardCache(data, now);
+
   return data;
 };
 

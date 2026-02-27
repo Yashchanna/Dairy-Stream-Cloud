@@ -75,6 +75,17 @@ const Subscribe = () => {
   const [toast, setToast] = useState(null);
   const [closing, setClosing] = useState(false);
 
+  const locationGuestDairyId = location.state?.guestDairyId ?? null;
+  const locationGuestDairyName = location.state?.guestDairyName ?? "";
+  const guestDairyId =
+    locationGuestDairyId != null
+      ? String(locationGuestDairyId)
+      : localStorage.getItem("guest_dairy_id");
+  const guestDairyName =
+    locationGuestDairyName || localStorage.getItem("guest_dairy_name") || "";
+  const hasActivePlan =
+    !!subscription && String(subscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+
   // -----------------------------------------
   // 1. Initial Data Fetch
   // -----------------------------------------
@@ -116,6 +127,15 @@ const Subscribe = () => {
 
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state, loading, subscription, navigate, location.pathname]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (hasActivePlan) {
+      localStorage.removeItem("guest_dairy_id");
+      localStorage.removeItem("guest_dairy_name");
+    }
+  }, [loading, hasActivePlan]);
 
   const showToastMessage = (type, message) => {
     setToast({ type, message });
@@ -240,19 +260,21 @@ const Subscribe = () => {
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-6">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500">
-                    {subscription ? `${subscription.status} PLAN` : 'NO ACTIVE PLAN'}
+                    {hasActivePlan ? `${subscription.status} PLAN` : 'NO ACTIVE PLAN'}
                   </p>
                   <h3 className="text-2xl font-semibold text-gray-900 mt-1">
-                    {subscription ? `${subscription.quantity} Liters ${subscription.product}` : 'No subscription yet'}
+                    {hasActivePlan ? `${subscription.quantity} Liters ${subscription.product}` : 'No subscription yet'}
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">
-                    {subscription
+                    {hasActivePlan
                       ? `${subscription.slot} Slot - ${subscription.timeRange}`
+                      : guestDairyId
+                      ? `You can start subscription directly with ${guestDairyName || `Dairy #${guestDairyId}`}.`
                       : 'Choose a dairy and create your plan from See Other Dairies'}
                   </p>
                 </div>
 
-                {subscription && subscription.status !== 'CLOSED' ? (
+                {hasActivePlan ? (
                   <div className="flex gap-3 flex-wrap">
                     <button
                       disabled={saving}
@@ -289,18 +311,31 @@ const Subscribe = () => {
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })}
-                    className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium"
-                  >
-                    See Other Dairies
-                  </button>
+                  guestDairyId ? (
+                    <button
+                      onClick={() =>
+                        navigate(`/join/${guestDairyId}`, {
+                          state: { openSubscriptionModal: true, from: 'customer-subscriptions' },
+                        })
+                      }
+                      className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium"
+                    >
+                      Take Subscription for {guestDairyName || `Dairy #${guestDairyId}`}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })}
+                      className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium"
+                    >
+                      See Other Dairies
+                    </button>
+                  )
                 )}
               </div>
             </div>
 
             {/* Stats Grid */}
-            {subscription && (
+            {hasActivePlan && (
               <div className="grid md:grid-cols-3 gap-6">
                 <StatCard icon={<Droplet size={24} />} label="Daily Quantity" value={`${subscription.quantity} Liters`} />
                 <StatCard icon={<Clock size={24} />} label="Delivery Slot" value={subscription.slot} />

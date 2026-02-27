@@ -15,7 +15,6 @@ const getAuthToken = () => {
 };
 
 const formatCurrency = (value) => `Rs ${Number(value || 0).toFixed(2)}`;
-
 const dueText = (dueInDays) => {
   if (dueInDays === null || dueInDays === undefined) return "Due date not set";
   if (dueInDays < 0) return `Overdue by ${Math.abs(dueInDays)} days`;

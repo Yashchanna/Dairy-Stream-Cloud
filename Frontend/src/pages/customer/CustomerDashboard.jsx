@@ -6,7 +6,7 @@ import {
   fetchCustomerDashboard,
   saveCustomerSubscription,
 } from "../../api/customer.api.js";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import {
   CheckCircle,
@@ -23,8 +23,11 @@ import {
 
 const CustomerDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data, loading, error } = useCustomerDashboard();
   const [dashboardData, setDashboardData] = useState(null);
+  const [guestDairyName, setGuestDairyName] = useState("");
+  const [guestDairyId, setGuestDairyId] = useState(null);
   const [showEditTomorrowModal, setShowEditTomorrowModal] = useState(false);
   const [savingTomorrow, setSavingTomorrow] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -36,6 +39,79 @@ const CustomerDashboard = () => {
   useEffect(() => {
     if (data) setDashboardData(data);
   }, [data]);
+
+  useEffect(() => {
+    const incomingState = location.state;
+    const incomingFromBuyOnce = incomingState?.from === "buy-once";
+
+    if (incomingFromBuyOnce) {
+      const nextName = String(incomingState?.dairyName || "").trim();
+      const nextDairyId = incomingState?.dairyId ?? null;
+      if (nextName) {
+        setGuestDairyName(nextName);
+        localStorage.setItem("guest_dairy_name", nextName);
+      }
+      if (nextDairyId != null) {
+        setGuestDairyId(String(nextDairyId));
+        localStorage.setItem("guest_dairy_id", String(nextDairyId));
+      }
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+
+    const persisted = localStorage.getItem("guest_dairy_name");
+    const persistedDairyId = localStorage.getItem("guest_dairy_id");
+    if (persisted) {
+      setGuestDairyName(persisted);
+    }
+    if (persistedDairyId) {
+      setGuestDairyId(persistedDairyId);
+    }
+  }, [location.state, location.pathname, navigate]);
+
+  useEffect(() => {
+    const currentSubscription = (dashboardData || data)?.subscription;
+    const hasCurrentSubscription =
+      !!currentSubscription &&
+      String(currentSubscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+
+    if (!hasCurrentSubscription) return;
+
+    setGuestDairyName("");
+    setGuestDairyId(null);
+    localStorage.removeItem("guest_dairy_name");
+    localStorage.removeItem("guest_dairy_id");
+  }, [dashboardData, data]);
+
+  useEffect(() => {
+    if (loading) return undefined;
+
+    let cancelled = false;
+
+    const refreshDashboard = async () => {
+      try {
+        const fresh = await fetchCustomerDashboard({ force: true });
+        if (!cancelled) {
+          setDashboardData(fresh);
+        }
+      } catch {
+        // Ignore transient refresh failures; existing dashboard data remains visible.
+      }
+    };
+
+    const interval = setInterval(refreshDashboard, 30000);
+    const handleFocus = () => {
+      refreshDashboard();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [loading]);
 
   if (loading) {
     return (
@@ -58,7 +134,48 @@ const CustomerDashboard = () => {
 
   /* ---------- DATA RESOLUTION ---------- */
   const resolvedData = dashboardData || data;
-  const { customer, todayDelivery, tomorrowDelivery, billing, subscription, alerts } = resolvedData;
+  const {
+    customer,
+    todayDelivery,
+    tomorrowDelivery,
+    billing,
+    subscription,
+    alerts,
+    oneTimeOrders = [],
+  } = resolvedData;
+  const hasActiveSubscription =
+    !!subscription &&
+    String(subscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+  const latestGuestOrder =
+    Array.isArray(oneTimeOrders) && oneTimeOrders.length > 0 ? oneTimeOrders[0] : null;
+  const customerDairyName = String(customer?.dairy || "").trim();
+  const fallbackGuestDairy =
+    customerDairyName && customerDairyName.toLowerCase() !== "not assigned"
+      ? customerDairyName
+      : String(latestGuestOrder?.dairyName || "").trim();
+  const resolvedGuestDairy = guestDairyName || fallbackGuestDairy;
+  const resolvedGuestDairyId =
+    guestDairyId ??
+    (latestGuestOrder?.dairyId !== null && latestGuestOrder?.dairyId !== undefined
+      ? String(latestGuestOrder.dairyId)
+      : null);
+  const latestDeliveredOneTimeOrder = Array.isArray(oneTimeOrders)
+    ? oneTimeOrders.find(
+        (order) => String(order?.status || "").toUpperCase() === "DELIVERED"
+      )
+    : null;
+  const promptDairyName = String(
+    latestDeliveredOneTimeOrder?.dairyName || resolvedGuestDairy || ""
+  ).trim();
+  const promptDairyId =
+    resolvedGuestDairyId ??
+    (latestDeliveredOneTimeOrder?.dairyId !== null &&
+    latestDeliveredOneTimeOrder?.dairyId !== undefined
+      ? String(latestDeliveredOneTimeOrder.dairyId)
+      : null);
+  const showPostDeliveryPrompt = !hasActiveSubscription && Boolean(latestDeliveredOneTimeOrder);
+  const showGuestBanner =
+    !showPostDeliveryPrompt && !hasActiveSubscription && Boolean(resolvedGuestDairy);
 
   const openTomorrowEdit = () => {
     if (!subscription?.dairyId) {
@@ -108,6 +225,50 @@ const CustomerDashboard = () => {
   return (
     <CustomerLayout>
       <div className="space-y-4 md:space-y-6 px-2 sm:px-4">
+        {showGuestBanner && (
+          <GuestSubscribeBanner
+            dairyName={resolvedGuestDairy}
+            onSubscribe={() =>
+              navigate("/customer/dashboard/subscriptions", {
+                state: resolvedGuestDairyId
+                  ? {
+                      from: "guest-banner",
+                      guestDairyId: resolvedGuestDairyId,
+                      guestDairyName: resolvedGuestDairy,
+                    }
+                  : null,
+              })
+            }
+            onBuyOnce={
+              resolvedGuestDairyId ? () => navigate(`/buy-once/${resolvedGuestDairyId}`) : null
+            }
+          />
+        )}
+        {showPostDeliveryPrompt && (
+          <PostDeliveryDecisionCard
+            dairyName={promptDairyName}
+            onSubscribe={() =>
+              navigate("/customer/dashboard/subscriptions", {
+                state: promptDairyId
+                  ? {
+                      from: "one-time-delivered",
+                      guestDairyId: promptDairyId,
+                      guestDairyName: promptDairyName,
+                    }
+                  : null,
+              })
+            }
+            onExplore={() =>
+              navigate("/explore", {
+                state: {
+                  from: "one-time-delivered",
+                  dairyId: promptDairyId || null,
+                },
+              })
+            }
+          />
+        )}
+
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
@@ -161,6 +322,56 @@ const CustomerDashboard = () => {
     </CustomerLayout>
   );
 };
+
+const GuestSubscribeBanner = ({ dairyName, onSubscribe, onBuyOnce }) => (
+  <div className="rounded-2xl border-2 border-amber-300 bg-amber-100/90 px-5 py-4 shadow-sm">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm sm:text-base font-semibold text-amber-900">
+        You are viewing {dairyName} as a guest. Subscribe now to schedule your first 6 AM delivery.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        {onBuyOnce && (
+          <button
+            onClick={onBuyOnce}
+            className="inline-flex items-center rounded-lg bg-white px-3 py-1 text-xs sm:text-sm font-bold text-amber-800 border border-amber-300 hover:bg-amber-50 transition-colors"
+          >
+            Buy Product Once
+          </button>
+        )}
+        <button
+          onClick={onSubscribe}
+          className="inline-flex items-center rounded-lg bg-amber-700 px-3 py-1 text-xs sm:text-sm font-bold text-white hover:bg-amber-800 transition-colors"
+        >
+          Subscribe Now
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const PostDeliveryDecisionCard = ({ dairyName, onSubscribe, onExplore }) => (
+  <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-5 py-4 shadow-sm">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm sm:text-base font-semibold text-emerald-900">
+        Your product has been delivered{dairyName ? ` from ${dairyName}` : ""}. Do you want to continue with a subscription?
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={onSubscribe}
+          className="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-1 text-xs sm:text-sm font-bold text-white hover:bg-emerald-800 transition-colors"
+        >
+          Continue Subscription
+        </button>
+        <button
+          onClick={onExplore}
+          className="inline-flex items-center rounded-lg bg-white px-3 py-1 text-xs sm:text-sm font-bold text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors"
+        >
+          Back to Explore Dairies
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 /* TODAY CARD */
 const TodayStatusCard = ({ data = {}, navigate }) => {

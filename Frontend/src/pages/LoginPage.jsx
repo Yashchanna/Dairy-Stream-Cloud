@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../hooks/useAuth.jsx"; // Adjust path if needed
 
@@ -23,6 +23,7 @@ import {
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const inputRef = useRef(null);
 
   // ================= STATES =================
@@ -180,7 +181,12 @@ const LoginPage = () => {
       localStorage.setItem("token", result.token);
       localStorage.setItem("userRole", "CUSTOMER");
       login(result);
-      navigate(result.redirect || "/customer/dashboard", { replace: true });
+      const redirectOverride = location.state?.postLoginRedirect;
+      const redirectState = location.state?.postLoginState;
+      navigate(redirectOverride || result.redirect || "/customer/dashboard", {
+        replace: true,
+        state: redirectState || null,
+      });
     }
 
   } catch (err) {

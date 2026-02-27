@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { fetchAdminDashboard } from "../../api/admin.api";
+import { useEffect, useMemo, useState } from "react";
+import { fetchAdminDashboard, getCachedAdminDashboard } from "../../api/admin.api";
 
 import AdminSidebar from "../../components/admin/layout/AdminSidebar";
 import AdminMobileTopbar from "../../components/admin/layout/AdminMobileTopbar";
@@ -13,27 +13,35 @@ import AdminDashboardSkeleton from "../../components/admin/skeletons/AdminDashbo
 
 export default function AdminDashboard() {
   // ---- UI state
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [dataReady, setDataReady] = useState(false);
-  const [uiReady, setUiReady] = useState(false);
+
+  const cachedDashboard = useMemo(() => getCachedAdminDashboard(), []);
+  const [uiReady, setUiReady] = useState(Boolean(cachedDashboard));
 
 
   // ---- Admin name (SYNC, SAFE)
-  const adminUserStr = localStorage.getItem("adminUser");
-  const adminName = adminUserStr
-    ? JSON.parse(adminUserStr).name
-    : "Admin";
+  let adminName = "Admin";
+  try {
+    const adminUserStr = localStorage.getItem("adminUser");
+    if (adminUserStr) {
+      const parsed = JSON.parse(adminUserStr);
+      adminName = parsed?.name || "Admin";
+    }
+  } catch {
+    adminName = "Admin";
+  }
 
   // ---- Dashboard data (SAFE DEFAULTS)
   const [data, setData] = useState({
-    dairyName: null,
-    totalCustomers: 0,
-    totalAgents: 0,
-    activeAgents: 0,
-    deliveriesToday: 0,
-    pendingPayments: 0,
+    ...(cachedDashboard || {
+      dairyName: null,
+      totalCustomers: 0,
+      totalAgents: 0,
+      activeAgents: 0,
+      deliveriesToday: 0,
+      pendingPayments: 0,
+    }),
   });
 
   const dashboardDisplayName = data?.dairyName || adminName;
@@ -44,17 +52,15 @@ export default function AdminDashboard() {
 
       const loadDashboard = async () => {
         try {
-          const res = await fetchAdminDashboard();
+          const res = await fetchAdminDashboard({ forceRefresh: Boolean(cachedDashboard) });
           if (isMounted) {
             setData(res);
-            requestAnimationFrame(() => {
-              setUiReady(true);
-            });
+            setUiReady(true);
           }
         } catch (err) {
-          if (isMounted) setError(err.message);
-        } finally {
-          if (isMounted) setLoading(false);
+          if (isMounted && !cachedDashboard) {
+            setError(err.message);
+          }
         }
       };
 
@@ -63,7 +69,7 @@ export default function AdminDashboard() {
       return () => {
         isMounted = false;
       };
-    }, []);
+    }, [cachedDashboard]);
 
 
   // ---- Error UI
@@ -91,16 +97,15 @@ export default function AdminDashboard() {
       />
 
       <main className="lg:ml-64 px-4 sm:px-6 lg:px-10 py-8">
-      <AdminHeader adminName={dashboardDisplayName} />
-
-{/* Phase 1: Skeleton / KPIs */}
         {!uiReady ? (
           <AdminDashboardSkeleton />
         ) : (
-          <AdminKpis data={data} />
+          <>
+            <AdminHeader adminName={dashboardDisplayName} />
+            <AdminKpis data={data} />
+          </>
         )}
 
-        {/* Phase 2: Heavy sections */}
         {uiReady && (
           <>
             <AdminOperations data={data} />

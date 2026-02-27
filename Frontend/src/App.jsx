@@ -9,6 +9,7 @@ import RegisterNewuserPage from "./pages/RegisterNewuserPage";
 import RegisterDairyPage from "./pages/RegisterDairyPage";
 import ExploreDairiesPage from "./pages/public/ExploreDairiesPage";
 import DairyDetailsPage from "./pages/public/DairyDetailsPage";
+import BuyOncePage from "./pages/public/BuyOncePage.jsx";
 
 // --- Customer Pages ---
 import CustomerDashboard from "./pages/customer/CustomerDashboard";
@@ -46,6 +47,7 @@ function App() {
       <Route path="/" element={<LoginPage />} />
       <Route path="/explore" element={<ExploreDairiesPage />} />
       <Route path="/join/:id" element={<DairyDetailsPage />} />
+      <Route path="/buy-once/:id" element={<BuyOncePage />} />
       <Route path="/customer/register" element={<RegisterNewuserPage />} />
       <Route path="/register-dairy" element={<RegisterDairyPage />} />
 

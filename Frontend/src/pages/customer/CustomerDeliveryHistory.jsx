@@ -33,6 +33,27 @@ const Deliveries = () => {
     fetchDeliveries();
   }, []);
 
+  const todayStatus = String(todayDelivery?.status || 'PENDING').toUpperCase();
+  const isTodayPending = todayStatus === 'PENDING';
+  const isTodayDelivered = todayStatus === 'DELIVERED';
+  const todayStatusClass = isTodayPending
+    ? 'bg-amber-100 text-amber-700'
+    : isTodayDelivered
+    ? 'bg-green-100 text-green-700'
+    : 'bg-slate-100 text-slate-700';
+  const todayTimingLabel =
+    todayStatus === 'NOT_SUBSCRIBED' || todayStatus === 'NOT_SCHEDULED'
+      ? 'No confirmed delivery slot for today'
+      : todayStatus === 'DELIVERED'
+      ? (todayDelivery?.time ? `Delivered at ${todayDelivery.time}` : 'Delivered')
+      : todayDelivery?.expectedWindow
+      ? `Expected in ${todayDelivery.expectedWindow}`
+      : todayDelivery?.slotWindow
+      ? `Expected between ${todayDelivery.slotWindow}`
+      : todayDelivery?.slot && todayDelivery.slot !== '-'
+      ? `Expected in ${todayDelivery.slot} slot`
+      : 'Expected today';
+
   return (
     <CustomerLayout>
       <div className="space-y-8 max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -74,20 +95,39 @@ const Deliveries = () => {
                   {todayDelivery.quantity || '-'} {todayDelivery.product || 'Milk'}
                 </h3>
                 <div className="flex items-center gap-3 mt-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                    (todayDelivery.status || 'PENDING') === 'PENDING' 
-                    ? 'bg-amber-100 text-amber-700' 
-                    : 'bg-green-100 text-green-700'
-                  }`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${todayStatusClass}`}>
                     {todayDelivery.status || 'PENDING'}
                   </span>
                   <span className="text-gray-400 text-sm">•</span>
-                  <span className="text-gray-500 text-sm font-medium">Expected by 8:00 AM</span>
+                  <span className="text-gray-500 text-sm font-medium">{todayTimingLabel}</span>
                 </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {todayDelivery?.isOneTimeOrder && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-indigo-50 text-indigo-700">
+                      One-time order
+                    </span>
+                  )}
+                  {todayDelivery?.slot && todayDelivery.slot !== '-' && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700">
+                      Slot: {todayDelivery.slot}
+                    </span>
+                  )}
+                  {todayDelivery?.paymentMethod && todayDelivery.paymentMethod !== '-' && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                      Payment: {todayDelivery.paymentMethod}
+                    </span>
+                  )}
+                </div>
+                {todayDelivery?.dairyName && (
+                  <p className="text-xs text-gray-500 mt-2">Dairy: {todayDelivery.dairyName}</p>
+                )}
+                {todayDelivery?.address && (
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">Address: {todayDelivery.address}</p>
+                )}
               </div>
 
               <button
-                onClick={() => navigate('/customer/track-agent', { state: { delivery: todayDelivery } })}
+                onClick={() => navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })}
                 className="flex items-center justify-center gap-3 bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 disabled:bg-gray-200 disabled:shadow-none disabled:text-gray-400"
                 disabled={!todayDelivery?.canTrackAgent}
               >
@@ -140,6 +180,31 @@ const Deliveries = () => {
                         <Clock size={14} className="text-blue-500" />
                         Dropped at {item.time}
                       </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {item.isOneTimeOrder && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-indigo-50 text-indigo-700">
+                          One-time
+                        </span>
+                      )}
+                      {item.slot && item.slot !== '-' && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700">
+                          Slot: {item.slot}{item.slotWindow ? ` (${item.slotWindow})` : ''}
+                        </span>
+                      )}
+                      {item.paymentMethod && item.paymentMethod !== '-' && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                          Payment: {item.paymentMethod}
+                        </span>
+                      )}
+                      {item.dairyName && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          {item.dairyName}
+                        </span>
+                      )}
+                    </div>
+                    {item.address && (
+                      <p className="text-xs text-gray-500 mt-2 line-clamp-2">Address: {item.address}</p>
                     )}
                   </div>
                 </div>

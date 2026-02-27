@@ -229,6 +229,37 @@ const buildPhoneVariants = (identifier) => {
   return [...variants].filter(Boolean);
 };
 
+const isMissingRelationOrColumnError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    (message.includes("relation") && message.includes("does not exist")) ||
+    (message.includes("column") && message.includes("does not exist"))
+  );
+};
+
+const hasHistoryRow = async ({
+  table,
+  customerId,
+  customerColumns = ["customer_id"],
+  dairyId = null,
+}) => {
+  for (const customerColumn of customerColumns) {
+    let query = supabase.from(table).select("id").eq(customerColumn, customerId);
+
+    if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
+      query = query.eq("dairy_id", dairyId);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
+
+    if (!error) return Boolean(data?.id);
+    if (isMissingRelationOrColumnError(error)) continue;
+    throw error;
+  }
+
+  return false;
+};
+
 // ==========================================
 // CORE AUTH LOGIC
 // ==========================================
@@ -389,6 +420,23 @@ export const determineRedirectPath = async (userId, requestedDairyId) => {
   );
 
   const hasActiveSubscription = activeSubscriptions.length > 0;
+
+  const [hasDeliveryHistory, hasPaymentHistory] = await Promise.all([
+    hasHistoryRow({
+      table: "deliveries",
+      customerId: userId,
+      customerColumns: ["customer_id", "user_id", "customerId", "customerid"],
+    }),
+    hasHistoryRow({
+      table: "payments",
+      customerId: userId,
+      customerColumns: ["customer_id", "user_id", "customerId", "customerid"],
+    }),
+  ]);
+
+  const hasOneTimeHistory = hasDeliveryHistory || hasPaymentHistory;
+  const shouldRedirectToDashboard = hasActiveSubscription || hasOneTimeHistory;
+
   const isRegisteredToRequestedDairy = !!(
     requestedDairyId &&
     activeSubscriptions.some(
@@ -397,7 +445,7 @@ export const determineRedirectPath = async (userId, requestedDairyId) => {
   );
 
   return {
-    redirect: hasActiveSubscription ? "/customer/dashboard" : "/explore",
+    redirect: shouldRedirectToDashboard ? "/customer/dashboard" : "/explore",
     isRegisteredToRequestedDairy,
   };
 };
