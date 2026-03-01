@@ -23,6 +23,13 @@ const toDecimal = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const formatStockValue = (value) => {
+  const stock = toDecimal(value);
+  return stock <= 0 ? "Out of Stock" : stock.toFixed(2);
+};
+
+const isOutOfStock = (value) => toDecimal(value) <= 0;
+
 export default function AdminProducts() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -257,23 +264,25 @@ export default function AdminProducts() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {products.map((item) => (
+                    {products.map((item) => {
+                      const shouldShowActive = item.isActive && !isOutOfStock(item.stockQuantity);
+                      return (
                       <tr key={item.id}>
                         <td className="px-5 py-3 font-medium text-gray-900">{item.name}</td>
                         <td className="px-5 py-3 text-gray-600">{item.type}</td>
                         <td className="px-5 py-3 text-gray-600">
                           Rs {toDecimal(item.ratePerUnit).toFixed(2)} / {item.unit}
                         </td>
-                        <td className="px-5 py-3 text-gray-600">{toDecimal(item.stockQuantity).toFixed(2)}</td>
+                        <td className="px-5 py-3 text-gray-600">{formatStockValue(item.stockQuantity)}</td>
                         <td className="px-5 py-3">
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium ${
-                              item.isActive
+                              shouldShowActive
                                 ? "bg-green-100 text-green-700"
                                 : "bg-gray-200 text-gray-700"
                             }`}
                           >
-                            {item.isActive ? "Active" : "Inactive"}
+                            {shouldShowActive ? "Active" : "Inactive"}
                           </span>
                         </td>
                         <td className="px-5 py-3">
@@ -295,7 +304,8 @@ export default function AdminProducts() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

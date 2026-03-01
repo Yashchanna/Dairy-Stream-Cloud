@@ -105,6 +105,18 @@ const normalizeProducts = (dairy = {}) => {
   }));
 };
 
+const isProductOutOfStock = (stockQuantity) => {
+  const stock = Number(stockQuantity);
+  return Number.isFinite(stock) && stock <= 0;
+};
+
+const formatProductStockLabel = (stockQuantity) => {
+  const stock = Number(stockQuantity);
+  if (!Number.isFinite(stock)) return "Unlimited";
+  if (stock <= 0) return "Out of Stock";
+  return String(stock);
+};
+
 const BuyOncePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -162,7 +174,8 @@ const BuyOncePage = () => {
   useEffect(() => {
     if (!dairy) return;
     if (dairy.productItems.some((item) => item.name === form.milkType)) return;
-    const firstProduct = dairy.productItems[0]?.name;
+    const firstInStock = dairy.productItems.find((item) => !isProductOutOfStock(item.stockQuantity))?.name;
+    const firstProduct = firstInStock || dairy.productItems[0]?.name;
     if (firstProduct) {
       setForm((prev) => ({ ...prev, milkType: firstProduct }));
     }
@@ -461,8 +474,13 @@ const BuyOncePage = () => {
                 {dairy.productItems.map((item) => (
                   <button
                     key={item.id}
+                    type="button"
+                    disabled={isProductOutOfStock(item.stockQuantity)}
                     onClick={() => setForm((prev) => ({ ...prev, milkType: item.name }))}
                     className={`relative p-4 rounded-xl border-2 text-left transition-all group ${
+                      isProductOutOfStock(item.stockQuantity)
+                      ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                      :
                       form.milkType === item.name
                       ? "border-blue-600 bg-blue-50/50 ring-4 ring-blue-50"
                       : "border-slate-100 hover:border-slate-300 bg-white"
@@ -473,8 +491,8 @@ const BuyOncePage = () => {
                     )}
                     <p className={`text-sm font-bold ${form.milkType === item.name ? "text-blue-900" : "text-slate-600"}`}>{item.name}</p>
                     <p className="text-lg font-black text-slate-900 mt-1">Rs {item.ratePerUnit}<span className="text-[10px] text-slate-400 font-normal">/{item.unit}</span></p>
-                    <p className={`text-[11px] mt-1 font-medium ${Number(item.stockQuantity || 0) > 0 ? "text-emerald-600" : "text-red-500"}`}>
-                      Stock: {Number(item.stockQuantity || 0)}
+                    <p className={`text-[11px] mt-1 font-medium ${isProductOutOfStock(item.stockQuantity) ? "text-red-500" : "text-emerald-600"}`}>
+                      Stock: {formatProductStockLabel(item.stockQuantity)}
                     </p>
                   </button>
                 ))}
@@ -516,7 +534,7 @@ const BuyOncePage = () => {
 
                 {selectedProduct && (
                   <p className={`text-xs font-semibold ${isOutOfStock || exceedsStock ? "text-red-600" : "text-emerald-600"}`}>
-                    Available stock: {Number.isFinite(availableStock) ? availableStock : "Unlimited"}
+                    Available stock: {isOutOfStock ? "Out of Stock" : Number.isFinite(availableStock) ? availableStock : "Unlimited"}
                   </p>
                 )}
 

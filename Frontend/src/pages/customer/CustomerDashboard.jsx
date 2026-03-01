@@ -176,6 +176,15 @@ const CustomerDashboard = () => {
   const showPostDeliveryPrompt = !hasActiveSubscription && Boolean(latestDeliveredOneTimeOrder);
   const showGuestBanner =
     !showPostDeliveryPrompt && !hasActiveSubscription && Boolean(resolvedGuestDairy);
+  const currentHour = new Date().getHours();
+  const greeting =
+    currentHour < 12
+      ? "Good Morning"
+      : currentHour < 17
+      ? "Good Afternoon"
+      : currentHour < 21
+      ? "Good Evening"
+      : "Good Night";
 
   const openTomorrowEdit = () => {
     if (!subscription?.dairyId) {
@@ -273,7 +282,7 @@ const CustomerDashboard = () => {
         <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-text-primary">
-              Good Morning, {customer.name || "Customer"} ðŸ‘‹
+              {greeting}, {customer.name || "Customer"}
             </h2>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm text-text-secondary">Member of</span>
@@ -502,12 +511,12 @@ const BillingSummaryCard = ({ data = {} }) => {
         <h3 className="text-xs sm:text-sm font-semibold text-text-muted uppercase mb-2">Billing Summary</h3>
         <div className="flex justify-between items-end">
           <div>
-            <p className="text-2xl md:text-3xl font-bold text-text-primary">â‚¹{data.monthlyDue || 0}</p>
+            <p className="text-2xl md:text-3xl font-bold text-text-primary">₹{data.monthlyDue || 0}</p>
             <p className="text-xs text-red-500 font-medium mt-1">Due in {data.dueInDays || 0} days</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-text-muted">Wallet Balance</p>
-            <p className="font-semibold text-text-secondary">â‚¹{data.walletBalance || 0}</p>
+            <p className="font-semibold text-text-secondary">₹{data.walletBalance || 0}</p>
           </div>
         </div>
       </div>

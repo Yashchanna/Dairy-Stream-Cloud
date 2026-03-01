@@ -4,76 +4,27 @@ import DeliveryCard from '../../components/agent/DeliveryCard';
 import DeliveryDetailsModal from '../../components/agent/DeliveryDetailsModal';
 import FailedReasonModal from '../../components/agent/FailedReasonModal';
 import { Filter } from 'lucide-react';
-
-// Mock data - replace with API call
-const MOCK_DELIVERIES = [
-  {
-    id: 'D1',
-    customerName: 'Amit Patil',
-    phoneNumber: '+91 98765 43210',
-    address: 'Flat 102, Green Valley Society, Narhe',
-    quantity: '1.0 L',
-    status: 'PENDING',
-    dairyFarmId: 'DF001',
-    dairyFarmName: 'Sunrise Dairy',
-    farmPhoneNumber: '+91 98765 11111',
-  },
-  {
-    id: 'D2',
-    customerName: 'Neha Kulkarni',
-    phoneNumber: '+91 98765 43211',
-    address: 'Flat 104, Green Valley Society, Narhe',
-    quantity: '0.5 L',
-    status: 'COMPLETED',
-    dairyFarmId: 'DF001',
-    dairyFarmName: 'Sunrise Dairy',
-    farmPhoneNumber: '+91 98765 11111',
-  },
-  {
-    id: 'D3',
-    customerName: 'Rajesh Deshmukh',
-    phoneNumber: '+91 98765 43212',
-    address: 'Flat 201, Green Valley Society, Narhe',
-    quantity: '2.0 L',
-    status: 'PENDING',
-    dairyFarmId: 'DF001',
-    dairyFarmName: 'Sunrise Dairy',
-    farmPhoneNumber: '+91 98765 11111',
-  },
-  {
-    id: 'D4',
-    customerName: 'Pooja Household',
-    phoneNumber: '+91 98765 43213',
-    address: 'Flat B-304, Sunshine Building, Ambegaon',
-    quantity: '0.5 L',
-    status: 'PENDING',
-    dairyFarmId: 'DF002',
-    dairyFarmName: 'Fresh Milk Co.',
-    farmPhoneNumber: '+91 98765 22222',
-  },
-  {
-    id: 'D5',
-    customerName: 'Sanjay Kumar',
-    phoneNumber: '+91 98765 43214',
-    address: 'Flat B-305, Sunshine Building, Ambegaon',
-    quantity: '1.0 L',
-    status: 'FAILED',
-    dairyFarmId: 'DF002',
-    dairyFarmName: 'Fresh Milk Co.',
-    farmPhoneNumber: '+91 98765 22222',
-    failedReason: 'Customer not available',
-  },
-];
+import {
+  fetchAssignedAgentDeliveries,
+  updateAssignedAgentDeliveryStatus,
+} from "../../api/agent.api";
 
 const AgentWorkingPage = () => {
-  const [deliveries, setDeliveries] = useState(MOCK_DELIVERIES);
+  const [deliveries, setDeliveries] = useState([]);
   const [filter, setFilter] = useState('ALL');
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [failedDelivery, setFailedDelivery] = useState(null);
 
   useEffect(() => {
-    // TODO: Fetch today's deliveries from API
-    // fetchTodayDeliveries().then(setDeliveries);
+    const loadDeliveries = async () => {
+      try {
+        const payload = await fetchAssignedAgentDeliveries();
+        setDeliveries(payload || []);
+      } catch (_err) {
+        setDeliveries([]);
+      }
+    };
+    loadDeliveries();
   }, []);
 
   const filteredDeliveries = deliveries.filter(delivery => {
@@ -81,31 +32,48 @@ const AgentWorkingPage = () => {
     return delivery.status === filter;
   });
 
-  const handleStatusChange = (deliveryId, newStatus) => {
+  const handleStatusChange = async (deliveryId, newStatus) => {
     if (newStatus === 'FAILED') {
-      const delivery = deliveries.find(d => d.id === deliveryId);
+      const delivery = deliveries.find((d) => String(d.id) === String(deliveryId));
       setFailedDelivery(delivery);
     } else {
-      // Update status directly for complete
-      setDeliveries(prev =>
-        prev.map(d =>
-          d.id === deliveryId ? { ...d, status: newStatus } : d
+      setDeliveries((prev) =>
+        prev.map((d) =>
+          String(d.id) === String(deliveryId) ? { ...d, status: newStatus } : d
         )
       );
-      // TODO: Send API update
+      try {
+        await updateAssignedAgentDeliveryStatus({
+          deliveryId,
+          status: newStatus,
+        });
+      } catch (_err) {
+        // Keep local state update for now to avoid blocking operator flow.
+      }
     }
   };
 
-  const handleFailedSubmit = ({ reason, image, imagePreview }) => {
-    setDeliveries(prev =>
-      prev.map(d =>
-        d.id === failedDelivery.id
+  const handleFailedSubmit = async ({ reason, imagePreview }) => {
+    if (!failedDelivery?.id) return;
+    const deliveryId = failedDelivery.id;
+
+    setDeliveries((prev) =>
+      prev.map((d) =>
+        String(d.id) === String(deliveryId)
           ? { ...d, status: 'FAILED', failedReason: reason, failedImage: imagePreview }
           : d
       )
     );
     setFailedDelivery(null);
-    // TODO: Send API update with reason and image
+    try {
+      await updateAssignedAgentDeliveryStatus({
+        deliveryId,
+        status: "FAILED",
+        reason,
+      });
+    } catch (_err) {
+      // Keep local state update for now to avoid blocking operator flow.
+    }
   };
 
   const stats = {

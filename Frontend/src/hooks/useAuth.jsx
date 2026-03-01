@@ -26,6 +26,18 @@ export const AuthProvider = ({ children }) => {
       role: data.role || data.user?.role, 
       ...data.user,
     };
+    const normalizedRole = String(userData.role || "").toUpperCase();
+
+    if (userData.token) {
+      if (normalizedRole === "ADMIN") {
+        localStorage.setItem("adminToken", userData.token);
+      } else if (normalizedRole === "AGENT" || normalizedRole === "STAFF") {
+        localStorage.setItem("agentToken", userData.token);
+      } else if (normalizedRole === "CUSTOMER") {
+        localStorage.setItem("token", userData.token);
+      }
+    }
+
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
     localStorage.setItem("userRole", userData.role);

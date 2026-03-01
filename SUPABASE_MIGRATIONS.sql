@@ -569,11 +569,21 @@ ALTER TABLE public.agents
   ADD COLUMN IF NOT EXISTS password VARCHAR(255);
 ALTER TABLE public.agents
   ADD COLUMN IF NOT EXISTS agent_id VARCHAR(50);
+ALTER TABLE public.agents
+  ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'ACTIVE';
+ALTER TABLE public.agents
+  ADD COLUMN IF NOT EXISTS inactive_from TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.agents
+  ADD COLUMN IF NOT EXISTS inactive_until DATE;
+ALTER TABLE public.agents
+  ADD COLUMN IF NOT EXISTS inactive_days INTEGER;
 
 -- Create index on email for faster lookups
 CREATE INDEX IF NOT EXISTS idx_agents_email ON public.agents(email);
 CREATE INDEX IF NOT EXISTS idx_agents_building ON public.agents(building);
 CREATE INDEX IF NOT EXISTS idx_agents_dairy_id ON public.agents(dairy_id);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON public.agents(status);
+CREATE INDEX IF NOT EXISTS idx_agents_inactive_until ON public.agents(inactive_until);
 
 -- ============================================
 -- Enable Row Level Security (Optional but Recommended)

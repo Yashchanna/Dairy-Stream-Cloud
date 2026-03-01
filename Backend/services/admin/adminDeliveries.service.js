@@ -30,6 +30,23 @@ const isMissingColumnError = (error) => {
   return message.includes("column") && message.includes("does not exist");
 };
 
+const parseDateSafe = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const deriveAgentIsActive = (agent = {}) => {
+  const status = String(agent?.status || "ACTIVE").toUpperCase();
+  const inactiveUntilDate = parseDateSafe(agent?.inactive_until);
+  if (status !== "INACTIVE") return true;
+  if (!inactiveUntilDate) return false;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return inactiveUntilDate < todayStart;
+};
+
 const hasEmailConfig = () =>
   Boolean(process.env.EMAIL_USER) && Boolean(process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD);
 
@@ -344,7 +361,7 @@ export const getDeliverySchedulingOptions = async ({ dairyId = null } = {}) => {
   const fetchAgents = async () => {
     let queryWithStatus = supabase
       .from("agents")
-      .select("id, agent_name, building, status");
+      .select("id, agent_name, building, status, inactive_until");
 
     if (dairyId) {
       queryWithStatus = queryWithStatus.eq("dairy_id", dairyId);
@@ -411,7 +428,7 @@ export const getDeliverySchedulingOptions = async ({ dairyId = null } = {}) => {
 
   const availableAgents = (agents || []).map((agent) => {
     const normalizedStatus = String(agent?.status || "ACTIVE").toUpperCase();
-    const isActive = normalizedStatus !== "INACTIVE";
+    const isActive = deriveAgentIsActive(agent);
     const availability = availabilityMap.get(agent?.id) || {
       assignedCount: 0,
       availability: "AVAILABLE",

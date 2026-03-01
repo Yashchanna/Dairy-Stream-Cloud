@@ -160,8 +160,15 @@ export default function AdminAgents() {
                     </div>
                     
                     <div>
-                      <div className="font-medium text-gray-900">
-                        {agent.full_name || "Unnamed Agent"}
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        <span>{agent.full_name || "Unnamed Agent"}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          String(agent.status || "ACTIVE").toUpperCase() === "INACTIVE"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }`}>
+                          {String(agent.status || "ACTIVE").toUpperCase()}
+                        </span>
                       </div>
                       <div className="text-sm text-gray-500 mt-0.5 flex gap-2">
                          <span>{agent.mobile || "No Phone"}</span>
@@ -170,6 +177,14 @@ export default function AdminAgents() {
                          )}
                          {agent.building && (
                              <span className="text-blue-600 font-medium">{agent.building}</span>
+                         )}
+                         {String(agent.status || "ACTIVE").toUpperCase() === "INACTIVE" && agent.inactive_until && (
+                             <>
+                               <span className="text-gray-300">|</span>
+                               <span className="text-red-600 font-medium">
+                                 Until {new Date(agent.inactive_until).toLocaleDateString()}
+                               </span>
+                             </>
                          )}
                       </div>
                     </div>

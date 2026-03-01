@@ -189,6 +189,23 @@ export default function AgentDrawer({ agentId, onClose, onChanged }) {
                     </p>
                   </div>
                 </div>
+                <div>
+                  <h3 className="text-xs text-gray-500 uppercase tracking-wide">Availability</h3>
+                  <div className="mt-3 space-y-1">
+                    <p className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold uppercase ${
+                      String(agent?.status || "ACTIVE").toUpperCase() === "INACTIVE"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-green-100 text-green-700"
+                    }`}>
+                      {String(agent?.status || "ACTIVE").toUpperCase()}
+                    </p>
+                    {String(agent?.status || "ACTIVE").toUpperCase() === "INACTIVE" && agent?.inactive_until && (
+                      <p className="text-xs text-gray-600">
+                        Until {new Date(agent.inactive_until).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}

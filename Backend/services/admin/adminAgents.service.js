@@ -1,5 +1,57 @@
 import { supabase } from "../../config/supabase.js"; // Adjust path to match your customer service import
 
+const parseDateSafe = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const deriveAgentAvailability = (agent = {}) => {
+  const rawStatus = String(agent?.status || "ACTIVE").toUpperCase();
+  const inactiveUntil = agent?.inactive_until || null;
+  const inactiveUntilDate = parseDateSafe(inactiveUntil);
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const inFutureWindow = inactiveUntilDate ? inactiveUntilDate >= todayStart : false;
+  const isInactive = rawStatus === "INACTIVE" && (inactiveUntilDate ? inFutureWindow : true);
+
+  let inactiveDaysRemaining = 0;
+  if (isInactive && inactiveUntilDate) {
+    const end = new Date(
+      inactiveUntilDate.getFullYear(),
+      inactiveUntilDate.getMonth(),
+      inactiveUntilDate.getDate()
+    );
+    const diffMs = end.getTime() - todayStart.getTime();
+    inactiveDaysRemaining = Math.max(1, Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1);
+  } else if (isInactive) {
+    inactiveDaysRemaining = Number(agent?.inactive_days || 0) || 0;
+  }
+
+  return {
+    status: isInactive ? "INACTIVE" : "ACTIVE",
+    isActive: !isInactive,
+    inactiveUntil,
+    inactiveFrom: agent?.inactive_from || null,
+    inactiveDaysRemaining,
+  };
+};
+
+const mapAgentForAdmin = (agent = {}) => {
+  const availability = deriveAgentAvailability(agent);
+  return {
+    ...agent,
+    full_name: agent.agent_name,
+    mobile: agent.phone_number,
+    status: availability.status,
+    isActive: availability.isActive,
+    inactive_until: availability.inactiveUntil,
+    inactive_from: availability.inactiveFrom,
+    inactive_days_remaining: availability.inactiveDaysRemaining,
+  };
+};
+
 export const getAdminAgents = async ({
   page = 1,
   limit = 10,
@@ -33,11 +85,7 @@ export const getAdminAgents = async ({
 
   return {
     // Normalize fields to match frontend expectations
-    agents: (data || []).map((agent) => ({
-      ...agent,
-      full_name: agent.agent_name,
-      mobile: agent.phone_number,
-    })),
+    agents: (data || []).map(mapAgentForAdmin),
     total: count,
     page,
     limit,
@@ -63,11 +111,7 @@ export const getAgentDetails = async (agentId, { dairyId = null } = {}) => {
   // For now, we return the agent profile to match the structure
   
   return {
-    agent: {
-      ...agent,
-      full_name: agent.agent_name,
-      mobile: agent.phone_number,
-    },
+    agent: mapAgentForAdmin(agent),
     // You can add more related data here later, like:
     // deliveries: [], 
     // assignments: null
@@ -75,7 +119,16 @@ export const getAgentDetails = async (agentId, { dairyId = null } = {}) => {
 };
 
 export const updateAgentById = async (agentId, updates) => {
-  const allowed = ["agent_name", "phone_number", "email", "building"];
+  const allowed = [
+    "agent_name",
+    "phone_number",
+    "email",
+    "building",
+    "status",
+    "inactive_from",
+    "inactive_until",
+    "inactive_days",
+  ];
 
   const payload = {};
   for (const key of allowed) {
@@ -91,11 +144,7 @@ export const updateAgentById = async (agentId, updates) => {
 
   if (error) throw error;
 
-  return {
-    ...data,
-    full_name: data.agent_name,
-    mobile: data.phone_number,
-  };
+  return mapAgentForAdmin(data);
 };
 
 export const deleteAgentById = async (agentId) => {
