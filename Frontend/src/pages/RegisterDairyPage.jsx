@@ -82,56 +82,67 @@ const RegisterDairyPage = () => {
   };
 
   const detectLocation = () => {
-    if (!navigator.geolocation) {
-      return toast.error("Geolocation not supported");
-    }
 
-    const toastId = toast.loading("Capturing GPS...");
+if (!navigator.geolocation) {
+  return toast.error("Geolocation not supported by your browser");
+}
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
+const toastId = toast.loading("Capturing GPS...");
 
-        setFormData((prev) => ({
-          ...prev,
-          latitude: lat,
-          longitude: lng,
-        }));
+navigator.geolocation.getCurrentPosition(
 
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
-          );
+async (pos) => {
 
-          const data = await res.json();
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
 
-          const address = data.address || {};
+  setFormData(prev => ({
+    ...prev,
+    latitude: lat,
+    longitude: lng
+  }));
 
-          setFormData((prev) => ({
-            ...prev,
-            latitude: lat,
-            longitude: lng,
-            city: address.city || address.town || address.village || "",
-            state: address.state || "",
-            pincode: address.postcode || "",
-          }));
-        } catch (e) {}
+  try {
 
-        toast.success("GPS Locked!", { id: toastId });
-      },
-
-      () => {
-        toast.error("Location permission denied", { id: toastId });
-      },
-
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      },
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
     );
-  };
+
+    const data = await res.json();
+
+    const address = data.address || {};
+
+    setFormData(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+      city: address.city || address.town || address.village || "",
+      state: address.state || "",
+      pincode: address.postcode || ""
+    }));
+
+  } catch (err) {}
+
+  toast.success("GPS Locked!", { id: toastId });
+
+  // 👇 ADD THIS LINE
+  toast("Please check the detected pincode once.");
+
+},
+
+() => {
+  toast.error("Location permission denied", { id: toastId });
+},
+
+{
+  enableHighAccuracy: true,
+  timeout: 15000,
+  maximumAge: 0
+}
+
+);
+
+};
 
   const validateStep = (step) => {
     let result;
