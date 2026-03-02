@@ -7,17 +7,8 @@ const TrackAgent = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // MOCK DATA: For testing purposes when backend is empty
-  const mockDelivery = {
-    quantity: "1",
-    product: "Full Cream Milk",
-    status: "OUT_FOR_DELIVERY", // Options: PENDING, OUT_FOR_DELIVERY, DELIVERED
-    agent: { name: "Rajesh Kumar", phone: "9876543210" }
-  };
-
   // Safe data extraction
-  const { delivery } = location.state || { delivery: mockDelivery };
-  // Added optional chaining to prevent crash if delivery is null
+  const delivery = location.state?.delivery || null;
   const agent = delivery?.agent;
 
   // Progress Bar Configuration
@@ -30,7 +21,7 @@ const TrackAgent = () => {
   // Logic to determine current step index - Added safety check for delivery
   const currentStepIndex = delivery ? steps.findIndex(s => s.status === delivery.status) : 0;
 
-  // 1. CRITICAL FIX: If data is missing and mock failed, show a simple message instead of crashing
+  // If tracking data is missing, show fallback UI
   if (!delivery || !agent) {
     return (
       <CustomerLayout>

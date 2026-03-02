@@ -16,16 +16,25 @@ client.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem("adminToken");
   const customerToken = localStorage.getItem("token");
   const agentToken = localStorage.getItem("agentToken");
+  const storedUserRaw = localStorage.getItem("user");
+  let storedUser = null;
+  try {
+    storedUser = storedUserRaw ? JSON.parse(storedUserRaw) : null;
+  } catch {
+    storedUser = null;
+  }
+  const fallbackRole = String(storedUser?.role || localStorage.getItem("userRole") || "").toUpperCase();
+  const fallbackToken = storedUser?.token || null;
 
   let token = null;
   if (requestPath.startsWith("/customer")) {
-    token = customerToken;
+    token = customerToken || (fallbackRole === "CUSTOMER" ? fallbackToken : null);
   } else if (requestPath.startsWith("/admin")) {
-    token = adminToken;
+    token = adminToken || (fallbackRole === "ADMIN" ? fallbackToken : null);
   } else if (requestPath.startsWith("/agent")) {
-    token = agentToken;
+    token = agentToken || ((fallbackRole === "AGENT" || fallbackRole === "STAFF") ? fallbackToken : null);
   } else {
-    token = adminToken || customerToken || agentToken;
+    token = adminToken || customerToken || agentToken || fallbackToken;
   }
 
   if (token) {

@@ -1,20 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth.jsx';
 import {
   Search, MapPin, Filter, Star, ShieldCheck,
-  Clock, Truck, ChevronDown, User, LogOut
+  Clock, Truck, ChevronDown, User, LogOut, ArrowLeft
 } from 'lucide-react';
 import { fetchPublicDairies } from '../../api/public.api.js';
+import { fetchCustomerSubscription } from '../../api/customer.api.js';
 import LoadingIndicator from '../../components/common/LoadingIndicator.jsx';
+
+const DASHBOARD_VISITED_FLAG = "customerDashboardVisited";
 
 const ExploreDairiesPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [dairies, setDairies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -60,8 +65,68 @@ const ExploreDairiesPage = () => {
   );
 
   const isLoggedIn = Boolean(user?.token || user?.role || localStorage.getItem("user"));
+  const roleFromStorage = localStorage.getItem("userRole");
+  const currentUserRole = String(user?.role || roleFromStorage || "").toUpperCase();
+  const isCustomerLoggedIn = isLoggedIn && currentUserRole === "CUSTOMER";
+  const isFromCustomerSubscriptions =
+    location.state?.from === "customer-subscriptions" && hasActiveSubscription;
+  const hasVisitedDashboard = sessionStorage.getItem(DASHBOARD_VISITED_FLAG) === "1";
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSubscriptionState = async () => {
+      if (!isCustomerLoggedIn) {
+        if (active) setHasActiveSubscription(false);
+        return;
+      }
+
+      try {
+        const data = await fetchCustomerSubscription();
+        const sub = data?.subscription;
+        const status = String(sub?.status || "").toUpperCase();
+        if (active) {
+          setHasActiveSubscription(Boolean(sub) && status !== "CLOSED");
+        }
+      } catch {
+        if (active) setHasActiveSubscription(false);
+      }
+    };
+
+    loadSubscriptionState();
+    return () => { active = false; };
+  }, [isCustomerLoggedIn]);
+  const deliveryLocation = useMemo(() => {
+    const stored = localStorage.getItem("user");
+    if (!stored) return "Your area";
+    try {
+      const parsed = JSON.parse(stored);
+      const rawAddress =
+        parsed?.user?.address ||
+        parsed?.address ||
+        parsed?.user?.areaSectorLocality ||
+        parsed?.areaSectorLocality ||
+        "";
+      const normalized = String(rawAddress).trim();
+      if (!normalized) return "Your area";
+      return normalized.split(",")[0].trim() || "Your area";
+    } catch {
+      return "Your area";
+    }
+  }, []);
 
   const handleAuthAction = () => {
+    if (isFromCustomerSubscriptions) {
+      navigate("/customer/dashboard/subscriptions");
+      return;
+    }
+
+    if (isCustomerLoggedIn) {
+      sessionStorage.setItem(DASHBOARD_VISITED_FLAG, "1");
+      navigate("/customer/dashboard");
+      return;
+    }
+
     if (isLoggedIn) {
       logout();
       navigate("/", { replace: true });
@@ -80,7 +145,7 @@ const ExploreDairiesPage = () => {
 
              {/* Logo & Location */}
              <div className="flex items-center justify-between md:justify-start gap-6">
-                <div onClick={() => navigate('/')} className="cursor-pointer font-bold text-2xl text-blue-600 tracking-tight flex items-center gap-2">
+                <div className="font-bold text-2xl text-blue-600 tracking-tight flex items-center gap-2">
                    DairyStream
                 </div>
 
@@ -89,7 +154,7 @@ const ExploreDairiesPage = () => {
                    <MapPin size={18} className="text-red-500" />
                    <div className="text-sm">
                       <span className="text-gray-500">Delivering to</span>
-                      <span className="font-bold text-gray-800 ml-1">Kothrud, Pune</span>
+                      <span className="font-bold text-gray-800 ml-1">{deliveryLocation}</span>
                    </div>
                    <ChevronDown size={16} className="text-gray-400"/>
                 </div>
@@ -110,8 +175,24 @@ const ExploreDairiesPage = () => {
              {/* Login Button */}
              <div className="hidden md:block">
                 <button onClick={handleAuthAction} className="flex items-center gap-2 font-semibold text-gray-700 hover:text-blue-600 transition">
-                   {isLoggedIn ? <LogOut size={20} /> : <User size={20} />}
-                   {isLoggedIn ? "Logout" : "Login"}
+                   {isFromCustomerSubscriptions ? (
+                     <>
+                       <ArrowLeft size={20} />
+                       Back to Subscriptions
+                     </>
+                   ) : (
+                     isCustomerLoggedIn ? (
+                       <>
+                         <ArrowLeft size={20} />
+                         {hasVisitedDashboard ? "Back to Dashboard" : "Go to Dashboard"}
+                       </>
+                     ) : (
+                       <>
+                         {isLoggedIn ? <LogOut size={20} /> : <User size={20} />}
+                         {isLoggedIn ? "Logout" : "Login"}
+                       </>
+                     )
+                   )}
                 </button>
              </div>
           </div>

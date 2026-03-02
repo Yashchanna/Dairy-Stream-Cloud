@@ -1,12 +1,34 @@
 import { supabase } from "../../config/supabase.js";
+import { upsertSubscription } from "../customer/subscription.service.js";
 
 export const getAdminCustomers = async ({
   page = 1,
   limit = 10,
   search = "",
+  dairyId = null,
 }) => {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
+
+  const getActiveSubscribedCustomerIdsForDairy = async (targetDairyId) => {
+    if (!targetDairyId) return null;
+
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("customer_id, status")
+      .eq("dairy_id", targetDairyId);
+
+    if (error) throw error;
+
+    const ids = new Set(
+      (data || [])
+        .filter((row) => String(row?.status || "ACTIVE").toUpperCase() !== "CLOSED")
+        .map((row) => row?.customer_id)
+        .filter(Boolean)
+    );
+
+    return [...ids];
+  };
 
   let query = supabase
     .from("customers")
@@ -14,9 +36,22 @@ export const getAdminCustomers = async ({
     .order("created_at", { ascending: false })
     .range(from, to);
 
+  if (dairyId) {
+    const scopedCustomerIds = await getActiveSubscribedCustomerIdsForDairy(dairyId);
+    if (!scopedCustomerIds || scopedCustomerIds.length === 0) {
+      return {
+        customers: [],
+        total: 0,
+        page,
+        limit,
+      };
+    }
+    query = query.in("id", scopedCustomerIds);
+  }
+
   if (search) {
     query = query.or(
-      `customer_name.ilike.%${search}%,phone_number.ilike.%${search}%`
+      `customer_name.ilike.%${search}%,phone_number.ilike.%${search}%,email.ilike.%${search}%`
     );
   }
 
@@ -113,4 +148,41 @@ export const deleteCustomerById = async (customerId) => {
   const { error } = await supabase.from("customers").delete().eq("id", customerId);
   if (error) throw error;
   return { success: true };
+};
+
+export const upsertAdminCustomerSubscriptionById = async ({
+  customerId,
+  dairyId,
+  milkType,
+  quantity,
+  slot,
+  startDate,
+  address,
+  paymentMethod,
+  status,
+}) => {
+  if (!customerId) throw new Error("customerId is required");
+  if (!dairyId) throw new Error("dairyId is required");
+
+  const { data: customer, error: customerError } = await supabase
+    .from("customers")
+    .select("id")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (customerError) throw customerError;
+  if (!customer) throw new Error("Customer not found");
+
+  const subscription = await upsertSubscription(customerId, {
+    dairy_id: dairyId,
+    milk_type: milkType || "Buffalo Milk",
+    quantity_liters: Number(quantity || 1),
+    delivery_slot: slot || "Morning",
+    start_date: startDate || undefined,
+    address: address || "",
+    payment_method: paymentMethod || "UPI",
+    status: (status || "ACTIVE").toUpperCase(),
+  });
+
+  return subscription;
 };

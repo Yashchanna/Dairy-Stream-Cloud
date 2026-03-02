@@ -2,62 +2,88 @@ import { supabase } from "../../config/supabase.js";
 import bcrypt from "bcryptjs";
 import verifyEmail from "../../utils/verifyEmail.js";
 
-// Helper: Generate STF123456 (Fallback)
+const MAX_ID_ATTEMPTS = 25;
+
 const generateStaffId = () => {
   const randomNum = Math.floor(100000 + Math.random() * 900000);
   return `STF${randomNum}`;
 };
 
-export const createAgentService = async (agentData) => {
-  const { email, password, agentName, phoneNumber, building, dairyId, agentId } = agentData;
+const isDuplicateAgentIdError = (error) =>
+  error?.code === "23505" &&
+  String(error?.message || "").toLowerCase().includes("agent_id");
 
-  // 1. Validate Email
-  const isEmailValid = await verifyEmail(email);
-  if (!isEmailValid) throw new Error("Invalid or undeliverable email address");
+const isAgentIdTaken = async (agentId) => {
+  const { data, error } = await supabase
+    .from("agents")
+    .select("id")
+    .eq("agent_id", agentId)
+    .maybeSingle();
 
-  // 2. Hash Password
-  const hashedPassword = await bcrypt.hash(password, 10);
+  if (error) {
+    throw new Error(error.message || "Failed to verify staff ID uniqueness");
+  }
 
-  // 3. Determine Agent ID (Use Frontend's ID if provided, else generate)
-  let finalAgentId = agentId || generateStaffId();
-  
-  // 4. Ensure Uniqueness (Double Check)
-  // If the ID coming from frontend is taken, we regenerate it to prevent crash
-  let isUnique = false;
-  while (!isUnique) {
-    const { data } = await supabase
-      .from("agents")
-      .select("agent_id")
-      .eq("agent_id", finalAgentId)
-      .maybeSingle();
+  return Boolean(data);
+};
 
-    if (!data) {
-      isUnique = true;
-    } else {
-      // Collision found! Generate a new one automatically
-      finalAgentId = generateStaffId(); 
+export const generateUniqueAgentId = async () => {
+  for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
+    const candidate = generateStaffId();
+    if (!(await isAgentIdTaken(candidate))) {
+      return candidate;
     }
   }
 
-  // 5. Insert into DB
-  const { data, error } = await supabase
-    .from("agents")
-    .insert([
-      {
-        agent_id: finalAgentId, // ✅ Uses the ID visible on frontend
-        email,
-        password: hashedPassword,
-        agent_name: agentName,
-        phone_number: phoneNumber,
-        building,
-        dairy_id: dairyId || null,
-        // role: 'AGENT'
-      },
-    ])
-    .select()
-    .single();
+  throw new Error("Could not generate a unique staff ID. Please retry.");
+};
 
-  if (error) throw new Error(error.message || "Failed to add agent");
+export const createAgentService = async (agentData) => {
+  const { email, password, agentName, phoneNumber, building, dairyId, agentId } = agentData;
+  if (!dairyId) throw new Error("Invalid admin context: dairy is required");
 
-  return data;
+  const isEmailValid = await verifyEmail(email);
+  if (!isEmailValid) throw new Error("Invalid or undeliverable email address");
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  let finalAgentId = String(agentId || "").trim().toUpperCase();
+  if (!finalAgentId) {
+    finalAgentId = await generateUniqueAgentId();
+  }
+
+  for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
+    if (await isAgentIdTaken(finalAgentId)) {
+      finalAgentId = await generateUniqueAgentId();
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from("agents")
+      .insert([
+        {
+          agent_id: finalAgentId,
+          email,
+          password: hashedPassword,
+          agent_name: agentName,
+          phone_number: phoneNumber,
+          building,
+          dairy_id: dairyId,
+        },
+      ])
+      .select()
+      .single();
+
+    if (!error) {
+      return data;
+    }
+
+    if (!isDuplicateAgentIdError(error)) {
+      throw new Error(error.message || "Failed to add agent");
+    }
+
+    finalAgentId = await generateUniqueAgentId();
+  }
+
+  throw new Error("Could not create agent with a unique staff ID. Please retry.");
 };

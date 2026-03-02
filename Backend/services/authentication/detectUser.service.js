@@ -2,66 +2,123 @@ import { supabase } from "../../config/supabase.js";
 
 const normalizeIdentifier = (value) => String(value ?? "").trim();
 
+const isMissingColumnError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("column") && message.includes("does not exist");
+};
+
+const findAdminByIdentifier = async (rawIdentifier) => {
+  const identifier = normalizeIdentifier(rawIdentifier);
+  const isEmail = identifier.includes("@");
+
+  if (isEmail) {
+    const { data, error } = await supabase
+      .from("admins")
+      .select("id, email, name")
+      .ilike("email", identifier)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  }
+
+  const mobile = identifier.replace(/\D/g, "");
+  if (mobile.length < 10) return null;
+
+  for (const column of ["phone", "phone_number"]) {
+    const { data, error } = await supabase
+      .from("admins")
+      .select(`id, email, name, ${column}`)
+      .eq(column, mobile)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) return data;
+    if (error && !isMissingColumnError(error)) throw error;
+  }
+
+  return null;
+};
+
+const findCustomerByIdentifier = async (rawIdentifier) => {
+  const identifier = normalizeIdentifier(rawIdentifier);
+  const isEmail = identifier.includes("@");
+
+  if (isEmail) {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id, customer_name, email")
+      .ilike("email", identifier)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  }
+
+  const mobile = identifier.replace(/\D/g, "");
+  if (mobile.length < 10) return null;
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, customer_name")
+    .eq("phone_number", mobile)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+};
+
 export const detectUserService = async (identifier) => {
   const rawId = normalizeIdentifier(identifier);
-  console.log(`🔍 [DetectUser] Checking: "${rawId}"`);
 
-  // 1. ADMIN CHECK (Email)
-  if (rawId.includes("@")) {
-    const { data: admin } = await supabase
-      .from("admins")
-      .select("email, name")
-      .eq("email", rawId)
-      .maybeSingle();
-
-    if (admin) {
-      return { exists: true, userType: "ADMIN", nextStep: "PASSWORD", name: admin.name };
-    }
+  const admin = await findAdminByIdentifier(rawId);
+  if (admin) {
+    return {
+      exists: true,
+      userType: "ADMIN",
+      nextStep: "PASSWORD",
+      name: admin.name || "Admin",
+    };
   }
 
-  // 2. AGENT CHECK (STF...)
   if (rawId.toUpperCase().startsWith("STF")) {
-    const agentIdUpper = rawId.toUpperCase();
-    const { data: agent } = await supabase
+    const { data: agent, error } = await supabase
       .from("agents")
       .select("agent_id, agent_name")
-      .ilike("agent_id", agentIdUpper)
+      .ilike("agent_id", rawId.toUpperCase())
+      .limit(1)
       .maybeSingle();
 
+    if (error) throw error;
+
     if (agent) {
-      return { exists: true, userType: "AGENT", nextStep: "PASSWORD", name: agent.agent_name };
+      return {
+        exists: true,
+        userType: "AGENT",
+        nextStep: "PASSWORD",
+        name: agent.agent_name || "Agent",
+      };
     }
   }
 
-  // 3. CUSTOMER CHECK (Mobile Number)
-  // ✅ FIX: Clean the number and check the 'customers' table
-  const mobile = rawId.replace(/\D/g, ""); // Removes any non-digits
-  
-  if (mobile.length >= 10) {
-    console.log(`📱 Checking 'customers' table for phone_number: ${mobile}`);
-    
-    const { data: customer } = await supabase
-      .from("customers") // 👈 Must match your Supabase table name
-      .select("customer_name")
-      .eq("phone_number", mobile) // 👈 Ensure this matches your DB column name
-      .maybeSingle();
+  const customer = await findCustomerByIdentifier(rawId);
+  if (customer) {
+    return {
+      exists: true,
+      userType: "CUSTOMER",
+      nextStep: "OTP",
+      name: customer.customer_name || "Customer",
+    };
+  }
 
-    if (customer) {
-      console.log("✅ Found Customer:", customer.customer_name);
-      return { 
-        exists: true, 
-        userType: "CUSTOMER", 
-        nextStep: "OTP", 
-        name: customer.customer_name 
-      };
-    }
-    
-    // If not found, suggest registration
+  const mobile = rawId.replace(/\D/g, "");
+  if (mobile.length >= 10) {
     return { exists: false, userType: "NEW_USER", nextStep: "REGISTER" };
   }
 
-  return { exists: false, error: "User not found" };
+  return { exists: false, error: "User not found", nextStep: "IDENTIFIER" };
 };
-
-
 

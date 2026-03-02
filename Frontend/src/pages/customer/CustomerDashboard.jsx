@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import CustomerLayout from "../../components/customer/layouts/CustomerLayout";
 import { useCustomerDashboard } from "../../hooks/useCustomerDashboard";
 import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
@@ -6,7 +6,7 @@ import {
   fetchCustomerDashboard,
   saveCustomerSubscription,
 } from "../../api/customer.api.js";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import {
   CheckCircle,
@@ -23,8 +23,11 @@ import {
 
 const CustomerDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data, loading, error } = useCustomerDashboard();
   const [dashboardData, setDashboardData] = useState(null);
+  const [guestDairyName, setGuestDairyName] = useState("");
+  const [guestDairyId, setGuestDairyId] = useState(null);
   const [showEditTomorrowModal, setShowEditTomorrowModal] = useState(false);
   const [savingTomorrow, setSavingTomorrow] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -36,6 +39,79 @@ const CustomerDashboard = () => {
   useEffect(() => {
     if (data) setDashboardData(data);
   }, [data]);
+
+  useEffect(() => {
+    const incomingState = location.state;
+    const incomingFromBuyOnce = incomingState?.from === "buy-once";
+
+    if (incomingFromBuyOnce) {
+      const nextName = String(incomingState?.dairyName || "").trim();
+      const nextDairyId = incomingState?.dairyId ?? null;
+      if (nextName) {
+        setGuestDairyName(nextName);
+        localStorage.setItem("guest_dairy_name", nextName);
+      }
+      if (nextDairyId != null) {
+        setGuestDairyId(String(nextDairyId));
+        localStorage.setItem("guest_dairy_id", String(nextDairyId));
+      }
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+
+    const persisted = localStorage.getItem("guest_dairy_name");
+    const persistedDairyId = localStorage.getItem("guest_dairy_id");
+    if (persisted) {
+      setGuestDairyName(persisted);
+    }
+    if (persistedDairyId) {
+      setGuestDairyId(persistedDairyId);
+    }
+  }, [location.state, location.pathname, navigate]);
+
+  useEffect(() => {
+    const currentSubscription = (dashboardData || data)?.subscription;
+    const hasCurrentSubscription =
+      !!currentSubscription &&
+      String(currentSubscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+
+    if (!hasCurrentSubscription) return;
+
+    setGuestDairyName("");
+    setGuestDairyId(null);
+    localStorage.removeItem("guest_dairy_name");
+    localStorage.removeItem("guest_dairy_id");
+  }, [dashboardData, data]);
+
+  useEffect(() => {
+    if (loading) return undefined;
+
+    let cancelled = false;
+
+    const refreshDashboard = async () => {
+      try {
+        const fresh = await fetchCustomerDashboard({ force: true });
+        if (!cancelled) {
+          setDashboardData(fresh);
+        }
+      } catch {
+        // Ignore transient refresh failures; existing dashboard data remains visible.
+      }
+    };
+
+    const interval = setInterval(refreshDashboard, 30000);
+    const handleFocus = () => {
+      refreshDashboard();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [loading]);
 
   if (loading) {
     return (
@@ -58,7 +134,57 @@ const CustomerDashboard = () => {
 
   /* ---------- DATA RESOLUTION ---------- */
   const resolvedData = dashboardData || data;
-  const { customer, todayDelivery, tomorrowDelivery, billing, subscription } = resolvedData;
+  const {
+    customer,
+    todayDelivery,
+    tomorrowDelivery,
+    billing,
+    subscription,
+    alerts,
+    oneTimeOrders = [],
+  } = resolvedData;
+  const hasActiveSubscription =
+    !!subscription &&
+    String(subscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+  const latestGuestOrder =
+    Array.isArray(oneTimeOrders) && oneTimeOrders.length > 0 ? oneTimeOrders[0] : null;
+  const customerDairyName = String(customer?.dairy || "").trim();
+  const fallbackGuestDairy =
+    customerDairyName && customerDairyName.toLowerCase() !== "not assigned"
+      ? customerDairyName
+      : String(latestGuestOrder?.dairyName || "").trim();
+  const resolvedGuestDairy = guestDairyName || fallbackGuestDairy;
+  const resolvedGuestDairyId =
+    guestDairyId ??
+    (latestGuestOrder?.dairyId !== null && latestGuestOrder?.dairyId !== undefined
+      ? String(latestGuestOrder.dairyId)
+      : null);
+  const latestDeliveredOneTimeOrder = Array.isArray(oneTimeOrders)
+    ? oneTimeOrders.find(
+        (order) => String(order?.status || "").toUpperCase() === "DELIVERED"
+      )
+    : null;
+  const promptDairyName = String(
+    latestDeliveredOneTimeOrder?.dairyName || resolvedGuestDairy || ""
+  ).trim();
+  const promptDairyId =
+    resolvedGuestDairyId ??
+    (latestDeliveredOneTimeOrder?.dairyId !== null &&
+    latestDeliveredOneTimeOrder?.dairyId !== undefined
+      ? String(latestDeliveredOneTimeOrder.dairyId)
+      : null);
+  const showPostDeliveryPrompt = !hasActiveSubscription && Boolean(latestDeliveredOneTimeOrder);
+  const showGuestBanner =
+    !showPostDeliveryPrompt && !hasActiveSubscription && Boolean(resolvedGuestDairy);
+  const currentHour = new Date().getHours();
+  const greeting =
+    currentHour < 12
+      ? "Good Morning"
+      : currentHour < 17
+      ? "Good Afternoon"
+      : currentHour < 21
+      ? "Good Evening"
+      : "Good Night";
 
   const openTomorrowEdit = () => {
     if (!subscription?.dairyId) {
@@ -84,7 +210,7 @@ const CustomerDashboard = () => {
       const token = storedUser ? JSON.parse(storedUser)?.token : localStorage.getItem("token");
       if (!token) throw new Error("Customer token missing");
 
-      await saveCustomerSubscription(token, {
+      await saveCustomerSubscription({
         dairyId: subscription.dairyId,
         milkType: subscription.milkType || "Milk",
         quantity: Number(editTomorrowForm.quantity || 1),
@@ -95,7 +221,7 @@ const CustomerDashboard = () => {
         status: subscription.status || "ACTIVE",
       });
 
-      const freshDashboard = await fetchCustomerDashboard(token, { force: true });
+      const freshDashboard = await fetchCustomerDashboard({ force: true });
       setDashboardData(freshDashboard);
       setShowEditTomorrowModal(false);
     } catch (err) {
@@ -108,11 +234,55 @@ const CustomerDashboard = () => {
   return (
     <CustomerLayout>
       <div className="space-y-4 md:space-y-6 px-2 sm:px-4">
+        {showGuestBanner && (
+          <GuestSubscribeBanner
+            dairyName={resolvedGuestDairy}
+            onSubscribe={() =>
+              navigate("/customer/dashboard/subscriptions", {
+                state: resolvedGuestDairyId
+                  ? {
+                      from: "guest-banner",
+                      guestDairyId: resolvedGuestDairyId,
+                      guestDairyName: resolvedGuestDairy,
+                    }
+                  : null,
+              })
+            }
+            onBuyOnce={
+              resolvedGuestDairyId ? () => navigate(`/buy-once/${resolvedGuestDairyId}`) : null
+            }
+          />
+        )}
+        {showPostDeliveryPrompt && (
+          <PostDeliveryDecisionCard
+            dairyName={promptDairyName}
+            onSubscribe={() =>
+              navigate("/customer/dashboard/subscriptions", {
+                state: promptDairyId
+                  ? {
+                      from: "one-time-delivered",
+                      guestDairyId: promptDairyId,
+                      guestDairyName: promptDairyName,
+                    }
+                  : null,
+              })
+            }
+            onExplore={() =>
+              navigate("/explore", {
+                state: {
+                  from: "one-time-delivered",
+                  dairyId: promptDairyId || null,
+                },
+              })
+            }
+          />
+        )}
+
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-text-primary">
-              Good Morning, {customer.name || "Customer"} 👋
+              {greeting}, {customer.name || "Customer"}
             </h2>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm text-text-secondary">Member of</span>
@@ -122,6 +292,8 @@ const CustomerDashboard = () => {
             </div>
           </div>
         </header>
+
+        <UpcomingDeliveryAlert alert={alerts?.upcomingDelivery} />
 
         {/* ================= TODAY STATUS ================= */}
         <TodayStatusCard data={todayDelivery} navigate={navigate} />
@@ -160,27 +332,93 @@ const CustomerDashboard = () => {
   );
 };
 
+const GuestSubscribeBanner = ({ dairyName, onSubscribe, onBuyOnce }) => (
+  <div className="rounded-2xl border-2 border-amber-300 bg-amber-100/90 px-5 py-4 shadow-sm">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm sm:text-base font-semibold text-amber-900">
+        You are viewing {dairyName} as a guest. Subscribe now to schedule your first 6 AM delivery.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        {onBuyOnce && (
+          <button
+            onClick={onBuyOnce}
+            className="inline-flex items-center rounded-lg bg-white px-3 py-1 text-xs sm:text-sm font-bold text-amber-800 border border-amber-300 hover:bg-amber-50 transition-colors"
+          >
+            Buy Product Once
+          </button>
+        )}
+        <button
+          onClick={onSubscribe}
+          className="inline-flex items-center rounded-lg bg-amber-700 px-3 py-1 text-xs sm:text-sm font-bold text-white hover:bg-amber-800 transition-colors"
+        >
+          Subscribe Now
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const PostDeliveryDecisionCard = ({ dairyName, onSubscribe, onExplore }) => (
+  <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-5 py-4 shadow-sm">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm sm:text-base font-semibold text-emerald-900">
+        Your product has been delivered{dairyName ? ` from ${dairyName}` : ""}. Do you want to continue with a subscription?
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={onSubscribe}
+          className="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-1 text-xs sm:text-sm font-bold text-white hover:bg-emerald-800 transition-colors"
+        >
+          Continue Subscription
+        </button>
+        <button
+          onClick={onExplore}
+          className="inline-flex items-center rounded-lg bg-white px-3 py-1 text-xs sm:text-sm font-bold text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors"
+        >
+          Back to Explore Dairies
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 /* TODAY CARD */
 const TodayStatusCard = ({ data = {}, navigate }) => {
   const isDelivered = data.status === "DELIVERED";
   const isPending = data.status === "PENDING";
-  const isNotScheduled = data.status === "NOT_SCHEDULED" || data.status === "NOT_SUBSCRIBED";
-  
-  const title = isDelivered ? "Delivered Successfully" : isPending ? "Delivery Pending" : "No Delivery Scheduled Today";
+  const isApprovalPending = data.status === "PENDING_APPROVAL";
+  const isPartnerUnassigned = isPending && !data?.agent?.name;
+
+  const title = isDelivered
+    ? "Delivered Successfully"
+    : isApprovalPending
+    ? "Approval Pending"
+    : isPartnerUnassigned
+    ? "Delivery Partner Not Assigned"
+    : isPending
+    ? "Delivery Pending"
+    : "No Delivery Scheduled Today";
 
   return (
-    <div className={`p-4 md:p-6 rounded-card border ${isDelivered ? "bg-success-soft border-border" : isPending ? "bg-brand-soft border-border" : "bg-gray-50 border-border"}`}>
+    <div className={`p-4 md:p-6 rounded-card border ${isDelivered ? "bg-success-soft border-border" : isApprovalPending ? "bg-indigo-50 border-indigo-200" : isPending ? "bg-brand-soft border-border" : "bg-gray-50 border-border"}`}>
       <h3 className="text-xs sm:text-sm font-semibold text-text-muted uppercase mb-4">Today's Delivery</h3>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex gap-4">
-          <div className={`p-3 rounded-full ${isDelivered ? "bg-success text-white" : isPending ? "bg-brand text-white" : "bg-gray-300 text-gray-700"}`}>
+          <div className={`p-3 rounded-full ${isDelivered ? "bg-success text-white" : isApprovalPending ? "bg-indigo-600 text-white" : isPending ? "bg-brand text-white" : "bg-gray-300 text-gray-700"}`}>
             {isDelivered ? <CheckCircle size={22} /> : <AlertCircle size={22} />}
           </div>
           <div>
             <h3 className="text-base md:text-lg font-bold text-text-primary">{title}</h3>
             <p className="text-sm text-text-secondary mt-1">{data.quantity || "-"} • {data.product || "-"}</p>
-            {data?.agent?.name && (
+            {isApprovalPending && (
+              <p className="text-xs text-indigo-700 mt-2 font-medium">
+                Your order is waiting for dairy admin approval.
+              </p>
+            )}
+            {data?.agent?.name ? (
               <p className="text-xs text-text-muted mt-2">Agent: {data.agent.name} ({data.agent.phone || "-"})</p>
+            ) : (
+              <p className="text-xs text-text-muted mt-2">Delivery partner not assigned yet.</p>
             )}
             {isDelivered && (
               <p className="text-xs text-text-muted mt-2">Dropped at Doorstep • {data.time || "-"}</p>
@@ -191,13 +429,27 @@ const TodayStatusCard = ({ data = {}, navigate }) => {
         <div className="flex items-center gap-3 self-start">
           <button
             onClick={() => navigate("/customer/dashboard/track/agent", { state: { delivery: data } })}
-            className="text-xs font-semibold text-brand border border-border px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
+            disabled={isApprovalPending}
+            className="text-xs font-semibold text-brand border border-border px-3 py-1.5 rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Track Agent
           </button>
           <button className="text-xs font-semibold text-text-secondary underline">Report Issue</button>
         </div>
       </div>
+    </div>
+  );
+};
+const UpcomingDeliveryAlert = ({ alert }) => {
+  if (!alert?.date) return null;
+  const dateLabel = new Date(alert.date).toLocaleDateString();
+  const isApprovalPending = String(alert?.approvalStatus || "").toUpperCase() === "PENDING";
+
+  return (
+    <div className={`rounded-xl px-4 py-3 text-sm ${isApprovalPending ? "border border-indigo-200 bg-indigo-50 text-indigo-800" : "border border-blue-200 bg-blue-50 text-blue-800"}`}>
+      {isApprovalPending
+        ? `Order approval pending: ${alert.quantity} ${alert.product} for ${dateLabel}.`
+        : `Upcoming delivery scheduled: ${alert.quantity} ${alert.product} on ${dateLabel}.`}
     </div>
   );
 };
@@ -277,7 +529,8 @@ const BillingSummaryCard = ({ data = {} }) => {
 };
 
 /* QUICK ACTION */
-const QuickAction = ({ icon: Icon, label, color, to }) => {
+const QuickAction = ({ icon, label, color, to }) => {
+  const Icon = icon;
   const navigate = useNavigate();
   const colorMap = {
     brand: "bg-brand-soft text-brand",
@@ -297,3 +550,5 @@ const QuickAction = ({ icon: Icon, label, color, to }) => {
 };
 
 export default CustomerDashboard;
+
+

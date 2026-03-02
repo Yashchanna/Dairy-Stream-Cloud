@@ -3,6 +3,8 @@ import { generateToken } from "../../utils/jwt.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../../config/cloudinary.js";
 import { ensureIdentityIsUnique } from "./identityUniqueness.service.js"; // Reuse existing uniqueness service
+import verifyEmail from "../../utils/verifyEmail.js";
+import { sendEmail } from "../../utils/email.js";
 
 // const normalizeIdentifier = (value) => String(value ?? "").trim();
 // const otpStore = new Map();
@@ -229,6 +231,55 @@ const buildPhoneVariants = (identifier) => {
   return [...variants].filter(Boolean);
 };
 
+const isMissingRelationOrColumnError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    (message.includes("relation") && message.includes("does not exist")) ||
+    (message.includes("column") && message.includes("does not exist"))
+  );
+};
+
+const findCustomerByIdentifier = async (identifier) => {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  const isEmail = normalizedIdentifier.includes("@");
+  const phoneVariants = buildPhoneVariants(normalizedIdentifier);
+
+  let query = supabase.from("customers").select("*");
+
+  if (isEmail) {
+    query = query.ilike("email", normalizedIdentifier);
+  } else {
+    query = query.in("phone_number", phoneVariants);
+  }
+
+  const { data: customer, error } = await query.limit(1).maybeSingle();
+  if (error) throw error;
+  return customer || null;
+};
+
+const hasHistoryRow = async ({
+  table,
+  customerId,
+  customerColumns = ["customer_id"],
+  dairyId = null,
+}) => {
+  for (const customerColumn of customerColumns) {
+    let query = supabase.from(table).select("id").eq(customerColumn, customerId);
+
+    if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
+      query = query.eq("dairy_id", dairyId);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
+
+    if (!error) return Boolean(data?.id);
+    if (isMissingRelationOrColumnError(error)) continue;
+    throw error;
+  }
+
+  return false;
+};
+
 // ==========================================
 // CORE AUTH LOGIC
 // ==========================================
@@ -248,8 +299,17 @@ export const registerCustomerService = async (payload) => {
     billingCycle,
   } = payload;
 
+  const normalizedEmail = normalizeEmail(email);
+
+  const isEmailValid = await verifyEmail(normalizedEmail);
+  if (!isEmailValid) {
+    const validationError = new Error("Invalid or undeliverable email address");
+    validationError.statusCode = 400;
+    throw validationError;
+  }
+
   // 1. Check Uniqueness (Email and Phone must be unique)
-  await ensureIdentityIsUnique({ email, phone: phoneNumber });
+  await ensureIdentityIsUnique({ email: normalizedEmail, phone: phoneNumber });
 
   // 2. Insert into DB 
   // We remove 'password' and 'profile_photo_url' from the insert object
@@ -258,7 +318,7 @@ export const registerCustomerService = async (payload) => {
     .insert([
       {
         customer_name: customerName,
-        email: normalizeEmail(email),
+        email: normalizedEmail,
         phone_number: phoneNumber,
         building_name: buildingName || null,
         wing: wing || null,
@@ -307,6 +367,11 @@ export const loginWithPasswordService = async (emailOrPhone, password) => {
 
 export const generateCustomerOtp = async ({ identifier, dairyId }) => {
   const normalizedIdentifier = normalizeIdentifier(identifier);
+  const customer = await findCustomerByIdentifier(normalizedIdentifier);
+
+  if (!customer) throw new Error("Customer not found");
+  if (!customer.email) throw new Error("Customer email not available for OTP delivery");
+
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
 
@@ -318,7 +383,18 @@ export const generateCustomerOtp = async ({ identifier, dairyId }) => {
   const key = buildOtpKey(normalizedIdentifier, dairyId);
   otpStore.set(key, { identifier: normalizedIdentifier, dairy_id: dairyId ?? null, otp, expiresAt });
 
-  console.log(`[OTP SENT] To: ${normalizedIdentifier} | OTP: ${otp}`); // Replace with SMS Gateway later
+  await sendEmail({
+    to: customer.email,
+    subject: "DairyStream Customer Login OTP",
+    html: `
+      <p>Your OTP for customer login is:</p>
+      <h2>${otp}</h2>
+      <p>This OTP is valid for 5 minutes.</p>
+      <p>If you did not request this, please ignore this email.</p>
+    `,
+  });
+
+  console.log(`[OTP SENT] To email: ${customer.email} | OTP: ${otp}`);
   return otp;
 };
 
@@ -348,15 +424,7 @@ export const verifyCustomerOtp = async ({ identifier, otp, dairyId }) => {
  */
 export const customerOtpLoginService = async ({ identifier, dairyId }) => {
   const normalizedIdentifier = normalizeIdentifier(identifier);
-  const phoneVariants = buildPhoneVariants(normalizedIdentifier);
-
-  // Find user by Phone OR Email
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("*")
-    .or(`email.eq.${normalizedIdentifier},phone_number.in.(${phoneVariants.join(',')})`)
-    .limit(1)
-    .maybeSingle();
+  const customer = await findCustomerByIdentifier(normalizedIdentifier);
 
   if (!customer) throw new Error("Customer not found");
 
@@ -389,6 +457,23 @@ export const determineRedirectPath = async (userId, requestedDairyId) => {
   );
 
   const hasActiveSubscription = activeSubscriptions.length > 0;
+
+  const [hasDeliveryHistory, hasPaymentHistory] = await Promise.all([
+    hasHistoryRow({
+      table: "deliveries",
+      customerId: userId,
+      customerColumns: ["customer_id", "user_id", "customerId", "customerid"],
+    }),
+    hasHistoryRow({
+      table: "payments",
+      customerId: userId,
+      customerColumns: ["customer_id", "user_id", "customerId", "customerid"],
+    }),
+  ]);
+
+  const hasOneTimeHistory = hasDeliveryHistory || hasPaymentHistory;
+  const shouldRedirectToDashboard = hasActiveSubscription || hasOneTimeHistory;
+
   const isRegisteredToRequestedDairy = !!(
     requestedDairyId &&
     activeSubscriptions.some(
@@ -397,7 +482,7 @@ export const determineRedirectPath = async (userId, requestedDairyId) => {
   );
 
   return {
-    redirect: hasActiveSubscription ? "/customer/dashboard" : "/explore",
+    redirect: shouldRedirectToDashboard ? "/customer/dashboard" : "/explore",
     isRegisteredToRequestedDairy,
   };
 };

@@ -10,8 +10,9 @@ export const fetchAdminAgents = async (req, res) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 10);
     const search = req.query.search || "";
+    const dairyId = req.admin?.dairyId ?? null;
 
-    const result = await getAdminAgents({ page, limit, search });
+    const result = await getAdminAgents({ page, limit, search, dairyId });
 
     res.json(result);
   } catch (err) {
@@ -25,8 +26,9 @@ export const fetchAdminAgents = async (req, res) => {
 export const fetchAdminAgentById = async (req, res) => {
   try {
     const { id } = req.params;
+    const dairyId = req.admin?.dairyId ?? null;
 
-    const data = await getAgentDetails(id);
+    const data = await getAgentDetails(id, { dairyId });
 
     if (!data) {
         return res.status(404).json({ message: "Agent not found" });

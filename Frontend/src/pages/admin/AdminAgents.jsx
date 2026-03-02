@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { fetchAdminAgents } from "../../api/admin.api";
 
 // Layout Components
 import AdminSidebar from "../../components/admin/layout/AdminSidebar";
 import AdminMobileTopbar from "../../components/admin/layout/AdminMobileTopbar";
 import AgentDrawer from "../../components/agent/AgentDrawer.jsx"; 
+import AddAgentModal from "../../components/agent/AddAgentModal.jsx";
 import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
 
 export default function AdminAgents() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -20,6 +23,13 @@ export default function AdminAgents() {
 
   // Drawer State
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("addAgent") === "1") {
+      setIsAddModalOpen(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let active = true;
@@ -57,6 +67,20 @@ export default function AdminAgents() {
     return () => (active = false);
   }, [page, search, refreshKey]);
 
+  const openAddModal = () => {
+    setIsAddModalOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.set("addAgent", "1");
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeAddModal = () => {
+    setIsAddModalOpen(false);
+    const next = new URLSearchParams(searchParams);
+    next.delete("addAgent");
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Header */}
@@ -82,12 +106,13 @@ export default function AdminAgents() {
               Manage your delivery staff and route assignments
             </p>
           </div>
-          <a 
-            href="/admin/addagent" 
-            className="hidden sm:inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
           >
             + Add Agent
-          </a>
+          </button>
         </div>
 
         {/* Main Canvas */}
@@ -135,8 +160,15 @@ export default function AdminAgents() {
                     </div>
                     
                     <div>
-                      <div className="font-medium text-gray-900">
-                        {agent.full_name || "Unnamed Agent"}
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        <span>{agent.full_name || "Unnamed Agent"}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          String(agent.status || "ACTIVE").toUpperCase() === "INACTIVE"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }`}>
+                          {String(agent.status || "ACTIVE").toUpperCase()}
+                        </span>
                       </div>
                       <div className="text-sm text-gray-500 mt-0.5 flex gap-2">
                          <span>{agent.mobile || "No Phone"}</span>
@@ -145,6 +177,14 @@ export default function AdminAgents() {
                          )}
                          {agent.building && (
                              <span className="text-blue-600 font-medium">{agent.building}</span>
+                         )}
+                         {String(agent.status || "ACTIVE").toUpperCase() === "INACTIVE" && agent.inactive_until && (
+                             <>
+                               <span className="text-gray-300">|</span>
+                               <span className="text-red-600 font-medium">
+                                 Until {new Date(agent.inactive_until).toLocaleDateString()}
+                               </span>
+                             </>
                          )}
                       </div>
                     </div>
@@ -204,6 +244,12 @@ export default function AdminAgents() {
           onChanged={() => setRefreshKey((k) => k + 1)}
         />
       )}
+
+      <AddAgentModal
+        open={isAddModalOpen}
+        onClose={closeAddModal}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }

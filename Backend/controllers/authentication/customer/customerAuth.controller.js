@@ -48,11 +48,11 @@ export const addCustomerAuth = async (req, res) => {
     
     // Handle specific errors (like duplicate email/phone from your uniqueness service)
     const isDuplicate = err.message.includes("already used") || err.message.includes("unique");
-    const statusCode = isDuplicate ? 409 : 500;
+    const statusCode = err.statusCode || (isDuplicate ? 409 : 500);
     
     return res.status(statusCode).json({
       success: false,
-      message: isDuplicate ? err.message : "Registration failed",
+      message: statusCode >= 500 ? "Registration failed" : err.message,
       error: err.message,
     });
   }
@@ -64,25 +64,30 @@ export const addCustomerAuth = async (req, res) => {
 export const requestOtpAuth = async (req, res) => {
   try {
     const { identifier, dairyId } = req.body;
+    const raw = String(identifier || "").trim();
+    const isEmail = raw.includes("@");
+    const normalizedIdentifier = isEmail ? raw.toLowerCase() : raw.replace(/\D/g, "");
 
-    // 1. Validate Mobile Format (Simple check)
-    // Remove non-digits
-    const mobile = String(identifier).replace(/\D/g, "");
-    
-    if (mobile.length < 10) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Please enter a valid 10-digit mobile number" 
+    if (!normalizedIdentifier) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or mobile number is required",
+      });
+    }
+
+    if (!isEmail && normalizedIdentifier.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid 10-digit mobile number",
       });
     }
 
     // 2. Call Service to Generate & Send OTP
-    // We pass the clean mobile number
-    await generateCustomerOtp({ identifier: mobile, dairyId });
+    await generateCustomerOtp({ identifier: normalizedIdentifier, dairyId });
 
     return res.status(200).json({
       success: true,
-      message: "OTP sent successfully to your mobile",
+      message: "OTP sent successfully to your email",
     });
 
   } catch (err) {
@@ -100,13 +105,13 @@ export const requestOtpAuth = async (req, res) => {
 export const verifyOtpLoginAuth = async (req, res) => {
   try {
     const { otp, dairyId, identifier } = req.body;
-
-    // 1. Normalize Mobile
-    const mobile = String(identifier).replace(/\D/g, "");
+    const raw = String(identifier || "").trim();
+    const isEmail = raw.includes("@");
+    const normalizedIdentifier = isEmail ? raw.toLowerCase() : raw.replace(/\D/g, "");
 
     // 2. Verify OTP via Service
     const verifiedData = await verifyCustomerOtp({ 
-      identifier: mobile, 
+      identifier: normalizedIdentifier, 
       otp, 
       dairyId 
     });
@@ -116,7 +121,7 @@ export const verifyOtpLoginAuth = async (req, res) => {
     const loginDairyId = verifiedData.dairy_id || dairyId;
     
     const { token, user } = await customerOtpLoginService({ 
-      identifier: mobile, 
+      identifier: normalizedIdentifier, 
       dairyId: loginDairyId 
     });
 

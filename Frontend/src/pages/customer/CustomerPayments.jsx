@@ -15,7 +15,6 @@ const getAuthToken = () => {
 };
 
 const formatCurrency = (value) => `Rs ${Number(value || 0).toFixed(2)}`;
-
 const dueText = (dueInDays) => {
   if (dueInDays === null || dueInDays === undefined) return "Due date not set";
   if (dueInDays < 0) return `Overdue by ${Math.abs(dueInDays)} days`;
@@ -55,7 +54,7 @@ const Payments = () => {
   });
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [paying, setPaying] = useState(false);
+  const [payingPaymentId, setPayingPaymentId] = useState(null);
   const [error, setError] = useState(null);
 
   const loadPayments = async () => {
@@ -95,7 +94,7 @@ const Payments = () => {
     loadPayments();
   }, []);
 
-  const pendingPayment =
+  const nextUnpaidPayment =
     history.find((item) => ["PENDING", "OVERDUE"].includes(String(item.status || "").toUpperCase())) ||
     null;
 
@@ -113,13 +112,16 @@ const Payments = () => {
       document.body.appendChild(script);
     });
 
-  const handlePayNow = async () => {
+  const handlePayNow = async (payment, { payAll = false } = {}) => {
     try {
-      if (!pendingPayment?.id) {
+      if (!payAll && !payment?.id) {
+        throw new Error("No pending payment found");
+      }
+      if (payAll && Number(summary.monthlyDue || 0) <= 0) {
         throw new Error("No pending payment found");
       }
 
-      setPaying(true);
+      setPayingPaymentId(payAll ? "__ALL__" : payment.id);
       setError(null);
 
       const scriptLoaded = await loadRazorpayCheckoutScript();
@@ -127,7 +129,9 @@ const Payments = () => {
         throw new Error("Failed to load Razorpay checkout");
       }
 
-      const orderPayload = await createCustomerPaymentOrder({ paymentId: pendingPayment.id });
+      const orderPayload = await createCustomerPaymentOrder(
+        payAll ? { payAll: true } : { paymentId: payment.id }
+      );
 
       const options = {
         key: orderPayload.keyId,
@@ -138,7 +142,8 @@ const Payments = () => {
         order_id: orderPayload.order.id,
         handler: async function onPaymentSuccess(response) {
           await verifyCustomerPayment({
-            paymentId: pendingPayment.id,
+            paymentId: payment?.id,
+            payAll,
             razorpay_order_id: response.razorpay_order_id,
             razorpay_payment_id: response.razorpay_payment_id,
             razorpay_signature: response.razorpay_signature,
@@ -158,7 +163,7 @@ const Payments = () => {
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || "Unable to start payment");
     } finally {
-      setPaying(false);
+      setPayingPaymentId(null);
     }
   };
 
@@ -209,7 +214,7 @@ const Payments = () => {
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-green-50 border border-green-100 rounded-2xl p-6 flex justify-between items-center">
             <div>
-              <p className="text-sm font-medium text-green-700">Current Due</p>
+              <p className="text-sm font-medium text-green-700">Pending + Overdue Due</p>
               <p className="text-xs text-green-600 mt-1">{formatCurrency(summary.monthlyDue)}</p>
             </div>
             <CreditCard className="text-green-600" />
@@ -226,12 +231,14 @@ const Payments = () => {
 
         <div className="flex justify-end">
           <button
-            onClick={handlePayNow}
-            disabled={paying || loading || !pendingPayment || Number(summary.monthlyDue || 0) <= 0}
+            onClick={() => handlePayNow(nextUnpaidPayment, { payAll: true })}
+            disabled={Boolean(payingPaymentId) || loading || !nextUnpaidPayment || Number(summary.monthlyDue || 0) <= 0}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:bg-gray-300"
           >
-            {(paying || loading) && <Loader2 size={14} className="animate-spin" />}
-            {paying ? "Opening checkout..." : "Pay Now"}
+            {(Boolean(payingPaymentId) || loading) && <Loader2 size={14} className="animate-spin" />}
+            {payingPaymentId === "__ALL__"
+              ? "Opening checkout..."
+              : `Pay Now ${formatCurrency(summary.monthlyDue)}`}
           </button>
         </div>
 
@@ -245,6 +252,7 @@ const Payments = () => {
           ) : (
             history.map((payment) => {
               const badge = statusBadge(payment.status);
+              const isUnpaid = ["PENDING", "OVERDUE"].includes(String(payment.status || "").toUpperCase());
 
               return (
                 <div
@@ -259,6 +267,16 @@ const Payments = () => {
 
                   <div className="flex items-center gap-3">
                     <p className="font-semibold text-gray-900">{formatCurrency(payment.amount)}</p>
+                    {isUnpaid && (
+                      <button
+                        onClick={() => handlePayNow(payment)}
+                        disabled={loading || Boolean(payingPaymentId)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:bg-gray-300"
+                      >
+                        {payingPaymentId === payment.id && <Loader2 size={12} className="animate-spin" />}
+                        {payingPaymentId === payment.id ? "Opening..." : "Pay Bill"}
+                      </button>
+                    )}
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge.className}`}
                     >

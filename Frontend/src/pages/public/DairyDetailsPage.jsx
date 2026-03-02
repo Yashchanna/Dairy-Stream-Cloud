@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Star,
   MapPin,
   ShieldCheck,
-  Clock,
   Truck,
   X,
   CheckCircle2,
@@ -18,43 +17,92 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { fetchPublicDairyById } from "../../api/public.api.js";
-import { fetchCustomerSubscription, saveCustomerSubscription } from "../../api/customer.api.js";
+import {
+  fetchCustomerProfile,
+  fetchCustomerSubscription,
+  saveCustomerSubscription,
+} from "../../api/customer.api.js";
 import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
+
+const buildAddressFromParts = (source = {}) => {
+  const directAddress = [
+    source.address,
+    source.fullAddress,
+    source.areaSectorLocality,
+  ].find((value) => typeof value === "string" && value.trim().length > 0);
+
+  if (directAddress) return directAddress.trim();
+
+  const parts = [
+    source.building_name || source.buildingName || "",
+    source.wing || "",
+    source.room_no || source.roomNo || "",
+  ]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+
+  return parts.join(", ");
+};
+
+const normalizeProducts = (dairy = {}) => {
+  const explicitItems = Array.isArray(dairy?.productItems) ? dairy.productItems : [];
+  if (explicitItems.length > 0) {
+    return explicitItems
+      .map((item) => ({
+        id: item.id || item.name,
+        name: String(item.name || "").trim(),
+        ratePerUnit: Number(item.ratePerUnit || 0),
+        stockQuantity: Number(item.stockQuantity || 0),
+        unit: item.unit || "LITER",
+      }))
+      .filter((item) => item.name && item.ratePerUnit > 0);
+  }
+
+  const legacy = dairy?.products || {
+    "Full Cream": 64,
+    Toned: 54,
+    "Cow Milk": 60,
+    "Buffalo Milk": 72,
+  };
+
+  return Object.keys(legacy).map((name) => ({
+    id: name,
+    name,
+    ratePerUnit: Number(legacy[name] || 0),
+    stockQuantity: Number.POSITIVE_INFINITY,
+    unit: "LITER",
+  }));
+};
 
 const DairyDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Data States
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [existingSubscription, setExistingSubscription] = useState(null);
 
-  // UI States
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-
-  // Form States
-  const [address, setAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("UPI");
+
+  const [address, setAddress] = useState("");
   const [subscription, setSubscription] = useState({
-    milkType: "Full Cream",
+    milkType: "",
     quantity: 1,
     slot: "Morning",
     startDate: new Date().toISOString().slice(0, 10),
   });
 
-  // 1. Load Data on Mount
   useEffect(() => {
     const loadPageData = async () => {
       try {
         setLoading(true);
-        // Fetch Dairy Info
         const res = await fetchPublicDairyById(id);
         setData(res?.dairy || null);
 
-        // Fetch User's current sub (to prevent double subscription)
         const token = localStorage.getItem("token");
         if (token) {
           try {
@@ -82,9 +130,14 @@ const DairyDetailsPage = () => {
     loadPageData();
   }, [id]);
 
-  // 2. Data Mappers
   const dairy = useMemo(() => {
     if (!data) return null;
+    const productItems = normalizeProducts(data);
+    const products = productItems.reduce((acc, item) => {
+      acc[item.name] = item.ratePerUnit;
+      return acc;
+    }, {});
+
     return {
       id: data.id,
       name: data.dairy_name || data.name || "Dairy Farm",
@@ -92,19 +145,26 @@ const DairyDetailsPage = () => {
       description: data.description || "Fresh milk delivered to your doorstep.",
       address: data.address || data.city || "Address not available",
       rating: data.rating || 4.5,
-      // ✅ Dynamic Product List with Prices
-      products: data.products || { 
-        "Full Cream": 64, 
-        "Toned": 54, 
-        "Cow Milk": 60,
-        "Buffalo Milk": 72 
-      },
+      products,
+      productItems,
     };
   }, [data]);
 
-  const currentPrice = useMemo(() => {
-    return dairy?.products[subscription.milkType] || 0;
+  useEffect(() => {
+    if (!dairy?.productItems?.length) return;
+    const hasSelected = dairy.productItems.some((item) => item.name === subscription.milkType);
+    if (hasSelected) return;
+    setSubscription((prev) => ({
+      ...prev,
+      milkType: dairy.productItems[0].name,
+    }));
   }, [dairy, subscription.milkType]);
+
+  const selectedProduct = useMemo(
+    () => dairy?.productItems?.find((item) => item.name === subscription.milkType) || null,
+    [dairy, subscription.milkType]
+  );
+  const currentPrice = useMemo(() => Number(selectedProduct?.ratePerUnit || 0), [selectedProduct]);
 
   const isSubscribedToThis = useMemo(() => {
     if (!existingSubscription) return false;
@@ -116,11 +176,16 @@ const DairyDetailsPage = () => {
     return String(existingSubscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
   }, [existingSubscription]);
 
-  // 3. Handlers
+  const isSubscriptionBlocked = hasActiveSubscription && !isSubscribedToThis;
+
+  const redirectToLogin = (postLoginRedirect, postLoginState = null) => {
+    navigate("/", { state: { postLoginRedirect, postLoginState } });
+  };
+
   const handleConfirmSubscription = async () => {
     setSaving(true);
     try {
-      await saveCustomerSubscription({ // ✅ Corrected: No token arg
+      await saveCustomerSubscription({
         dairyId: dairy.id,
         milkType: subscription.milkType,
         quantity: Number(subscription.quantity),
@@ -160,21 +225,32 @@ const handleContinueFromStep2 = () => {
   const handleSubscribeClick = () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      toast.error("Login to take subscription first");
+      toast.error("Login to start subscription first");
+      redirectToLogin(`/join/${id}`, { openSubscriptionModal: true });
       return;
     }
-
-    if (hasActiveSubscription && !isSubscribedToThis) {
-      toast.error("You have active subscription. Close your subscription first.");
+    if (isSubscriptionBlocked) {
+      toast.error("You already have an active subscription. Close it first.");
       return;
     }
+    setStep(1);
     setShowSubscribe(true);
   };
+
+  const handleBuyOnceClick = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Login to place a one-time order first");
+      redirectToLogin(`/buy-once/${id}`);
+      return;
+    }
+    navigate(`/buy-once/${id}`);
+  };
+
   if (loading) return <LoadingIndicator fullScreen message="Fetching farm details..." />;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      {/* Header Navigation */}
       <div className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
@@ -185,7 +261,6 @@ const handleContinueFromStep2 = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8 grid lg:grid-cols-3 gap-10">
-        {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
           <div className="aspect-video w-full rounded-[40px] overflow-hidden shadow-2xl bg-slate-200">
             {dairy.image ? (
@@ -201,14 +276,13 @@ const handleContinueFromStep2 = () => {
           </section>
         </div>
 
-        {/* Sticky Action Sidebar */}
         <div className="lg:col-span-1">
           <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-slate-200 border border-white sticky top-28">
             <div className="flex justify-between items-start mb-6">
               <div>
                 <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Starting from</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-slate-900">₹{currentPrice}</span>
+                  <span className="text-4xl font-black text-slate-900">Rs {currentPrice}</span>
                   <span className="text-slate-400 font-medium">/L</span>
                 </div>
               </div>
@@ -229,30 +303,47 @@ const handleContinueFromStep2 = () => {
             </div>
 
             {isSubscribedToThis ? (
-              <button 
-                onClick={() => navigate("/customer/dashboard/subscriptions")}
-                className="w-full bg-green-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-green-100 flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 size={20} /> Active Subscription
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate("/customer/dashboard/subscriptions")}
+                  className="w-full bg-green-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-green-100 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={20} /> Active Subscription
+                </button>
+                <button
+                  onClick={handleBuyOnceClick}
+                  className="w-full bg-white text-slate-900 py-4 rounded-[20px] font-bold border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Calendar size={18} /> Buy Once
+                </button>
+              </div>
             ) : (
-              <button 
-                onClick={handleSubscribeClick}
-                className="w-full bg-blue-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
-              >
-                Subscribe Now <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={handleSubscribeClick}
+                  className="w-full bg-blue-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
+                >
+                  Subscribe Now <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+                <button
+                  onClick={handleBuyOnceClick}
+                  className="w-full bg-white text-slate-900 py-4 rounded-[20px] font-bold border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Calendar size={18} /> Buy Once
+                </button>
+              </div>
             )}
+
+            <p className="mt-4 text-xs text-slate-500">
+              Buy once from the dedicated order page, or choose subscription for recurring delivery plans.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Subscription Stepper Modal */}
       {showSubscribe && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-xl rounded-[40px] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
-            
-            {/* Modal Header */}
             <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
               <div>
                 <h2 className="text-xl font-bold">Setup Subscription</h2>
@@ -262,24 +353,27 @@ const handleContinueFromStep2 = () => {
                   ))}
                 </div>
               </div>
-              <button onClick={() => setShowSubscribe(false)} className="p-2 hover:bg-white rounded-full border shadow-sm"><X size={20}/></button>
+              <button onClick={() => setShowSubscribe(false)} className="p-2 hover:bg-white rounded-full border shadow-sm">
+                <X size={20} />
+              </button>
             </div>
 
             <div className="p-8">
-              {/* Step 1: Product Selection */}
               {step === 1 && (
                 <div className="space-y-6">
                   <div className="space-y-3">
-                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><Layers size={16}/> Select Variant</label>
+                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <Layers size={16} /> Select Variant
+                    </label>
                     <div className="grid grid-cols-1 gap-3">
-                      {Object.keys(dairy.products).map(variant => (
-                        <button 
-                          key={variant}
-                          onClick={() => setSubscription({...subscription, milkType: variant})}
-                          className={`flex justify-between items-center p-4 border-2 rounded-2xl transition-all ${subscription.milkType === variant ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
+                      {dairy.productItems.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setSubscription({...subscription, milkType: item.name})}
+                          className={`flex justify-between items-center p-4 border-2 rounded-2xl transition-all ${subscription.milkType === item.name ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
                         >
-                          <span className="font-bold">{variant}</span>
-                          <span className="text-blue-600 font-black">₹{dairy.products[variant]}/L</span>
+                          <span className="font-bold">{item.name}</span>
+                          <span className="text-blue-600 font-black">Rs {item.ratePerUnit}/{item.unit}</span>
                         </button>
                       ))}
                     </div>
@@ -287,12 +381,23 @@ const handleContinueFromStep2 = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-bold">Daily Qty (L)</label>
-                      <input type="number" step="0.5" className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500" value={subscription.quantity} onChange={e => setSubscription({...subscription, quantity: e.target.value})} />
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500"
+                        value={subscription.quantity}
+                        onChange={(e) => setSubscription({ ...subscription, quantity: e.target.value })}
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-bold">Time Slot</label>
-                      <select className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none" value={subscription.slot} onChange={e => setSubscription({...subscription, slot: e.target.value})}>
-                        <option>Morning</option><option>Evening</option>
+                      <select
+                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none"
+                        value={subscription.slot}
+                        onChange={(e) => setSubscription({ ...subscription, slot: e.target.value })}
+                      >
+                        <option>Morning</option>
+                        <option>Evening</option>
                       </select>
                     </div>
                   </div>
@@ -338,7 +443,6 @@ const handleContinueFromStep2 = () => {
   </div>
 )}
 
-              {/* Step 3: Payment Method Selection */}
               {step === 3 && (
   <div className="p-6 space-y-4"> {/* ⬇️ Reduced from p-8 and space-y-6 */}
     <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -385,7 +489,6 @@ const handleContinueFromStep2 = () => {
   </div>
 )}
 
-              {/* Step 4: Success */}
               {step === 4 && (
                 <div className="py-10 text-center space-y-6">
                   <div className="h-24 w-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
@@ -395,7 +498,9 @@ const handleContinueFromStep2 = () => {
                     <h3 className="text-2xl font-black">Subscription Started!</h3>
                     <p className="text-slate-500 mt-2">Your first delivery from {dairy.name} arrives tomorrow morning.</p>
                   </div>
-                  <button onClick={() => navigate("/customer/dashboard")} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold">Go to Dashboard</button>
+                  <button onClick={() => navigate("/customer/dashboard")} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold">
+                    Go to Dashboard
+                  </button>
                 </div>
               )}
             </div>

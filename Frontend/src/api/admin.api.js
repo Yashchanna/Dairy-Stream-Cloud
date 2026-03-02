@@ -19,18 +19,69 @@ import client from "./client";
 /* =========================
    DASHBOARD (WITH CACHE)
 ========================= */
+const DASHBOARD_CACHE_KEY = "adminDashboardCacheV1";
+const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+
 let dashboardCache = null;
 let cacheTime = 0;
 
-export const fetchAdminDashboard = async () => {
+const readPersistedDashboardCache = () => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed?.data || !parsed?.timestamp) return null;
+
+    const isFresh = Date.now() - parsed.timestamp < DASHBOARD_CACHE_TTL_MS;
+    return isFresh ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistDashboardCache = (data, timestamp) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(
+      DASHBOARD_CACHE_KEY,
+      JSON.stringify({ data, timestamp })
+    );
+  } catch {
+    // Ignore storage write failures to keep API flow stable.
+  }
+};
+
+export const getCachedAdminDashboard = () => {
   const now = Date.now();
-  if (dashboardCache && now - cacheTime < 60000) {
+  if (dashboardCache && now - cacheTime < DASHBOARD_CACHE_TTL_MS) {
     return dashboardCache;
   }
 
+  const persisted = readPersistedDashboardCache();
+  if (!persisted) return null;
+
+  dashboardCache = persisted.data;
+  cacheTime = persisted.timestamp;
+  return persisted.data;
+};
+
+export const fetchAdminDashboard = async ({ forceRefresh = false } = {}) => {
+  if (!forceRefresh) {
+    const cachedDashboard = getCachedAdminDashboard();
+    if (cachedDashboard) return cachedDashboard;
+  }
+
   const { data } = await client.get("/admin/dashboard");
+  const now = Date.now();
+
   dashboardCache = data;
   cacheTime = now;
+  persistDashboardCache(data, now);
+
   return data;
 };
 
@@ -56,6 +107,11 @@ export const updateAdminCustomer = async (id, payload) => {
 
 export const deleteAdminCustomer = async (id) => {
   const { data } = await client.delete(`/admin/customers/${id}`);
+  return data;
+};
+
+export const createAdminCustomerSubscription = async (customerId, payload) => {
+  const { data } = await client.post(`/admin/customers/${customerId}/subscription`, payload);
   return data;
 };
 
@@ -97,6 +153,45 @@ export const registerDairyApi = async (dairyData) => {
   return data;
 };
 
+export const fetchAdminDeliveries = async ({ limit = 1000 } = {}) => {
+  const { data } = await client.get("/admin/deliveries", {
+    params: { limit },
+  });
+  return data;
+};
+
+export const fetchAdminDeliverySchedulingOptions = async () => {
+  const { data } = await client.get("/admin/deliveries/scheduling-options");
+  return data;
+};
+
+export const scheduleAdminDelivery = async ({ customerId, agentId, deliveryDate, notes } = {}) => {
+  const { data } = await client.post("/admin/deliveries/schedule", {
+    customerId,
+    agentId,
+    deliveryDate,
+    notes,
+  });
+  return data;
+};
+
+export const scheduleAdminDeliveriesBulk = async ({
+  deliveryDate,
+  agentId,
+  slot = "ALL",
+  route = "ALL",
+  notes,
+} = {}) => {
+  const { data } = await client.post("/admin/deliveries/schedule-bulk", {
+    deliveryDate,
+    agentId,
+    slot,
+    route,
+    notes,
+  });
+  return data;
+};
+
 /* =========================
    PAYMENTS
 ========================= */
@@ -114,5 +209,45 @@ export const updateAdminPaymentStatus = async (id, status) => {
 
 export const updateAdminFarmPlan = async (plan) => {
   const { data } = await client.patch("/admin/farm-plan", { plan });
+  return data;
+};
+
+export const approveAdminDelivery = async (id) => {
+  const { data } = await client.patch(`/admin/deliveries/${id}/approve`);
+  return data;
+};
+
+export const approveAllAdminDeliveries = async () => {
+  const { data } = await client.post("/admin/deliveries/approve-all");
+  return data;
+};
+
+export const assignAdminDeliveryPartner = async (id, agentId) => {
+  const { data } = await client.patch(`/admin/deliveries/${id}/assign-partner`, { agentId });
+  return data;
+};
+
+/* =========================
+   PRODUCTS & STOCK
+========================= */
+export const fetchAdminProducts = async ({ search = "", includeInactive = true } = {}) => {
+  const { data } = await client.get("/admin/products", {
+    params: { search, includeInactive },
+  });
+  return data;
+};
+
+export const createAdminProduct = async (payload) => {
+  const { data } = await client.post("/admin/products", payload);
+  return data;
+};
+
+export const updateAdminProduct = async (id, payload) => {
+  const { data } = await client.put(`/admin/products/${id}`, payload);
+  return data;
+};
+
+export const deleteAdminProduct = async (id) => {
+  const { data } = await client.delete(`/admin/products/${id}`);
   return data;
 };

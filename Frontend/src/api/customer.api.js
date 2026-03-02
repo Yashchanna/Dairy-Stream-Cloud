@@ -90,6 +90,18 @@ export const fetchCustomerDeliveries = async () => {
   return data;
 };
 
+export const createCustomerOneTimeOrder = async (payload) => {
+  const { data } = await client.post("/customer/orders/one-time", payload);
+  invalidateCustomerDashboardCache();
+  return data;
+};
+
+export const cancelCustomerOneTimeOrder = async (payload) => {
+  const { data } = await client.post("/customer/orders/one-time/cancel", payload);
+  invalidateCustomerDashboardCache();
+  return data;
+};
+
 export const fetchCustomerPayments = async () => {
   const { data } = await client.get("/customer/payments");
   return data;

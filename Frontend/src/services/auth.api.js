@@ -29,10 +29,30 @@ export const adminLoginApi = async (payload) => {
   return data;
 };
 
+export const requestAdminPasswordResetOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/admin/forgot-password/request-otp", payload);
+  return data;
+};
+
+export const resetAdminPasswordWithOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/admin/forgot-password/reset", payload);
+  return data;
+};
+
 // ===============================
 // 4. AGENT LOGIN
 // ===============================
 export const agentLoginApi = async (payload) => {
   const { data } = await client.post("/auth/agent/login", payload);
+  return data;
+};
+
+export const requestAgentPasswordResetOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/agent/forgot-password/request-otp", payload);
+  return data;
+};
+
+export const resetAgentPasswordWithOtpApi = async (payload) => {
+  const { data } = await client.post("/auth/agent/forgot-password/reset", payload);
   return data;
 };
