@@ -21,6 +21,25 @@ const ExploreDairiesPage = () => {
   const [loadError, setLoadError] = useState('');
   const [activeSubData, setActiveSubData] = useState(null); // Stores the actual sub object
 
+
+  const getLiveLocation = () => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject("Geolocation is not supported by your browser");
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        () => reject("Unable to retrieve your location")
+      );
+    }
+  });
+};
+
   // 1. Load Dairies
   useEffect(() => {
     let active = true;
