@@ -1,45 +1,134 @@
 import React, { useState, useEffect } from 'react';
 import AgentLayout from '../../components/agent/AgentLayout';
 import { User, Phone, Mail, MapPin, Award, TrendingUp, Route as RouteIcon, ToggleLeft, ToggleRight } from 'lucide-react';
+import { fetchAgentProfile, updateAgentAvailability } from "../../api/agent.api";
 
-// Mock data - replace with API
-const MOCK_AGENT_PROFILE = {
-  agentId: 'AG001',
-  name: 'Rajesh Kumar',
-  email: 'rajesh.kumar@dairy.com',
-  phone: '+91 98765 43210',
-  address: 'Narhe, Pune, Maharashtra',
-  isActive: true,
-  joinedDate: '2025-01-15',
-  deliveryRoutes: [
-    'Route A: Narhe - Ambegaon - Dhayari',
-    'Route B: Kothrud - Karve Nagar',
-  ],
-  // performanceStats: {
-  //   totalDeliveries: 1248,
-  //   completedDeliveries: 1180,
-  //   failedDeliveries: 68,
-  //   successRate: 94.5,
-  // },
+const EMPTY_AGENT_PROFILE = {
+  agentId: '',
+  name: '',
+  email: '',
+  phone: '',
+  address: '',
+  status: 'ACTIVE',
+  isActive: false,
+  inactiveFrom: null,
+  inactiveUntil: null,
+  inactiveDaysRemaining: 0,
+  joinedDate: null,
+  deliveryRoutes: [],
 };
 
 const AgentProfile = () => {
-  const [profile, setProfile] = useState(MOCK_AGENT_PROFILE);
-  const [isActive, setIsActive] = useState(profile.isActive);
+  const [profile, setProfile] = useState(EMPTY_AGENT_PROFILE);
+  const [showInactiveDaysInput, setShowInactiveDaysInput] = useState(false);
+  const [inactiveDays, setInactiveDays] = useState("1");
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState("");
+
+  const isActive =
+    typeof profile?.isActive === "boolean"
+      ? profile.isActive
+      : String(profile?.status || "ACTIVE").toUpperCase() !== "INACTIVE";
 
   useEffect(() => {
-    // TODO: Fetch agent profile from API
-    // fetchAgentProfile().then(setProfile);
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setProfile((prev) => ({
+          ...prev,
+          agentId: user?.agentId || '',
+          name: user?.name || '',
+          email: user?.email || '',
+        }));
+      } catch {
+        // Ignore malformed local user data.
+      }
+    }
+
+    const loadProfile = async () => {
+      try {
+        const payload = await fetchAgentProfile();
+        if (payload) setProfile(payload);
+      } catch (_err) {
+        // Keep local fallback profile values.
+      }
+    };
+    loadProfile();
   }, []);
 
+  const refreshProfileFromServer = async () => {
+    const payload = await fetchAgentProfile();
+    if (payload) setProfile(payload);
+  };
+
   const handleToggleStatus = async () => {
-    const newStatus = !isActive;
-    setIsActive(newStatus);
-    
-    // TODO: Update status in API
-    // await updateAgentStatus(newStatus);
-    
-    setProfile(prev => ({ ...prev, isActive: newStatus }));
+    if (statusSaving) return;
+    setStatusError("");
+
+    if (isActive) {
+      setShowInactiveDaysInput(true);
+      return;
+    }
+
+    try {
+      setStatusSaving(true);
+      const payload = await updateAgentAvailability({ isActive: true });
+      setProfile((prev) => ({
+        ...prev,
+        isActive: payload?.isActive ?? true,
+        status: payload?.status || "ACTIVE",
+        inactiveFrom: payload?.inactiveFrom || null,
+        inactiveUntil: payload?.inactiveUntil || null,
+        inactiveDaysRemaining: payload?.inactiveDaysRemaining || 0,
+      }));
+      try {
+        await refreshProfileFromServer();
+      } catch {
+        // UI already updated from PATCH response.
+      }
+      setShowInactiveDaysInput(false);
+      setInactiveDays("1");
+    } catch (err) {
+      setStatusError(err?.response?.data?.message || err?.message || "Failed to update status.");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const confirmSetInactive = async () => {
+    const parsedDays = Number(inactiveDays);
+    if (!Number.isFinite(parsedDays) || parsedDays <= 0) {
+      setStatusError("Please enter valid inactive days.");
+      return;
+    }
+
+    try {
+      setStatusSaving(true);
+      setStatusError("");
+      const payload = await updateAgentAvailability({
+        isActive: false,
+        inactiveDays: parsedDays,
+      });
+      setProfile((prev) => ({
+        ...prev,
+        isActive: payload?.isActive ?? false,
+        status: payload?.status || "INACTIVE",
+        inactiveFrom: payload?.inactiveFrom || null,
+        inactiveUntil: payload?.inactiveUntil || null,
+        inactiveDaysRemaining: payload?.inactiveDaysRemaining || parsedDays,
+      }));
+      try {
+        await refreshProfileFromServer();
+      } catch {
+        // UI already updated from PATCH response.
+      }
+      setShowInactiveDaysInput(false);
+    } catch (err) {
+      setStatusError(err?.response?.data?.message || err?.message || "Failed to update status.");
+    } finally {
+      setStatusSaving(false);
+    }
   };
 
   // const { performanceStats } = profile;
@@ -68,35 +157,90 @@ const AgentProfile = () => {
                   <h3 className="text-2xl font-bold">{profile.name}</h3>
                   <p className="text-blue-100">Agent ID: {profile.agentId}</p>
                   <p className="text-sm text-blue-100 mt-1">
-                    Joined: {new Date(profile.joinedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    Joined: {profile.joinedDate
+                      ? new Date(profile.joinedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                      : '-'}
                   </p>
                 </div>
               </div>
 
               {/* Active Status Toggle */}
-              <div className="bg-white bg-opacity-20 rounded-lg p-3">
+              <div className="rounded-xl border border-white/40 bg-white/15 p-3 shadow-md backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium">Status</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-white/90">Status</span>
                 </div>
                 <button
                   onClick={handleToggleStatus}
-                  className="flex items-center gap-2"
+                  disabled={statusSaving}
+                  className="flex min-w-[150px] items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isActive ? (
                     <>
-                      <ToggleRight className="text-green-300" size={32} />
-                      <span className="text-sm font-medium">Active</span>
+                      <ToggleRight className="text-green-600" size={28} />
+                      <span>
+                        {statusSaving ? "Updating..." : "Active"}
+                      </span>
                     </>
                   ) : (
                     <>
-                      <ToggleLeft className="text-gray-300" size={32} />
-                      <span className="text-sm font-medium">Inactive</span>
+                      <ToggleLeft className="text-red-500" size={28} />
+                      <span>
+                        {statusSaving ? "Updating..." : "Inactive"}
+                      </span>
                     </>
                   )}
                 </button>
+                {!isActive && profile?.inactiveUntil && (
+                  <p className="mt-2 text-xs text-white/90">
+                    Inactive until: {new Date(profile.inactiveUntil).toLocaleDateString()} ({profile?.inactiveDaysRemaining || 0} day(s) left)
+                  </p>
+                )}
               </div>
             </div>
           </div>
+
+          {showInactiveDaysInput && (
+            <div className="border-t border-gray-200 p-4 bg-amber-50">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Set inactive for how many days?
+              </label>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={inactiveDays}
+                  onChange={(e) => setInactiveDays(e.target.value)}
+                  className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={confirmSetInactive}
+                    disabled={statusSaving}
+                    className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    {statusSaving ? "Saving..." : "Confirm Inactive"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInactiveDaysInput(false);
+                      setInactiveDays("1");
+                      setStatusError("");
+                    }}
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {statusError && (
+            <div className="px-6 pb-4 text-sm text-red-600">{statusError}</div>
+          )}
 
           {/* Contact Information */}
           <div className="p-6 space-y-4">
@@ -143,17 +287,23 @@ const AgentProfile = () => {
             <h4 className="font-semibold text-gray-800 text-lg">Assigned Delivery Routes</h4>
           </div>
           <div className="space-y-2">
-            {profile.deliveryRoutes.map((route, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100"
-              >
-                <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                  {index + 1}
-                </div>
-                <p className="text-gray-800">{route}</p>
+            {profile.deliveryRoutes.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-600">
+                No routes assigned
               </div>
-            ))}
+            ) : (
+              profile.deliveryRoutes.map((route, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100"
+                >
+                  <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                    {index + 1}
+                  </div>
+                  <p className="text-gray-800">{route}</p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

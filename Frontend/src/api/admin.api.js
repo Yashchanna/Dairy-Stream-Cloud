@@ -1,115 +1,270 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:4000").trim();
+import client from "./client";
 
 /* =========================
    ADMIN LOGIN
 ========================= */
-export const adminApiLogin = async (email, password) => {
-  const res = await fetch(`${BASE_URL}/api/admin/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
+// export const adminApiLogin = async (email, password) => {
+//   const { data } = await client.post("/admin/login", { email, password });
 
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(text || "Admin login failed");
+//   if (!data.token) throw new Error("No token received from server");
+
+//   localStorage.setItem("adminToken", data.token);
+//   if (data.admin) {
+//     localStorage.setItem("adminUser", JSON.stringify(data.admin));
+//   }
+
+//   return data;
+// };
+
+/* =========================
+   DASHBOARD (WITH CACHE)
+========================= */
+const DASHBOARD_CACHE_KEY = "adminDashboardCacheV1";
+const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let dashboardCache = null;
+let cacheTime = 0;
+
+const readPersistedDashboardCache = () => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed?.data || !parsed?.timestamp) return null;
+
+    const isFresh = Date.now() - parsed.timestamp < DASHBOARD_CACHE_TTL_MS;
+    return isFresh ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistDashboardCache = (data, timestamp) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(
+      DASHBOARD_CACHE_KEY,
+      JSON.stringify({ data, timestamp })
+    );
+  } catch {
+    // Ignore storage write failures to keep API flow stable.
+  }
+};
+
+export const getCachedAdminDashboard = () => {
+  const now = Date.now();
+  if (dashboardCache && now - cacheTime < DASHBOARD_CACHE_TTL_MS) {
+    return dashboardCache;
   }
 
-  const data = JSON.parse(text);
+  const persisted = readPersistedDashboardCache();
+  if (!persisted) return null;
 
-  if (!data.token) {
-    throw new Error("No token received from server");
+  dashboardCache = persisted.data;
+  cacheTime = persisted.timestamp;
+  return persisted.data;
+};
+
+export const fetchAdminDashboard = async ({ forceRefresh = false } = {}) => {
+  if (!forceRefresh) {
+    const cachedDashboard = getCachedAdminDashboard();
+    if (cachedDashboard) return cachedDashboard;
   }
 
-  localStorage.setItem("adminToken", data.token);
+  const { data } = await client.get("/admin/dashboard");
+  const now = Date.now();
 
-  if (data.admin) {
-    localStorage.setItem("adminUser", JSON.stringify(data.admin));
-  }
+  dashboardCache = data;
+  cacheTime = now;
+  persistDashboardCache(data, now);
 
   return data;
 };
 
 /* =========================
-   DASHBOARD (CACHED)
+   CUSTOMER MANAGEMENT
 ========================= */
-let dashboardCache = null;
-let cacheTime = 0;
-
-export const fetchAdminDashboard = async () => {
-  const now = Date.now();
-
-  // 60 seconds cache
-  if (dashboardCache && now - cacheTime < 60000) {
-    return dashboardCache;
-  }
-
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const res = await fetch(`${BASE_URL}/api/admin/dashboard`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+export const fetchAdminCustomers = async ({ page = 1, limit = 10, search = "" }) => {
+  const { data } = await client.get("/admin/customers", {
+    params: { page, limit, search },
   });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || "Failed to fetch dashboard");
-
-  const data = JSON.parse(text);
-
-  dashboardCache = data;
-  cacheTime = now;
-
   return data;
 };
 
-export const fetchAdminCustomers = async ({
-  page = 1,
-  limit = 10,
-  search = "",
-}) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
-
-  const params = new URLSearchParams({
-    page,
-    limit,
-    search,
-  });
-
-  const res = await fetch(
-    `${BASE_URL}/api/admin/customers?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-
-  return JSON.parse(text);
+export const fetchAdminCustomerById = async (id) => {
+  const { data } = await client.get(`/admin/customers/${id}`);
+  return data;
 };
 
-export const fetchAdminCustomerById = async (id) => {
-  const token = localStorage.getItem("adminToken");
-  if (!token) throw new Error("Admin token missing");
+export const updateAdminCustomer = async (id, payload) => {
+  const { data } = await client.put(`/admin/customers/${id}`, payload);
+  return data;
+};
 
-  const res = await fetch(
-    `${BASE_URL}/api/admin/customers/${id}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+export const deleteAdminCustomer = async (id) => {
+  const { data } = await client.delete(`/admin/customers/${id}`);
+  return data;
+};
 
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
+export const createAdminCustomerSubscription = async (customerId, payload) => {
+  const { data } = await client.post(`/admin/customers/${customerId}/subscription`, payload);
+  return data;
+};
 
-  return JSON.parse(text);
+export const approveAdminCustomerSubscription = async (customerId) => {
+  const { data } = await client.patch(`/admin/customers/${customerId}/subscription/approve`);
+  return data;
+};
+
+export const assignAdminCustomerPermanentPartner = async (customerId, agentId) => {
+  const { data } = await client.patch(`/admin/customers/${customerId}/subscription/assign-partner`, {
+    agentId,
+  });
+  return data;
+};
+
+/* =========================
+   AGENT MANAGEMENT
+========================= */
+export const fetchAdminAgents = async ({ page = 1, limit = 10, search = "" }) => {
+  const { data } = await client.get("/admin/agents", {
+    params: { page, limit, search },
+  });
+  return data;
+};
+
+export const fetchAdminAgentsById = async (id) => {
+  const { data } = await client.get(`/admin/agents/${id}`);
+  return data;
+};
+
+export const updateAdminAgent = async (id, payload) => {
+  const { data } = await client.put(`/admin/agents/${id}`, payload);
+  return data;
+};
+
+export const deleteAdminAgent = async (id) => {
+  const { data } = await client.delete(`/admin/agents/${id}`);
+  return data;
+};
+
+/* =========================
+   DAIRY REGISTRATION
+========================= */
+export const registerDairyApi = async (dairyData) => {
+  // Use a custom header for multipart/form-data if dairyData is FormData
+  const config = dairyData instanceof FormData 
+    ? { headers: { "Content-Type": "multipart/form-data" } } 
+    : {};
+
+  const { data } = await client.post("/admin/register-dairy", dairyData, config);
+  return data;
+};
+
+export const fetchAdminDeliveries = async ({ limit = 1000 } = {}) => {
+  const { data } = await client.get("/admin/deliveries", {
+    params: { limit },
+  });
+  return data;
+};
+
+export const fetchAdminDeliverySchedulingOptions = async () => {
+  const { data } = await client.get("/admin/deliveries/scheduling-options");
+  return data;
+};
+
+export const scheduleAdminDelivery = async ({ customerId, agentId, deliveryDate, notes } = {}) => {
+  const { data } = await client.post("/admin/deliveries/schedule", {
+    customerId,
+    agentId,
+    deliveryDate,
+    notes,
+  });
+  return data;
+};
+
+export const scheduleAdminDeliveriesBulk = async ({
+  deliveryDate,
+  agentId,
+  slot = "ALL",
+  route = "ALL",
+  notes,
+} = {}) => {
+  const { data } = await client.post("/admin/deliveries/schedule-bulk", {
+    deliveryDate,
+    agentId,
+    slot,
+    route,
+    notes,
+  });
+  return data;
+};
+
+/* =========================
+   PAYMENTS
+========================= */
+export const fetchAdminPayments = async ({ page = 1, status = "ALL" } = {}) => {
+  const { data } = await client.get("/admin/payments", {
+    params: { page, status },
+  });
+  return data;
+};
+
+export const updateAdminPaymentStatus = async (id, status) => {
+  const { data } = await client.patch(`/admin/payments/${id}/status`, { status });
+  return data;
+};
+
+export const updateAdminFarmPlan = async (plan) => {
+  const { data } = await client.patch("/admin/farm-plan", { plan });
+  return data;
+};
+
+export const approveAdminDelivery = async (id) => {
+  const { data } = await client.patch(`/admin/deliveries/${id}/approve`);
+  return data;
+};
+
+export const approveAllAdminDeliveries = async () => {
+  const { data } = await client.post("/admin/deliveries/approve-all");
+  return data;
+};
+
+export const assignAdminDeliveryPartner = async (id, agentId) => {
+  const { data } = await client.patch(`/admin/deliveries/${id}/assign-partner`, { agentId });
+  return data;
+};
+
+export const resolveAdminDeliveryIssue = async (id, note = "") => {
+  const { data } = await client.patch(`/admin/deliveries/${id}/resolve-issue`, { note });
+  return data;
+};
+
+/* =========================
+   PRODUCTS & STOCK
+========================= */
+export const fetchAdminProducts = async ({ search = "", includeInactive = true } = {}) => {
+  const { data } = await client.get("/admin/products", {
+    params: { search, includeInactive },
+  });
+  return data;
+};
+
+export const createAdminProduct = async (payload) => {
+  const { data } = await client.post("/admin/products", payload);
+  return data;
+};
+
+export const updateAdminProduct = async (id, payload) => {
+  const { data } = await client.put(`/admin/products/${id}`, payload);
+  return data;
+};
+
+export const deleteAdminProduct = async (id) => {
+  const { data } = await client.delete(`/admin/products/${id}`);
+  return data;
 };

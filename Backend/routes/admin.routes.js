@@ -1,25 +1,84 @@
-const express = require("express");
-const {
-  adminLogin,
-} = require("../controllers/authentication/admin/auth.controller");
-const { verifyAdmin } = require("../middleware/admin.middleware");
-const {
-  getDashboard,
-} = require("../controllers/admin/dashboard.controller");
-const {
+import express from "express";
+import { adminLogin } from "../controllers/authentication/adminAuth.controller.js";
+import { verifyAdmin } from "../middleware/admin.middleware.js";
+import { getDashboard } from "../controllers/admin/dashboard.controller.js";
+import {
+  approveAdminDelivery,
+  approveAllAdminDeliveries,
+  assignAdminDeliveryPartner,
+  fetchAdminDeliveries,
+  fetchDeliverySchedulingOptions,
+  resolveAdminDeliveryIssue,
+  scheduleAdminDelivery,
+  scheduleAdminDeliveriesBulk,
+} from "../controllers/admin/adminDeliveries.controller.js";
+import {
   fetchAdminCustomers,
   fetchAdminCustomerById,
-} = require("../controllers/admin/adminCustomers.controller");
-
+  updateAdminCustomerById,
+  deleteAdminCustomerById,
+  approveAdminCustomerSubscription,
+  assignAdminCustomerPermanentPartner,
+  upsertAdminCustomerSubscription,
+} from "../controllers/admin/adminCustomers.controller.js";
+import { registerDairy } from "../controllers/admin/dairy.controller.js";
+import { uploadSingleImage } from "../middleware/upload.middleware.js";
+import { addAgent, getUniqueAgentId } from "../controllers/admin/addAgent.controller.js";
+import { getUniqueBuildings } from "../controllers/shared/building.controller.js";
+import {
+  fetchAdminAgents,
+  fetchAdminAgentById,
+  updateAdminAgentById,
+  deleteAdminAgentById,
+} from "../controllers/admin/adminagent.controller.js";
+import {
+  changeFarmPlan,
+  fetchPageData,
+  updateStatus,
+} from "../controllers/admin/adminPayments.controller.js";
+import {
+  addAdminProduct,
+  editAdminProduct,
+  fetchAdminProducts,
+  removeAdminProduct,
+} from "../controllers/admin/products.controller.js";
 const router = express.Router();
 
-router.post("/login", adminLogin);
-router.get("/customers", verifyAdmin, fetchAdminCustomers);
+router.post("/", adminLogin);
+router.post("/register-dairy", uploadSingleImage, registerDairy);
+router.post("/addagent", verifyAdmin, addAgent);
+router.get("/agents/generate-id", verifyAdmin, getUniqueAgentId);
+router.get("/customers", verifyAdmin, fetchAdminCustomers); //need to work on this route, where we just fetch the customer data from the db, if no customer just a banner "you dont have any customer now, add you customer"
 router.get("/customers/:id", verifyAdmin, fetchAdminCustomerById);
+router.put("/customers/:id", verifyAdmin, updateAdminCustomerById);
+router.delete("/customers/:id", verifyAdmin, deleteAdminCustomerById);
+router.post("/customers/:id/subscription", verifyAdmin, upsertAdminCustomerSubscription);
+router.patch("/customers/:id/subscription/approve", verifyAdmin, approveAdminCustomerSubscription);
+router.patch("/customers/:id/subscription/assign-partner", verifyAdmin, assignAdminCustomerPermanentPartner);
 router.get("/dashboard", verifyAdmin, getDashboard);
+router.get("/deliveries", verifyAdmin, fetchAdminDeliveries);
+router.get("/deliveries/scheduling-options", verifyAdmin, fetchDeliverySchedulingOptions);
+router.post("/deliveries/schedule", verifyAdmin, scheduleAdminDelivery);
+router.post("/deliveries/schedule-bulk", verifyAdmin, scheduleAdminDeliveriesBulk);
+router.patch("/deliveries/:id/approve", verifyAdmin, approveAdminDelivery);
+router.patch("/deliveries/:id/assign-partner", verifyAdmin, assignAdminDeliveryPartner);
+router.patch("/deliveries/:id/resolve-issue", verifyAdmin, resolveAdminDeliveryIssue);
+router.post("/deliveries/approve-all", verifyAdmin, approveAllAdminDeliveries);
+router.get("/buildings", verifyAdmin, getUniqueBuildings);
+router.get("/agents",verifyAdmin, fetchAdminAgents);
+router.get("/agents/:id",verifyAdmin,fetchAdminAgentById);
+router.put("/agents/:id", verifyAdmin, updateAdminAgentById);
+router.delete("/agents/:id", verifyAdmin, deleteAdminAgentById);
+router.get("/payments", verifyAdmin, fetchPageData);
+router.patch("/payments/:id/status", verifyAdmin, updateStatus);
+router.patch("/farm-plan", verifyAdmin, changeFarmPlan);
+router.get("/products", verifyAdmin, fetchAdminProducts);
+router.post("/products", verifyAdmin, addAdminProduct);
+router.put("/products/:id", verifyAdmin, editAdminProduct);
+router.delete("/products/:id", verifyAdmin, removeAdminProduct);
 
 router.get("/health", (req, res) => {
-  res.json({ status: "ok", time: new Date() });
+  res.json({ status: "ok", time: new Date() }); //dont get any output
 });
 
-module.exports = router;
+export default router;

@@ -1,9 +1,13 @@
 import express from "express";
-import { detectUser } from "../controllers/authentication/customer/auth.controller.js";
+
+// ✅ UPDATE IMPORT
+import { detectUser } from "../controllers/authentication/detectUser.controller.js";
+import { getPublicDairies, getPublicDairy } from "../controllers/public/dairies.controller.js";
 
 const router = express.Router();
 
-// Smart Detect (Gatekeeper)
-router.post("/detect", detectUser);
+// Public Dairy Listings
+router.get("/dairies", getPublicDairies);
+router.get("/dairies/:id", getPublicDairy);
 
 export default router;

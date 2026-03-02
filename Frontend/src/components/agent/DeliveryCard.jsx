@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
-import { CheckCircle, XCircle, Clock, RotateCcw } from 'lucide-react';
+import React from 'react';
+import { CheckCircle, XCircle, Clock } from 'lucide-react';
 
 const DeliveryCard = ({ delivery, onStatusChange, onClick }) => {
-  const [showRevertConfirm, setShowRevertConfirm] = useState(false);
-
   const getStatusColor = () => {
     switch (delivery.status) {
       case 'COMPLETED':
@@ -16,24 +14,15 @@ const DeliveryCard = ({ delivery, onStatusChange, onClick }) => {
   };
 
   const handleComplete = () => {
-    if (delivery.status !== 'COMPLETED') {
+    if (delivery.status === 'PENDING') {
       onStatusChange(delivery.id, 'COMPLETED');
     }
   };
 
   const handleFailed = () => {
-    onStatusChange(delivery.id, 'FAILED');
-  };
-
-  const handleRevert = () => {
-    if (delivery.status === 'FAILED') {
-      setShowRevertConfirm(true);
+    if (delivery.status === 'PENDING') {
+      onStatusChange(delivery.id, 'FAILED');
     }
-  };
-
-  const confirmRevert = () => {
-    onStatusChange(delivery.id, 'COMPLETED');
-    setShowRevertConfirm(false);
   };
 
   return (
@@ -68,9 +57,9 @@ const DeliveryCard = ({ delivery, onStatusChange, onClick }) => {
         <div className="flex gap-2 mt-3">
           <button
             onClick={handleComplete}
-            disabled={delivery.status === 'COMPLETED'}
+            disabled={delivery.status !== 'PENDING'}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-medium transition-colors ${
-              delivery.status === 'COMPLETED'
+              delivery.status !== 'PENDING'
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-green-500 hover:bg-green-600 text-white'
             }`}
@@ -81,9 +70,9 @@ const DeliveryCard = ({ delivery, onStatusChange, onClick }) => {
 
           <button
             onClick={handleFailed}
-            disabled={delivery.status === 'COMPLETED'}
+            disabled={delivery.status !== 'PENDING'}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-medium transition-colors ${
-              delivery.status === 'COMPLETED'
+              delivery.status !== 'PENDING'
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-red-500 hover:bg-red-600 text-white'
             }`}
@@ -92,15 +81,6 @@ const DeliveryCard = ({ delivery, onStatusChange, onClick }) => {
             Failed
           </button>
 
-          {delivery.status === 'FAILED' && (
-            <button
-              onClick={handleRevert}
-              className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              title="Revert to Completed"
-            >
-              <RotateCcw size={18} />
-            </button>
-          )}
         </div>
 
         {delivery.status === 'PENDING' && (
@@ -111,31 +91,6 @@ const DeliveryCard = ({ delivery, onStatusChange, onClick }) => {
         )}
       </div>
 
-      {/* Revert Confirmation */}
-      {showRevertConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Confirm Change</h3>
-            <p className="text-gray-600 mb-4">
-              Change this delivery from Failed to Completed?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowRevertConfirm(false)}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmRevert}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

@@ -1,258 +1,347 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth.jsx';
-import { 
-  Search, MapPin, Filter, Star, ShieldCheck, 
-  Clock, Truck, ChevronDown, User, LogOut 
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth.jsx";
+import {
+  Search,
+  MapPin,
+  Clock,
+  User,
+  LogOut,
+  LayoutDashboard,
+} from "lucide-react";
 
-// --- EXPANDED MOCK DATA ---
-const MOCK_DAIRIES = [
-  {
-    id: 'D001',
-    name: 'Nandanvan Farms',
-    rating: 4.8,
-    reviews: 124,
-    distance: '1.2 km',
-    isVerified: true,
-    isTrusted: true,
-    slots: ['Morning', 'Evening'],
-    image: 'https://images.unsplash.com/photo-1528498033373-3c6c08e93d79?auto=format&fit=crop&q=80&w=400',
-    address: 'Kothrud, Pune',
-    minPrice: 60
-  },
-  {
-    id: 'D002',
-    name: 'Pure Desi Milk',
-    rating: 4.2,
-    reviews: 85,
-    distance: '3.5 km',
-    isVerified: true,
-    isTrusted: false,
-    slots: ['Morning Only'],
-    image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=400',
-    address: 'Baner, Pune',
-    minPrice: 55
-  },
-  {
-    id: 'D003',
-    name: 'Gokul Dairy',
-    rating: 4.5,
-    reviews: 210,
-    distance: '0.8 km',
-    isVerified: true,
-    isTrusted: true,
-    slots: ['Morning', 'Evening'],
-    image: 'https://images.unsplash.com/photo-1596733430282-743a35525829?auto=format&fit=crop&q=80&w=400',
-    address: 'Deccan, Pune',
-    minPrice: 58
-  },
-  {
-    id: 'D004',
-    name: 'Sunrise Organics',
-    rating: 3.9,
-    reviews: 45,
-    distance: '5.0 km',
-    isVerified: false,
-    isTrusted: false,
-    slots: ['Morning Only'],
-    image: 'https://images.unsplash.com/photo-1635843104646-c225010041d1?auto=format&fit=crop&q=80&w=400',
-    address: 'Viman Nagar, Pune',
-    minPrice: 70
-  },
-  {
-    id: 'D005',
-    name: 'Happy Cow Milk',
-    rating: 4.9,
-    reviews: 530,
-    distance: '2.1 km',
-    isVerified: true,
-    isTrusted: true,
-    slots: ['Morning', 'Evening'],
-    image: 'https://images.unsplash.com/photo-1546445317-29f4545e9d53?auto=format&fit=crop&q=80&w=400',
-    address: 'Kalyani Nagar, Pune',
-    minPrice: 65
-  },
-  {
-    id: 'D006',
-    name: 'Local Fresh',
-    rating: 4.0,
-    reviews: 20,
-    distance: '0.5 km',
-    isVerified: false,
-    isTrusted: false,
-    slots: ['Morning'],
-    image: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&q=80&w=400',
-    address: 'Shivajinagar, Pune',
-    minPrice: 50
-  }
+import { fetchPublicDairies } from "../../api/public.api.js";
+import { fetchCustomerSubscription } from "../../api/customer.api.js";
+import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
+import LocationSelector from "../../components/dairy/LocationSelector.jsx";
+
+const CITY_OPTIONS = [
+  "Kolkata",
+  "Bardhaman",
+  "Durgapur",
+  "Asansol",
+  "Siliguri",
 ];
 
 const ExploreDairiesPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dairies, _setDairies] = useState(MOCK_DAIRIES);
 
-  // Simple Filter Logic (Name or Address)
-  const filteredDairies = dairies.filter(dairy => 
-    dairy.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    dairy.address.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Core Data States
+  const [dairies, setDairies] = useState([]);
+  const [activeSubData, setActiveSubData] = useState(null);
 
-  const isLoggedIn = Boolean(user?.token || user?.role || localStorage.getItem("user"));
+  // UI & Filter States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCity, setSelectedCity] = useState("");
+  const [detectedLocation, setDetectedLocation] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [showLocation, setShowLocation] = useState(false);
+
+  // ---------- GPS HELPER ----------
+  const getLiveLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) reject("Geolocation not supported");
+      navigator.geolocation.getCurrentPosition(
+        (pos) =>
+          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => reject("Location denied"),
+        { timeout: 10000 },
+      );
+    });
+  };
+
+  // ---------- CENTRAL FETCH LOGIC ----------
+  const loadDairiesList = useCallback(async (params = {}) => {
+    try {
+      setLoading(true);
+      const res = await fetchPublicDairies({
+        radius: 150, // Changed from 20 to 150 for testing/broad discovery
+        ...params,
+      });
+      console.log("API RESPONSE:", res);
+      setDairies(res?.dairies || []);
+      setLoadError("");
+    } catch (err) {
+      console.error("Failed to fetch dairies:", err);
+      setDairies([]);
+      setLoadError("FETCH_ERROR");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ---------- INITIAL LOAD (NEARBY) ----------
+  useEffect(() => {
+    const initNearby = async () => {
+      try {
+        const coords = await getLiveLocation();
+        setDetectedLocation("Nearby");
+        await loadDairiesList({ lat: coords.lat, lng: coords.lng });
+      } catch (err) {
+        setLoadError("LOCATION_OFF");
+        setLoading(false);
+      }
+    };
+    initNearby();
+  }, [loadDairiesList]);
+
+  // ---------- GLOBAL SEARCH (DEBOUNCED) ----------
+  useEffect(() => {
+    if (!searchTerm.trim()) return;
+
+    const delay = setTimeout(() => {
+      setSelectedCity(""); // Clear city shortcut if user starts typing
+      loadDairiesList({ search: searchTerm });
+    }, 500);
+
+    return () => clearTimeout(delay);
+  }, [searchTerm, loadDairiesList]);
+
+  // ---------- CITY SHORTCUTS ----------
+  const handleCityClick = (city) => {
+    setSearchTerm("");
+    setSelectedCity(city);
+    setDetectedLocation(city);
+    loadDairiesList({ city });
+  };
+
+  // ---------- SUBSCRIPTION CHECK ----------
+  const isLoggedIn = Boolean(user?.token || localStorage.getItem("user"));
+  const isCustomer =
+    isLoggedIn &&
+    (user?.role || localStorage.getItem("userRole")) === "CUSTOMER";
+
+  useEffect(() => {
+    if (isCustomer) {
+      fetchCustomerSubscription()
+        .then((data) => {
+          if (data?.subscription?.status !== "CLOSED") {
+            setActiveSubData(data.subscription);
+          }
+        })
+        .catch(() => setActiveSubData(null));
+    }
+  }, [isCustomer]);
+
+  // ---------- DATA MAPPING ----------
+  const mappedDairies = useMemo(() => {
+    return dairies
+      .map((d) => ({
+        id: d.id,
+        name: d.dairy_name || "Dairy",
+        distance:
+          typeof d.distance === "number" ? `${d.distance.toFixed(1)} km` : "—",
+        image: d.image_url || "",
+        address: d.address || d.city || "",
+        minPrice: d.min_price ?? 50,
+        isSubscribed: activeSubData?.dairy_id === d.id,
+      }))
+      .sort((a, b) =>
+        a.isSubscribed === b.isSubscribed ? 0 : a.isSubscribed ? -1 : 1,
+      );
+  }, [dairies, activeSubData]);
 
   const handleAuthAction = () => {
-    if (isLoggedIn) {
-      logout();
-      navigate("/", { replace: true });
-      return;
-    }
-    navigate("/");
+    if (isCustomer) return navigate("/customer/dashboard");
+    isLoggedIn ? (logout(), navigate("/", { replace: true })) : navigate("/");
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
-      
-      {/* --- HEADER (Full Width) --- */}
+      {/* HEADER */}
       <header className="bg-white sticky top-0 z-20 shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-             
-             {/* Logo & Location */}
-             <div className="flex items-center justify-between md:justify-start gap-6">
-                <div onClick={() => navigate('/')} className="cursor-pointer font-bold text-2xl text-blue-600 tracking-tight flex items-center gap-2">
-                   DairyStream
-                </div>
-                
-                {/* Location Picker */}
-                <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-full cursor-pointer transition">
-                   <MapPin size={18} className="text-red-500" />
-                   <div className="text-sm">
-                      <span className="text-gray-500">Delivering to</span>
-                      <span className="font-bold text-gray-800 ml-1">Kothrud, Pune</span>
-                   </div>
-                   <ChevronDown size={16} className="text-gray-400"/>
-                </div>
-             </div>
+            <div className="flex items-center gap-6">
+              <div
+                className="font-bold text-2xl text-blue-600 cursor-pointer"
+                onClick={() => navigate("/")}
+              >
+                DairyStream
+              </div>
 
-             {/* Search Bar (Wide) */}
-             <div className="flex-1 max-w-2xl relative">
-                <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
-                <input 
-                  type="text" 
-                  placeholder="Search for dairies, milk, paneer..." 
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition shadow-sm"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-             </div>
-
-             {/* Login Button */}
-             <div className="hidden md:block">
-                <button onClick={handleAuthAction} className="flex items-center gap-2 font-semibold text-gray-700 hover:text-blue-600 transition">
-                   {isLoggedIn ? <LogOut size={20} /> : <User size={20} />}
-                   {isLoggedIn ? "Logout" : "Login"}
+              <div className="relative">
+                <button
+                  onClick={() => setShowLocation(!showLocation)}
+                  className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full hover:bg-gray-200 transition-colors"
+                >
+                  <MapPin size={18} className="text-red-500" />
+                  <span className="text-sm">
+                    Delivering to{" "}
+                    <b>
+                      {selectedCity ||
+                        (detectedLocation === "Nearby"
+                          ? "Your Current Location"
+                          : detectedLocation) ||
+                        "Your area"}
+                    </b>
+                  </span>
                 </button>
-             </div>
-          </div>
 
-          {/* Filters Row */}
-          <div className="flex gap-3 overflow-x-auto pb-1 mt-4 no-scrollbar">
-             <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-semibold hover:border-gray-300 transition shadow-sm">
-                <Filter size={14}/> Filters
-             </button>
-             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
-                Verified Partners
-             </button>
-             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
-                Rating 4.0+
-             </button>
-             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
-                Morning Delivery
-             </button>
-             <button className="px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium hover:border-blue-500 hover:text-blue-600 transition shadow-sm whitespace-nowrap">
-                Within 2 km
-             </button>
+                {showLocation && (
+                  <div className="absolute top-12 left-0 z-50">
+                    <LocationSelector
+                      // Inside LocationSelector onApply or City Shortcut handler
+                      onApply={(data) => {
+                        setShowLocation(false);
+                        setSearchTerm("");
+                        setSelectedCity(data.city || "");
+                        setDetectedLocation(""); // Clear 'Nearby' so the label shows the city name
+                        loadDairiesList({
+                          city: data.city,
+                          pincode: data.pincode,
+                          radius: data.radius,
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SEARCH INPUT */}
+            <div className="flex-1 max-w-2xl relative">
+              <Search
+                className="absolute left-4 top-3.5 text-gray-400"
+                size={20}
+              />
+              <input
+                type="text"
+                placeholder="Search dairies by name or area..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleAuthAction}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all ${
+                  isCustomer
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                {isCustomer ? (
+                  <LayoutDashboard size={18} />
+                ) : isLoggedIn ? (
+                  <LogOut size={20} />
+                ) : (
+                  <User size={20} />
+                )}
+                {isCustomer ? "Dashboard" : isLoggedIn ? "Logout" : "Login"}
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* --- CONTENT GRID --- */}
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-         <h2 className="text-xl font-bold text-gray-900 mb-6">Nearby Dairies</h2>
-         
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredDairies.map((dairy) => (
-               <div 
-                  key={dairy.id} 
-                  className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group"
-                  onClick={() => navigate(`/join/${dairy.id}`)}
-               >
-                  {/* Image Area */}
-                  <div className="relative h-48 overflow-hidden">
-                     <img 
-                        src={dairy.image} 
-                        alt={dairy.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                     />
-                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-gray-800 shadow-sm flex items-center gap-1">
-                        <Clock size={12}/> {dairy.distance}
-                     </div>
-                     {dairy.isVerified && (
-                        <div className="absolute bottom-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 shadow-md">
-                           <ShieldCheck size={10}/> Verified
-                        </div>
-                     )}
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+        {/* CITY QUICK LINKS */}
+        <div className="flex gap-3 mb-8 overflow-x-auto pb-2 no-scrollbar">
+          {CITY_OPTIONS.map((city) => (
+            <button
+              key={city}
+              onClick={() => handleCityClick(city)}
+              className={`px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
+                selectedCity === city
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-white border border-gray-200 text-gray-600 hover:border-blue-300"
+              }`}
+            >
+              {city}
+            </button>
+          ))}
+        </div>
+
+        {/* LOADING & ERRORS */}
+        {loading ? (
+          <LoadingIndicator className="py-20" />
+        ) : loadError === "LOCATION_OFF" && !searchTerm && !selectedCity ? (
+          <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-300">
+            <MapPin size={48} className="mx-auto text-gray-300 mb-4" />
+            <h2 className="text-xl font-bold text-gray-800">
+              Location is turned off
+            </h2>
+            <p className="text-gray-500 mt-2">
+              Search for a city above or enable GPS to find dairies near you.
+            </p>
+          </div>
+        ) : mappedDairies.length === 0 ? (
+          <div className="text-center py-20">
+            <h3 className="text-xl font-bold text-gray-800">
+              No dairies found here 🚚
+            </h3>
+            <p className="text-gray-500 mt-2">
+              Try adjusting your search or radius.
+            </p>
+          </div>
+        ) : (
+          /* DAIRY GRID */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {mappedDairies.map((dairy) => (
+              <div
+                key={dairy.id}
+                onClick={() => navigate(`/join/${dairy.id}`)}
+                className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl transition-all cursor-pointer overflow-hidden"
+              >
+                <div className="relative h-48 bg-gray-200">
+                  {dairy.image ? (
+                    <img
+                      src={dairy.image}
+                      alt={dairy.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold uppercase tracking-widest text-xs">
+                      No Image
+                    </div>
+                  )}
+                  {dairy.isSubscribed && (
+                    <div className="absolute top-3 left-3 bg-green-500 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                      My Subscription
+                    </div>
+                  )}
+                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-gray-700">
+                    <Clock size={12} className="inline mr-1 text-blue-500" />
+                    {dairy.distance}
                   </div>
-                  
-                  {/* Content Area */}
-                  <div className="p-4">
-                     <div className="flex justify-between items-start mb-1">
-                        <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600 transition">{dairy.name}</h3>
-                        <div className="flex items-center gap-1 bg-green-100 px-1.5 py-0.5 rounded text-xs font-bold text-green-700">
-                           {dairy.rating} <Star size={10} fill="currentColor"/>
-                        </div>
-                     </div>
-                     
-                     <p className="text-sm text-gray-500 mb-3">{dairy.address}</p>
-                     
-                     <div className="flex items-center gap-2 mb-4">
-                        {dairy.isTrusted && (
-                           <span className="text-[10px] bg-yellow-50 text-yellow-700 px-2 py-1 rounded-md border border-yellow-100 font-medium flex items-center gap-1">
-                              <Star size={10}/> Trusted
-                           </span>
-                        )}
-                        <span className="text-[10px] bg-gray-50 text-gray-600 px-2 py-1 rounded-md border border-gray-100 font-medium">
-                           {dairy.slots.length} Slots Available
+                </div>
+
+                <div className="p-5">
+                  <h3 className="font-bold text-lg text-gray-900 mb-1 truncate">
+                    {dairy.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4 flex items-start gap-1">
+                    <MapPin size={14} className="mt-0.5 shrink-0" />
+                    <span className="line-clamp-1">{dairy.address}</span>
+                  </p>
+
+                  <div className="pt-4 border-t flex justify-between items-end">
+                    <div>
+                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
+                        Starts at
+                      </span>
+                      <p className="font-bold text-lg text-gray-900">
+                        ₹{dairy.minPrice}
+                        <span className="text-sm font-normal text-gray-500">
+                          /L
                         </span>
-                     </div>
-
-                     <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                        <div>
-                           <span className="text-xs text-gray-400">Starts at</span>
-                           <p className="font-bold text-gray-900">₹{dairy.minPrice}<span className="text-xs font-normal text-gray-500">/L</span></p>
-                        </div>
-                        <button className="bg-blue-50 text-blue-600 p-2 rounded-full hover:bg-blue-600 hover:text-white transition">
-                           <Truck size={20} />
-                        </button>
-                     </div>
+                      </p>
+                    </div>
+                    <button className="bg-blue-50 text-blue-600 px-5 py-2 rounded-xl text-xs font-bold group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      View Menu
+                    </button>
                   </div>
-               </div>
+                </div>
+              </div>
             ))}
-         </div>
-
-         {/* Empty State (if search fails) */}
-         {filteredDairies.length === 0 && (
-            <div className="text-center py-20">
-               <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search size={30} className="text-gray-400"/>
-               </div>
-               <h3 className="text-lg font-bold text-gray-900">No dairies found</h3>
-               <p className="text-gray-500">Try searching for a different area or name.</p>
-            </div>
-         )}
-      </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };

@@ -2,119 +2,26 @@ import React, { useState, useEffect } from 'react';
 import AgentLayout from '../../components/agent/AgentLayout';
 import DeliveryDetailsModal from '../../components/agent/DeliveryDetailsModal';
 import { Calendar, CheckCircle, XCircle, Clock, Search, ChevronDown, ChevronUp, Package } from 'lucide-react';
-
-// Mock data - replace with API
-const MOCK_HISTORY = [
-  {
-    date: '2025-01-28',
-    deliveries: [
-      {
-        id: 'D001',
-        customerName: 'Ramesh Patil',
-        milkQuantity: '2L',
-        address: 'Shop 5, Narhe',
-        phone: '+91 98765 43210',
-        status: 'completed',
-        completedAt: '08:15 AM',
-        dairyName: 'Gokul Dairy Farm',
-      },
-      {
-        id: 'D002',
-        customerName: 'Sunita Sharma',
-        milkQuantity: '1L',
-        address: 'Building A, Ambegaon',
-        phone: '+91 98765 43211',
-        status: 'completed',
-        completedAt: '08:45 AM',
-        dairyName: 'Gokul Dairy Farm',
-      },
-      {
-        id: 'D003',
-        customerName: 'Prakash Desai',
-        milkQuantity: '3L',
-        address: 'House 12, Dhayari',
-        phone: '+91 98765 43212',
-        status: 'failed',
-        completedAt: '09:30 AM',
-        dairyName: 'Gokul Dairy Farm',
-        failedReason: 'Customer not available',
-        failedImage: null,
-      },
-    ],
-  },
-  {
-    date: '2025-01-27',
-    deliveries: [
-      {
-        id: 'D004',
-        customerName: 'Anjali Kulkarni',
-        milkQuantity: '2L',
-        address: 'Shop 8, Kothrud',
-        phone: '+91 98765 43213',
-        status: 'completed',
-        completedAt: '07:30 AM',
-        dairyName: 'Gokul Dairy Farm',
-      },
-      {
-        id: 'D005',
-        customerName: 'Rohit Yadav',
-        milkQuantity: '1.5L',
-        address: 'Building C, Karve Nagar',
-        phone: '+91 98765 43214',
-        status: 'completed',
-        completedAt: '08:00 AM',
-        dairyName: 'Gokul Dairy Farm',
-      },
-    ],
-  },
-  {
-    date: '2025-01-26',
-    deliveries: [
-      {
-        id: 'D006',
-        customerName: 'Kavita Joshi',
-        milkQuantity: '2.5L',
-        address: 'House 15, Narhe',
-        phone: '+91 98765 43215',
-        status: 'completed',
-        completedAt: '08:20 AM',
-        dairyName: 'Gokul Dairy Farm',
-      },
-      {
-        id: 'D007',
-        customerName: 'Suresh Pawar',
-        milkQuantity: '1L',
-        address: 'Shop 3, Ambegaon',
-        phone: '+91 98765 43216',
-        status: 'failed',
-        completedAt: '09:00 AM',
-        dairyName: 'Gokul Dairy Farm',
-        failedReason: 'Wrong address',
-        failedImage: null,
-      },
-      {
-        id: 'D008',
-        customerName: 'Meena Patel',
-        milkQuantity: '2L',
-        address: 'Building D, Dhayari',
-        phone: '+91 98765 43217',
-        status: 'completed',
-        completedAt: '09:45 AM',
-        dairyName: 'Gokul Dairy Farm',
-      },
-    ],
-  },
-];
+import { fetchAgentDeliveryHistory } from "../../api/agent.api";
 
 const AgentHistory = () => {
-  const [history, setHistory] = useState(MOCK_HISTORY);
+  const [history, setHistory] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedDates, setExpandedDates] = useState([MOCK_HISTORY[0]?.date]); // First date expanded by default
+  const [expandedDates, setExpandedDates] = useState([]);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
 
   useEffect(() => {
-    // TODO: Fetch delivery history from API
-    // fetchDeliveryHistory().then(setHistory);
+    const loadHistory = async () => {
+      try {
+        const payload = await fetchAgentDeliveryHistory();
+        setHistory(payload || []);
+        setExpandedDates(payload?.[0]?.date ? [payload[0].date] : []);
+      } catch (_err) {
+        setHistory([]);
+        setExpandedDates([]);
+      }
+    };
+    loadHistory();
   }, []);
 
   const toggleDateExpanded = (date) => {

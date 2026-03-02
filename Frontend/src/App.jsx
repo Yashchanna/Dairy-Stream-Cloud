@@ -1,104 +1,206 @@
 import React from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
+
+// --- Components ---
 import ProtectedRoute from "./pages/ProtectedRoute";
-import AddNewCustomerForm from "./pages/admin/AddNewCustomerForm";
-import AddNewAgentForm from "./pages/admin/AddNewAgentForm";
-import DairyCustomerDashboard from "./pages/customer/DairyCustomerDashboard";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AgentDashboard from "./pages/agent/agentDashboard";
-import AgentWorkingPage from "./pages/agent/AgentWorkingPage";
-import AgentProfile from "./pages/agent/AgentProfile";
-import AgentHistory from "./pages/agent/AgentHistory";
 import LoginPage from "./pages/LoginPage";
 import RegisterNewuserPage from "./pages/RegisterNewuserPage";
 import RegisterDairyPage from "./pages/RegisterDairyPage";
 import ExploreDairiesPage from "./pages/public/ExploreDairiesPage";
 import DairyDetailsPage from "./pages/public/DairyDetailsPage";
+import BuyOncePage from "./pages/public/BuyOncePage.jsx";
+
+// --- Customer Pages ---
 import CustomerDashboard from "./pages/customer/CustomerDashboard";
-import Deliveries from "./pages/customer/Deliveries";
-import Subscription from "./pages/customer/Subscription";
-import Payments from "./pages/customer/Payments";
-import Profile from "./pages/customer/Profile";
+import Deliveries from "./pages/customer/CustomerDeliveryHistory.jsx";
+import Subscription from "./pages/customer/CustomerSubscription.jsx";
+import Payments from "./pages/customer/CustomerPayments.jsx";
+import Profile from "./pages/customer/CustomerProfile.jsx";
+
+// --- Admin Pages ---
+import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCustomers from "./pages/admin/AdminCustomers";
+// ⚠️ Ensure these files exist, even if empty placeholders for now:
+import AdminAgents from "./pages/admin/AdminAgents.jsx"; 
+import AdminDeliveries from "./pages/admin/AdminDeliveries"; 
+import AdminPayments from "./pages/admin/AdminPayments"; 
+import AdminProducts from "./pages/admin/AdminProducts.jsx";
+
+// --- Agent Pages ---
+import AgentDashboard from "./pages/agent/agentDashboard.jsx";
+import AgentHistory from "./pages/agent/AgentHistory.jsx";
+import AgentProfile from "./pages/agent/AgentProfile.jsx";
+import AgentWorkingPage from "./pages/agent/AgentWorkingPage.jsx";
+import ThemeToggleButton from "./components/common/ThemeToggleButton.jsx";
+import TrackAgent from "./pages/customer/TrackAgent.jsx";
+
+
 
 function App() {
   return (
+    <>
+    <ThemeToggleButton />
     <Routes>
-      {/* Root/Login Route */}
+      {/* ==============================
+          🔓 PUBLIC ROUTES
+      ============================== */}
       <Route path="/" element={<LoginPage />} />
-
-      {/* Public Routes */}
       <Route path="/explore" element={<ExploreDairiesPage />} />
       <Route path="/join/:id" element={<DairyDetailsPage />} />
+      <Route path="/buy-once/:id" element={<BuyOncePage />} />
+      <Route path="/customer/register" element={<RegisterNewuserPage />} />
+      <Route path="/register-dairy" element={<RegisterDairyPage />} />
 
-      {/* Customer Routes - Unprotected for development */}
-      <Route path="/customer-dashboard" element={<CustomerDashboard />} />
-      <Route path="/customer/deliveries" element={<Deliveries />} />
-      <Route path="/customer/subscriptions" element={<Subscription />} />
-      <Route path="/customer/payments" element={<Payments />} />
-      <Route path="/customer/profile" element={<Profile />} />
 
-      {/* Agent Routes - Unprotected for development */}
-      <Route path="/agent/dashboard" element={<AgentDashboard />} />
+      {/* ==============================
+          👤 CUSTOMER ROUTES (Protected)
+      ============================== */}
+      <Route
+        path="/customer/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <CustomerDashboard />
+          </ProtectedRoute>
+        }
+      />
+       
+      <Route
+        path="/customer/dashboard/deliveries"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <Deliveries />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/dashboard/subscriptions"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <Subscription />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/dashboard/payments"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <Payments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/dashboard/track/agent"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <TrackAgent />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/dashboard/profile"
+        element={
+          <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
+
+
+      {/* ==============================
+          🛡️ ADMIN ROUTES (Protected)
+      ============================== */}
+      {/* Dashboard */}
+      <Route
+        path="/admin/AdminDashboard"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Customers Section */}
+      <Route
+        path="/admin/customers"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminCustomers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/addCustomer"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <Navigate to="/admin/customers?addCustomer=1" replace />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Agents Section (This was missing!) */}
+      <Route
+        path="/admin/agents"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminAgents /> 
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/addagent"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <Navigate to="/admin/agents?addAgent=1" replace />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Deliveries Section (This was missing!) */}
+      <Route
+        path="/admin/deliveries"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminDeliveries />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Payments Section (This was missing!) */}
+      <Route
+        path="/admin/payments"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminPayments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/products"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminProducts />
+          </ProtectedRoute>
+        }
+      />
+
+
+      {/* ==============================
+          🚚 AGENT ROUTES (Protected)
+      ============================== */}
+        <Route path="/agent/dashboard" element={<AgentDashboard />} />
       <Route path="/agent/working" element={<AgentWorkingPage />} />
       <Route path="/agent/profile" element={<AgentProfile />} />
       <Route path="/agent/history" element={<AgentHistory />} />
 
-      {/* Admin Routes - Unprotected for development */}
-      <Route path="/admin/customers" element={<AdminCustomers />} />
-      <Route path="/admin/AdminDashboard" element={<AdminDashboard />} />
-      <Route path="/admin/addCustomer" element={<AddNewCustomerForm />} />
-      <Route path="/admin/addAgent" element={<AddNewAgentForm />} />
 
-      {/* Other Routes */}
-      <Route path="/customer/register" element={<RegisterNewuserPage />} />
-      <Route path="/customerDashbord" element={<DairyCustomerDashboard />} />
-      <Route path="/register-dairy" element={<RegisterDairyPage />} />
-
-      <Route
-        path="*"
-        element={<h2 className="text-center mt-5">404 - Page Not Found</h2>}
-      ></Route>
+      {/* ==============================
+          ⛔ 404 CATCH-ALL
+      ============================== */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
+
 export default App;
-
-///this is uncommnet after we complete the whole app, so that we can use the protected route and give a smooth exp for the user also prevent clicking the wrong url
-
-// import React from 'react';
-// import { Route, Routes } from 'react-router-dom';
-
-// // Import Components
-// import ProtectedRoute from './pages/ProtectedRoute'; // <--- Imported
-// import PublicRoute from './pages/PublicRoute';       // <--- Imported
-// import LoginPage from './pages/LoginPage';
-// import CustomerDashboard from './pages/customer/CustomerDashboard';
-// // ... other imports ...
-
-// function App() {
-//   return (
-//     <Routes>
-
-//       {/* Public: Login Page */}
-//       <Route path="/" element={
-//         <PublicRoute>
-//           <LoginPage />
-//         </PublicRoute>
-//       } />
-
-//       {/* Protected: Customer Dashboard */}
-//       <Route path="/customer-dashboard" element={
-//         <ProtectedRoute allowedRoles={['CUSTOMER']}>
-//           <CustomerDashboard />
-//         </ProtectedRoute>
-//       } />
-
-//       {/* ... other routes ... */}
-
-//     </Routes>
-//   );
-// }
-
-// export default App;

@@ -1,0 +1,574 @@
+import React, { useEffect, useState } from 'react';
+import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
+import { Droplet, Clock, Edit, PauseCircle, PlayCircle, Store, X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  fetchCustomerSubscription,
+  saveCustomerSubscription,
+  clearCustomerSubscription,
+} from '../../api/customer.api';
+import LoadingIndicator from '../../components/common/LoadingIndicator.jsx';
+
+/* ======================================================
+   HELPERS & CONSTANTS
+====================================================== */
+const EMPTY_FORM = {
+  dairyId: null,
+  product: 'Buffalo Milk',
+  quantity: 1,
+  slot: 'Morning',
+  timeRange: '6:00 - 8:00 AM',
+  status: 'ACTIVE',
+  approvalStatus: 'PENDING',
+  assignedAgentId: null,
+  startDate: '',
+  address: '',
+  paymentMethod: 'UPI',
+};
+
+// ✅ UI Mapper
+const toUiSubscription = (record) => {
+  if (!record) return null;
+  const slot = record.delivery_slot || 'Morning';
+  return {
+    dairyId: record.dairy_id ?? null,
+    product: record.milk_type || 'Milk',
+    quantity: Number(record.quantity_liters || 0),
+    slot,
+    timeRange: slot === 'Evening' ? '5:00 - 8:00 PM' : '6:00 - 8:00 AM',
+    status: (record.status || 'ACTIVE').toUpperCase(),
+    approvalStatus: (record.approval_status || 'PENDING').toUpperCase(),
+    assignedAgentId: record.assigned_agent_id ?? null,
+    startDate: record.start_date || '',
+    address: record.address || '',
+    paymentMethod: record.payment_method || 'UPI',
+  };
+};
+
+// ✅ Payload Mapper
+const toSavePayload = (model, overrides = {}) => {
+  const next = { ...model, ...overrides };
+  return {
+    dairyId: next.dairyId,
+    milkType: next.product,
+    quantity: Number(next.quantity),
+    slot: next.slot,
+    startDate: next.startDate || undefined,
+    address: next.address || '',
+    paymentMethod: next.paymentMethod || 'UPI',
+    status: (next.status || 'ACTIVE').toUpperCase(),
+    approvalStatus: (next.approvalStatus || 'PENDING').toUpperCase(),
+  };
+};
+
+/* ======================================================
+   MAIN COMPONENT
+====================================================== */
+const Subscribe = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [subscription, setSubscription] = useState(null);
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
+  const [toast, setToast] = useState(null);
+  const [closing, setClosing] = useState(false);
+
+  const locationGuestDairyId = location.state?.guestDairyId ?? null;
+  const locationGuestDairyName = location.state?.guestDairyName ?? "";
+  const guestDairyId =
+    locationGuestDairyId != null
+      ? String(locationGuestDairyId)
+      : localStorage.getItem("guest_dairy_id");
+  const guestDairyName =
+    locationGuestDairyName || localStorage.getItem("guest_dairy_name") || "";
+  const hasActivePlan =
+    !!subscription && String(subscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+  const isApprovalPending =
+    hasActivePlan && String(subscription?.approvalStatus || "PENDING").toUpperCase() === "PENDING";
+  const isPartnerAssignmentPending =
+    hasActivePlan &&
+    String(subscription?.approvalStatus || "PENDING").toUpperCase() === "APPROVED" &&
+    !subscription?.assignedAgentId;
+  const isApprovedSubscription =
+    hasActivePlan && String(subscription?.approvalStatus || "PENDING").toUpperCase() === "APPROVED";
+  const canTogglePauseResume =
+    hasActivePlan &&
+    isApprovedSubscription &&
+    Boolean(subscription?.assignedAgentId) &&
+    !saving;
+
+  // -----------------------------------------
+  // 1. Initial Data Fetch
+  // -----------------------------------------
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // ✅ Token is handled by client.js Interceptor automatically
+        const data = await fetchCustomerSubscription();
+        const mapped = toUiSubscription(data?.subscription);
+
+        setSubscription(mapped);
+        setFormData(mapped || EMPTY_FORM);
+      } catch (error) {
+        console.error('Subscription fetch error:', error.message);
+        setSubscription(null);
+        setFormData(EMPTY_FORM);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // -----------------------------------------
+  // 2. Dashboard Redirect Logic
+  // -----------------------------------------
+  useEffect(() => {
+    const shouldOpenUpdateFromDashboard =
+      Boolean(location.state?.openUpdateModal) && location.state?.editMode === "next-day-delivery";
+
+    if (!shouldOpenUpdateFromDashboard || loading) return;
+
+    if (subscription) {
+      setShowUpdateModal(true);
+    } else {
+      showToastMessage('error', 'No active subscription found');
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, loading, subscription, navigate, location.pathname]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (hasActivePlan) {
+      localStorage.removeItem("guest_dairy_id");
+      localStorage.removeItem("guest_dairy_name");
+    }
+  }, [loading, hasActivePlan]);
+
+  const showToastMessage = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // -----------------------------------------
+  // 3. Update Plan Logic
+  // -----------------------------------------
+  const updatePlan = async () => {
+    if (!subscription?.dairyId) {
+      showToastMessage('error', 'No active subscription found');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // ✅ FIX: Removed token argument. Passing ONLY the payload.
+      const result = await saveCustomerSubscription(
+        toSavePayload(formData, {
+          dairyId: subscription.dairyId,
+          status: subscription.status,
+          startDate: subscription.startDate,
+          address: subscription.address,
+          paymentMethod: subscription.paymentMethod,
+        })
+      );
+
+      const mapped = toUiSubscription(result?.subscription);
+      setSubscription(mapped);
+      setFormData(mapped || EMPTY_FORM);
+      setShowUpdateModal(false);
+      showToastMessage('success', 'Subscription updated successfully');
+    } catch (err) {
+      showToastMessage('error', err?.message || 'Failed to update subscription');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // -----------------------------------------
+  // 4. Pause / Resume Logic
+  // -----------------------------------------
+  const updateStatus = async (status) => {
+    if (!subscription?.dairyId) {
+      showToastMessage('error', 'No active subscription found');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // ✅ FIX: Removed token argument.
+      const result = await saveCustomerSubscription(
+        toSavePayload(subscription, { status })
+      );
+
+      const mapped = toUiSubscription(result?.subscription);
+      setSubscription(mapped);
+      setFormData(mapped || EMPTY_FORM);
+      showToastMessage('success', status === 'PAUSED' ? 'Subscription paused' : 'Subscription resumed');
+    } catch (err) {
+      showToastMessage('error', err?.message || 'Failed to update status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pause = () => updateStatus('PAUSED');
+  const resume = () => updateStatus('ACTIVE');
+
+  // -----------------------------------------
+  // 5. Cancel Subscription Logic
+  // -----------------------------------------
+  const cancelSubscription = async () => {
+    setClosing(true);
+    try {
+      // ✅ FIX: Removed token argument.
+      await clearCustomerSubscription();
+      setShowCancelModal(false);
+      setSubscription(null);
+      setFormData(EMPTY_FORM);
+      showToastMessage('success', 'Subscription removed successfully');
+      setTimeout(() => navigate('/explore', { state: { from: 'customer-subscriptions' } }), 900);
+    } catch (err) {
+      showToastMessage('error', err?.message || 'Failed to close subscription');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  return (
+    <CustomerLayout>
+      <div className="space-y-10 w-full animate-in fade-in slide-in-from-bottom-4">
+        <h2 className="text-2xl font-bold text-gray-900">My Subscription</h2>
+
+        {loading ? (
+          <div className="space-y-6">
+            <LoadingIndicator className="py-6" message="Loading subscription..." />
+            <div className="space-y-6 animate-pulse">
+              <div className="h-32 bg-gray-200 rounded-2xl"></div>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="h-24 bg-gray-200 rounded-2xl"></div>
+                <div className="h-24 bg-gray-200 rounded-2xl"></div>
+                <div className="h-24 bg-gray-200 rounded-2xl"></div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Status Card */}
+            <div
+              className={`w-full rounded-2xl p-8 shadow-sm border transition hover:shadow-md ${
+                !subscription
+                  ? 'bg-gray-50 border-gray-200'
+                  : subscription.status === 'ACTIVE'
+                  ? 'bg-green-50 border-green-100'
+                  : subscription.status === 'PAUSED'
+                  ? 'bg-yellow-50 border-yellow-100'
+                  : 'bg-red-50 border-red-100'
+              }`}
+            >
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-6">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500">
+                    {hasActivePlan ? `${subscription.status} PLAN` : 'NO ACTIVE PLAN'}
+                  </p>
+                  <h3 className="text-2xl font-semibold text-gray-900 mt-1">
+                    {hasActivePlan ? `${subscription.quantity} Liters ${subscription.product}` : 'No subscription yet'}
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {hasActivePlan
+                      ? `${subscription.slot} Slot - ${subscription.timeRange}`
+                      : guestDairyId
+                      ? `You can start subscription directly with ${guestDairyName || `Dairy #${guestDairyId}`}.`
+                      : 'Choose a dairy and create your plan from See Other Dairies'}
+                  </p>
+                  {hasActivePlan && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {isApprovalPending && (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                          Subscription approval pending
+                        </span>
+                      )}
+                      {isPartnerAssignmentPending && (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                          Delivery partner assignment pending
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {hasActivePlan ? (
+                  <div className="flex gap-3 flex-wrap">
+                    <button
+                      disabled={saving}
+                      onClick={() => setShowUpdateModal(true)}
+                      className="px-5 py-2 rounded-xl bg-white border text-blue-600 hover:bg-blue-50 flex items-center gap-2 text-sm font-medium disabled:opacity-50"
+                    >
+                      <Edit size={16} /> Update Plan
+                    </button>
+
+                    {subscription.status === 'ACTIVE' ? (
+                      <button
+                        disabled={!canTogglePauseResume}
+                        onClick={pause}
+                        className="px-5 py-2 rounded-xl bg-white border text-orange-600 hover:bg-orange-50 flex items-center gap-2 text-sm font-medium disabled:opacity-50"
+                      >
+                        <PauseCircle size={16} /> Pause
+                      </button>
+                    ) : (
+                      <button
+                        disabled={!canTogglePauseResume}
+                        onClick={resume}
+                        className="px-5 py-2 rounded-xl bg-white border text-green-600 hover:bg-green-50 flex items-center gap-2 text-sm font-medium disabled:opacity-50"
+                      >
+                        <PlayCircle size={16} /> Resume
+                      </button>
+                    )}
+
+                    <button
+                      disabled={saving}
+                      onClick={() => setShowCancelModal(true)}
+                      className="px-5 py-2 rounded-xl bg-white border text-red-600 hover:bg-red-50 text-sm font-medium disabled:opacity-50"
+                    >
+                      {isApprovedSubscription ? 'Close Subscription' : 'Cancel Subscription'}
+                    </button>
+                  </div>
+                ) : (
+                  guestDairyId ? (
+                    <button
+                      onClick={() =>
+                        navigate(`/join/${guestDairyId}`, {
+                          state: { openSubscriptionModal: true, from: 'customer-subscriptions' },
+                        })
+                      }
+                      className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium"
+                    >
+                      Take Subscription for {guestDairyName || `Dairy #${guestDairyId}`}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })}
+                      className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium"
+                    >
+                      See Other Dairies
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            {hasActivePlan && (
+              <div className="grid md:grid-cols-3 gap-6">
+                <StatCard icon={<Droplet size={24} />} label="Daily Quantity" value={`${subscription.quantity} Liters`} />
+                <StatCard icon={<Clock size={24} />} label="Delivery Slot" value={subscription.slot} />
+                <StatCard
+                  icon={subscription.status === 'ACTIVE' ? <PlayCircle size={24} /> : <PauseCircle size={24} />}
+                  label="Status"
+                  value={subscription.status}
+                />
+              </div>
+            )}
+
+            <ExploreOtherDairiesSection onExplore={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })} />
+          </>
+        )}
+      </div>
+
+      {/* Update Modal */}
+      {showUpdateModal && subscription && (
+        <ModalWrapper>
+          <ModalHeader
+            title="Update Subscription"
+            subtitle="Manage your milk delivery"
+            onClose={() => setShowUpdateModal(false)}
+          />
+          <div className="px-8 py-6 grid md:grid-cols-2 gap-5">
+            <InputBlock label="Product">
+              <select
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.product}
+                onChange={(e) => setFormData({ ...formData, product: e.target.value })}
+              >
+                <option>Buffalo Milk</option>
+                <option>Cow Milk</option>
+                <option>Full Cream</option>
+                <option>Toned</option>
+                <option>Double Toned</option>
+              </select>
+            </InputBlock>
+
+            <InputBlock label="Quantity (Liters)">
+              <input
+                type="number"
+                step="0.5"
+                min="0.5"
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.quantity}
+                onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+              />
+            </InputBlock>
+
+            <InputBlock label="Delivery Slot">
+              <select
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.slot}
+                onChange={(e) => setFormData({ ...formData, slot: e.target.value })}
+              >
+                <option>Morning</option>
+                <option>Evening</option>
+              </select>
+            </InputBlock>
+
+            <InputBlock label="Time Range">
+              <input
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.timeRange}
+                onChange={(e) => setFormData({ ...formData, timeRange: e.target.value })}
+              />
+            </InputBlock>
+          </div>
+          <ModalFooter
+            onCancel={() => setShowUpdateModal(false)}
+            onConfirm={updatePlan}
+            confirmText={saving ? 'Saving...' : 'Save Changes'}
+          />
+        </ModalWrapper>
+      )}
+
+      {/* Cancel Modal */}
+      {showCancelModal && (
+        <ModalWrapper small>
+          <div className="p-8">
+            <h3 className="text-2xl font-semibold text-gray-900">
+              {isApprovedSubscription ? 'Close Subscription?' : 'Cancel Subscription?'}
+            </h3>
+            <p className="text-gray-600 mt-3">
+              {isApprovedSubscription
+                ? 'Are you sure you want to close your subscription? This will stop deliveries immediately.'
+                : 'Are you sure you want to cancel your subscription? Your subscription is still pending approval, so cancelling will simply remove the pending request.'}
+            </p>
+            <div className="flex justify-end gap-4 mt-8">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="px-6 py-2 rounded-xl border hover:bg-gray-50"
+              >
+                Keep It
+              </button>
+              <button
+                onClick={cancelSubscription}
+                disabled={closing}
+                className="px-6 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 flex items-center gap-2 disabled:bg-red-400"
+              >
+                {closing && <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+                {closing
+                  ? (isApprovedSubscription ? 'Closing...' : 'Cancelling...')
+                  : (isApprovedSubscription ? 'Yes, Close Subscription' : 'Yes, Cancel Subscription')}
+              </button>
+            </div>
+          </div>
+        </ModalWrapper>
+      )}
+
+      {/* Custom Toast */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 animate-slide-in">
+          <div
+            className={`relative overflow-hidden rounded-2xl shadow-lg px-6 py-4 text-white min-w-[260px] ${
+              toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            }`}
+          >
+            <p className="font-medium">{toast.message}</p>
+          </div>
+        </div>
+      )}
+    </CustomerLayout>
+  );
+};
+
+export default Subscribe;
+
+/* ======================================================
+   SUB-COMPONENTS (Styling & Layout)
+====================================================== */
+
+const StatCard = ({ icon, label, value }) => (
+  <div className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition">
+    <div className="bg-blue-50 p-3 rounded-xl text-blue-600">{icon}</div>
+    <div>
+      <p className="text-xs text-gray-400 uppercase">{label}</p>
+      <p className="text-lg font-semibold text-gray-900">{value}</p>
+    </div>
+  </div>
+);
+
+const ExploreOtherDairiesSection = ({ onExplore }) => (
+  <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-cyan-50 p-6 md:p-7">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+      <div className="flex items-start gap-4">
+        <div className="p-3 rounded-xl bg-white text-blue-600 border border-blue-100">
+          <Store size={22} />
+        </div>
+        <div>
+          <h3 className="text-xl font-semibold text-gray-900">Explore Other Dairies</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Compare dairies, check plans, and switch to a better option anytime.
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onExplore}
+        className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+      >
+        Browse Dairies
+      </button>
+    </div>
+  </section>
+);
+
+const ModalWrapper = ({ children, small }) => (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
+    <div className={`bg-white rounded-3xl shadow-2xl w-full animate-in zoom-in-95 ${small ? 'max-w-md' : 'max-w-xl'}`}>
+      {children}
+    </div>
+  </div>
+);
+
+const ModalHeader = ({ title, subtitle, onClose }) => (
+  <div className="px-8 py-6 flex justify-between items-center border-b">
+    <div>
+      <h3 className="text-2xl font-semibold">{title}</h3>
+      <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+    </div>
+    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
+      <X size={22} className="text-gray-400" />
+    </button>
+  </div>
+);
+
+const ModalFooter = ({ onCancel, onConfirm, confirmText }) => (
+  <div className="px-8 py-6 border-t flex justify-end gap-4">
+    <button onClick={onCancel} className="px-6 py-2 rounded-xl border hover:bg-gray-50">
+      Cancel
+    </button>
+    <button onClick={onConfirm} className="px-8 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+      {confirmText}
+    </button>
+  </div>
+);
+
+const InputBlock = ({ label, children }) => (
+  <div className="space-y-1">
+    <label className="text-sm font-medium text-gray-600">{label}</label>
+    {children}
+  </div>
+);

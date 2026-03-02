@@ -1,14 +1,35 @@
 import express from "express";
 
+// ✅ UPDATED IMPORTS (From New Controller)
 import {
-  requestOtp,
-  verifyOtpLogin
-} from "../controllers/authentication/customer/auth.controller.js";
+  addCustomerAuth,
+  // loginCustomerAuth,
+  requestOtpAuth,
+  verifyOtpLoginAuth,
+} from "../controllers/authentication/customer/customerAuth.controller.js";
 
+// Existing Controllers...
 import {
   getProfile,
   updateProfile,
 } from "../controllers/customer/profile.controller.js";
+import { getDashboard } from "../controllers/customer/dashboard.controller.js";
+import {
+  cancelOneTimeOrder,
+  createOneTimeOrder,
+  getDeliveries,
+  reportIssue,
+} from "../controllers/customer/deliveries.controller.js";
+import {
+  createPaymentOrder,
+  getPayments,
+  verifyPayment,
+} from "../controllers/customer/payments.controller.js";
+import {
+  getSubscription,
+  saveSubscription,
+  clearSubscription,
+} from "../controllers/customer/subscription.controller.js";
 
 import {
   forgotPassword,
@@ -16,22 +37,21 @@ import {
 } from "../controllers/authentication/customer/password.controller.js";
 
 import { verifyEmail } from "../controllers/customer/verifyEmail.controller.js";
+import { uploadSingleImage } from "../middleware/upload.middleware.js";
 
-import { authenticate } from "../middleware/customer/auth.middleware.js";
+// Middleware
+import { authenticate } from "../middleware/cutomerAuthChecker.middleware.js";
 
 const router = express.Router();
 
 // ==========================================
-// 🔐 PUBLIC ROUTES
+// 🔐 PUBLIC ROUTES (Registration & specific auth)
 // ==========================================
+router.post("/addCustomer", addCustomerAuth);
 
-// OTP Login
-router.post("/login/otp", requestOtp);
-router.post("/login/otp/verify", verifyOtpLogin);
-
-// Account recovery
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password", resetPassword);
+// OTP Auth Flow
+router.post("/login/otp", requestOtpAuth);
+router.post("/login/otp/verify", verifyOtpLoginAuth);
 
 // Email verification
 router.get("/verify-email", verifyEmail);
@@ -41,6 +61,19 @@ router.get("/verify-email", verifyEmail);
 // ==========================================
 
 router.get("/profile", authenticate, getProfile);
-router.put("/profile", authenticate, updateProfile);
+router.put("/profile", authenticate, uploadSingleImage, updateProfile);
+
+router.get("/dashboard", authenticate, getDashboard);
+router.get("/deliveries", authenticate, getDeliveries);
+router.post("/deliveries/:id/issue", authenticate, reportIssue);
+router.post("/orders/one-time", authenticate, createOneTimeOrder);
+router.post("/orders/one-time/cancel", authenticate, cancelOneTimeOrder);
+router.get("/payments", authenticate, getPayments);
+router.post("/payments/order", authenticate, createPaymentOrder);
+router.post("/payments/verify", authenticate, verifyPayment);
+
+router.get("/subscription", authenticate, getSubscription);
+router.post("/subscription", authenticate, saveSubscription);
+router.delete("/subscription", authenticate, clearSubscription);
 
 export default router;

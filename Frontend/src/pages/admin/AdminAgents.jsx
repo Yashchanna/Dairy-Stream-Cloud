@@ -1,0 +1,255 @@
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { fetchAdminAgents } from "../../api/admin.api";
+
+// Layout Components
+import AdminSidebar from "../../components/admin/layout/AdminSidebar";
+import AdminMobileTopbar from "../../components/admin/layout/AdminMobileTopbar";
+import AgentDrawer from "../../components/agent/AgentDrawer.jsx"; 
+import AddAgentModal from "../../components/agent/AddAgentModal.jsx";
+import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
+
+export default function AdminAgents() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Data States
+  const [agents, setAgents] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Drawer State
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("addAgent") === "1") {
+      setIsAddModalOpen(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetchAdminAgents({ page, search });
+        
+        if (active) {
+          // ✅ FIX: Check for 'agents' because that is what your backend service returns
+          if (res.agents) {
+             setAgents(res.agents);
+             setTotal(res.total || 0);
+          } 
+          // Fallback: Check for 'data' (common pattern)
+          else if (res.data) {
+             setAgents(res.data);
+             setTotal(res.total || 0);
+          } 
+          // Fallback: Check if response itself is an array
+          else if (Array.isArray(res)) {
+             setAgents(res);
+             setTotal(res.length);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load agents", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => (active = false);
+  }, [page, search, refreshKey]);
+
+  const openAddModal = () => {
+    setIsAddModalOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.set("addAgent", "1");
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeAddModal = () => {
+    setIsAddModalOpen(false);
+    const next = new URLSearchParams(searchParams);
+    next.delete("addAgent");
+    setSearchParams(next, { replace: true });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Mobile Header */}
+      <AdminMobileTopbar
+        title="Delivery Agents"
+        onMenu={() => setSidebarOpen(true)}
+      />
+
+      {/* Sidebar */}
+      <AdminSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      <main className="lg:ml-64 px-4 sm:px-6 lg:px-10 py-8">
+        {/* Page Header */}
+        <div className="mb-8 flex justify-between items-end">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">
+              Delivery Agents
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Manage your delivery staff and route assignments
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            + Add Agent
+          </button>
+        </div>
+
+        {/* Main Canvas */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          
+          {/* Top Bar (Search & Total) */}
+          <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b">
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search agent name or phone..."
+              className="pro-input max-w-sm border-gray-300 rounded-lg p-2 border w-full"
+            />
+
+            <div className="text-sm text-gray-500">
+              Total Agents{" "}
+              <span className="font-medium text-gray-900">
+                {total}
+              </span>
+            </div>
+          </div>
+
+          {/* List Area */}
+          <div className="divide-y">
+            {loading ? (
+              <LoadingIndicator className="px-6 py-10" message="Loading agents..." />
+            ) : agents.length === 0 ? (
+              <div className="px-6 py-10 text-gray-500 text-center">
+                No delivery agents found.
+              </div>
+            ) : (
+              agents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 transition gap-4"
+                >
+                  {/* Left: Info */}
+                  <div className="flex items-center gap-4">
+                    {/* Avatar Circle */}
+                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase">
+                      {agent.full_name?.charAt(0) || "A"}
+                    </div>
+                    
+                    <div>
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        <span>{agent.full_name || "Unnamed Agent"}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          String(agent.status || "ACTIVE").toUpperCase() === "INACTIVE"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }`}>
+                          {String(agent.status || "ACTIVE").toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-500 mt-0.5 flex gap-2">
+                         <span>{agent.mobile || "No Phone"}</span>
+                         {agent.building && (
+                             <span className="text-gray-300">|</span>
+                         )}
+                         {agent.building && (
+                             <span className="text-blue-600 font-medium">{agent.building}</span>
+                         )}
+                         {String(agent.status || "ACTIVE").toUpperCase() === "INACTIVE" && agent.inactive_until && (
+                             <>
+                               <span className="text-gray-300">|</span>
+                               <span className="text-red-600 font-medium">
+                                 Until {new Date(agent.inactive_until).toLocaleDateString()}
+                               </span>
+                             </>
+                         )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Actions */}
+                  <div className="flex items-center gap-6 text-sm">
+                    <div className="hidden sm:block text-gray-500">
+                      Joined{" "}
+                      <span className="text-gray-900 font-medium">
+                        {new Date(agent.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedAgent(agent.id)}
+                      className="text-blue-600 font-medium hover:underline"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Pagination */}
+          <div className="px-6 py-4 flex justify-between items-center border-t">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="px-4 py-2 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-50"
+            >
+              Previous
+            </button>
+
+            <span className="text-sm text-gray-500">
+              Page {page}
+            </span>
+
+            <button
+              disabled={page * 10 >= total}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-4 py-2 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </main>
+
+      {/* Drawer */}
+      {selectedAgent && (
+        <AgentDrawer
+          agentId={selectedAgent}
+          onClose={() => setSelectedAgent(null)}
+          onChanged={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      <AddAgentModal
+        open={isAddModalOpen}
+        onClose={closeAddModal}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+      />
+    </div>
+  );
+}

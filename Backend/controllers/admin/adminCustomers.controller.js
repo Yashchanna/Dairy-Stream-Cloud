@@ -1,12 +1,21 @@
-import { getAdminCustomers } from "../../services/admin/adminCustomers.service.js";
+import {
+  getAdminCustomers,
+  getCustomerDetails,
+  updateCustomerById,
+  deleteCustomerById,
+  approveCustomerSubscriptionById,
+  assignPermanentDeliveryPartnerByCustomerId,
+  upsertAdminCustomerSubscriptionById,
+} from "../../services/admin/adminCustomers.service.js";
 
 export const fetchAdminCustomers = async (req, res) => {
   try {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 10);
     const search = req.query.search || "";
+    const dairyId = req.admin?.dairyId ?? null;
 
-    const result = await getAdminCustomers({ page, limit, search });
+    const result = await getAdminCustomers({ page, limit, search, dairyId });
 
     res.json(result);
   } catch (err) {
@@ -16,8 +25,6 @@ export const fetchAdminCustomers = async (req, res) => {
     });
   }
 };
-
-import { getCustomerDetails } from "../../services/admin/adminCustomers.service.js";
 
 export const fetchAdminCustomerById = async (req, res) => {
   try {
@@ -30,6 +37,98 @@ export const fetchAdminCustomerById = async (req, res) => {
     console.error("ADMIN CUSTOMER DETAIL ERROR:", err.message);
     res.status(500).json({
       message: "Failed to load customer details",
+    });
+  }
+};
+
+export const updateAdminCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await updateCustomerById(id, req.body);
+    res.json({ success: true, customer: updated });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER UPDATE ERROR:", err.message);
+    res.status(500).json({ message: "Failed to update customer" });
+  }
+};
+
+export const deleteAdminCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteCustomerById(id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER DELETE ERROR:", err.message);
+    res.status(500).json({ message: "Failed to delete customer" });
+  }
+};
+
+export const upsertAdminCustomerSubscription = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const dairyId = req.admin?.dairyId ?? null;
+
+    if (!dairyId) {
+      return res.status(403).json({
+        message: "Admin is not linked to any dairy",
+      });
+    }
+
+    const subscription = await upsertAdminCustomerSubscriptionById({
+      customerId: id,
+      dairyId,
+      ...req.body,
+    });
+
+    res.json({ success: true, subscription });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER SUBSCRIPTION ERROR:", err.message);
+    res.status(500).json({
+      message: err?.message || "Failed to save customer subscription",
+    });
+  }
+};
+
+export const approveAdminCustomerSubscription = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const dairyId = req.admin?.dairyId ?? null;
+    if (!dairyId) {
+      return res.status(403).json({ message: "Admin is not linked to any dairy" });
+    }
+
+    const subscription = await approveCustomerSubscriptionById({
+      customerId: id,
+      dairyId,
+    });
+    res.json({ success: true, subscription });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER SUBSCRIPTION APPROVE ERROR:", err.message);
+    res.status(500).json({
+      message: err?.message || "Failed to approve customer subscription",
+    });
+  }
+};
+
+export const assignAdminCustomerPermanentPartner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const dairyId = req.admin?.dairyId ?? null;
+    const { agentId } = req.body || {};
+    if (!dairyId) {
+      return res.status(403).json({ message: "Admin is not linked to any dairy" });
+    }
+
+    const subscription = await assignPermanentDeliveryPartnerByCustomerId({
+      customerId: id,
+      dairyId,
+      agentId,
+    });
+    res.json({ success: true, subscription });
+  } catch (err) {
+    console.error("ADMIN CUSTOMER SUBSCRIPTION ASSIGN PARTNER ERROR:", err.message);
+    res.status(500).json({
+      message: err?.message || "Failed to assign permanent delivery partner",
     });
   }
 };

@@ -1,241 +1,516 @@
-import React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Star,
   MapPin,
   ShieldCheck,
-  Clock,
   Truck,
-  CheckCircle,
-  Droplets,
-  BadgeCheck,
+  X,
+  CheckCircle2,
+  ChevronRight,
+  CreditCard,
+  Wallet,
+  Banknote,
+  Calendar,
+  Layers
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { fetchPublicDairyById } from "../../api/public.api.js";
+import {
+  fetchCustomerProfile,
+  fetchCustomerSubscription,
+  saveCustomerSubscription,
+} from "../../api/customer.api.js";
+import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
 
-/* MOCK DATA */
-const MOCK_DAIRIES = [
-  {
-    id: "D001",
-    name: "Nandanvan Farms",
-    rating: 4.8,
-    reviews: 124,
-    distance: "1.2 km",
-    isVerified: true,
-    isTrusted: true,
-    slots: ["Morning", "Evening"],
-    image:
-      "https://images.unsplash.com/photo-1528498033373-3c6c08e93d79?auto=format&fit=crop&q=80&w=1600",
-    address: "Kothrud, Pune",
-    minPrice: 60,
-    description:
-      "Fresh farm milk delivered daily with strict hygiene, quality checks, and reliable delivery.",
+const buildAddressFromParts = (source = {}) => {
+  const directAddress = [
+    source.address,
+    source.fullAddress,
+    source.areaSectorLocality,
+  ].find((value) => typeof value === "string" && value.trim().length > 0);
 
-    milkInfo: {
-      type: "Cow Milk",
-      fat: "3.8%",
-      processing: "Unprocessed",
-      testing: "Adulteration Tested",
-    },
+  if (directAddress) return directAddress.trim();
 
-    deliveryInfo: {
-      timing: "5:00 AM – 8:00 AM",
-      holidays: "Delivered on holidays",
-      cutoff: "Modify before 9:00 PM",
-    },
+  const parts = [
+    source.building_name || source.buildingName || "",
+    source.wing || "",
+    source.room_no || source.roomNo || "",
+  ]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
 
-    subscriptionRules: [
-      "Pause or resume anytime",
-      "Change quantity daily",
-      "No minimum commitment",
-      "Monthly billing",
-    ],
+  return parts.join(", ");
+};
 
-    hygiene: [
-      "Cleaned containers daily",
-      "Insulated delivery cans",
-      "Regular lab testing",
-      "Farm-to-home supply",
-    ],
+const normalizeProducts = (dairy = {}) => {
+  const explicitItems = Array.isArray(dairy?.productItems) ? dairy.productItems : [];
+  if (explicitItems.length > 0) {
+    return explicitItems
+      .map((item) => ({
+        id: item.id || item.name,
+        name: String(item.name || "").trim(),
+        ratePerUnit: Number(item.ratePerUnit || 0),
+        stockQuantity: Number(item.stockQuantity || 0),
+        unit: item.unit || "LITER",
+      }))
+      .filter((item) => item.name && item.ratePerUnit > 0);
+  }
 
-    reviewsData: [
-      {
-        name: "Rohit, Kothrud",
-        text: "Milk is always fresh and delivery is very punctual.",
-      },
-      {
-        name: "Anita, Karve Nagar",
-        text: "Quality is consistent and customer support is helpful.",
-      },
-    ],
-  },
-];
+  const legacy = dairy?.products || {
+    "Full Cream": 64,
+    Toned: 54,
+    "Cow Milk": 60,
+    "Buffalo Milk": 72,
+  };
+
+  return Object.keys(legacy).map((name) => ({
+    id: name,
+    name,
+    ratePerUnit: Number(legacy[name] || 0),
+    stockQuantity: Number.POSITIVE_INFINITY,
+    unit: "LITER",
+  }));
+};
 
 const DairyDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const dairy = MOCK_DAIRIES.find((d) => d.id === id);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [existingSubscription, setExistingSubscription] = useState(null);
 
-  if (!dairy) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Dairy not found
-      </div>
-    );
+  const [showSubscribe, setShowSubscribe] = useState(false);
+  const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
+
+  const [address, setAddress] = useState("");
+  const [subscription, setSubscription] = useState({
+    milkType: "",
+    quantity: 1,
+    slot: "Morning",
+    startDate: new Date().toISOString().slice(0, 10),
+  });
+
+  useEffect(() => {
+    const loadPageData = async () => {
+      try {
+        setLoading(true);
+        const res = await fetchPublicDairyById(id);
+        setData(res?.dairy || null);
+
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            const subRes = await fetchCustomerSubscription();
+            setExistingSubscription(subRes?.subscription || null);
+          } catch {
+            setExistingSubscription(null);
+          }
+        } else {
+          setExistingSubscription(null);
+        }
+        
+        // Load User Address from local storage
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          setAddress(user?.user?.address || user?.address || "");
+        }
+      } catch (err) {
+        toast.error("Error loading dairy details");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPageData();
+  }, [id]);
+
+  const dairy = useMemo(() => {
+    if (!data) return null;
+    const productItems = normalizeProducts(data);
+    const products = productItems.reduce((acc, item) => {
+      acc[item.name] = item.ratePerUnit;
+      return acc;
+    }, {});
+
+    return {
+      id: data.id,
+      name: data.dairy_name || data.name || "Dairy Farm",
+      image: data.image_url || "",
+      description: data.description || "Fresh milk delivered to your doorstep.",
+      address: data.address || data.city || "Address not available",
+      rating: data.rating || 4.5,
+      products,
+      productItems,
+    };
+  }, [data]);
+
+  useEffect(() => {
+    if (!dairy?.productItems?.length) return;
+    const hasSelected = dairy.productItems.some((item) => item.name === subscription.milkType);
+    if (hasSelected) return;
+    setSubscription((prev) => ({
+      ...prev,
+      milkType: dairy.productItems[0].name,
+    }));
+  }, [dairy, subscription.milkType]);
+
+  const selectedProduct = useMemo(
+    () => dairy?.productItems?.find((item) => item.name === subscription.milkType) || null,
+    [dairy, subscription.milkType]
+  );
+  const currentPrice = useMemo(() => Number(selectedProduct?.ratePerUnit || 0), [selectedProduct]);
+
+  const isSubscribedToThis = useMemo(() => {
+    if (!existingSubscription) return false;
+    return String(existingSubscription.dairy_id) === String(id);
+  }, [existingSubscription, id]);
+
+  const hasActiveSubscription = useMemo(() => {
+    if (!existingSubscription) return false;
+    return String(existingSubscription.status || "ACTIVE").toUpperCase() !== "CLOSED";
+  }, [existingSubscription]);
+
+  const isSubscriptionBlocked = hasActiveSubscription && !isSubscribedToThis;
+
+  const redirectToLogin = (postLoginRedirect, postLoginState = null) => {
+    navigate("/", { state: { postLoginRedirect, postLoginState } });
+  };
+
+  const handleConfirmSubscription = async () => {
+    setSaving(true);
+    try {
+      await saveCustomerSubscription({
+        dairyId: dairy.id,
+        milkType: subscription.milkType,
+        quantity: Number(subscription.quantity),
+        slot: subscription.slot,
+        startDate: subscription.startDate,
+        address: address,
+        paymentMethod: paymentMethod,
+        pricePerLiter: currentPrice,
+        status: "ACTIVE",
+      });
+
+      toast.success("Subscription successful!");
+      setStep(4);
+    } catch (err) {
+      toast.error(err.message || "Failed to subscribe");
+    } finally {
+      setSaving(false);
+    }
+  };
+const handleContinueFromStep2 = () => {
+  // ✅ Check if the address is empty or just whitespace
+  if (!address || address.trim().length === 0) {
+    toast.error("Delivery address is required to continue");
+    return;
   }
 
+  // ✅ Optional: Check for a minimum length (e.g., 10 characters) to ensure it's a real address
+  if (address.trim().length < 10) {
+    toast.error("Please provide a more detailed delivery address");
+    return;
+  }
+
+  // If valid, move to the next step
+  setStep(3);
+};
+
+  const handleSubscribeClick = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Login to start subscription first");
+      redirectToLogin(`/join/${id}`, { openSubscriptionModal: true });
+      return;
+    }
+    if (isSubscriptionBlocked) {
+      toast.error("You already have an active subscription. Close it first.");
+      return;
+    }
+    setStep(1);
+    setShowSubscribe(true);
+  };
+
+  const handleBuyOnceClick = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Login to place a one-time order first");
+      redirectToLogin(`/buy-once/${id}`);
+      return;
+    }
+    navigate(`/buy-once/${id}`);
+  };
+
+  if (loading) return <LoadingIndicator fullScreen message="Fetching farm details..." />;
+
   return (
-    <div className="min-h-screen w-full bg-slate-50">
-
-      {/* HEADER */}
-      <div className="bg-white border-b sticky top-0 z-20">
-        <div className="w-full px-6 lg:px-10 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-full hover:bg-gray-100"
-          >
-            <ArrowLeft />
+    <div className="min-h-screen bg-slate-50 pb-24">
+      <div className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <ArrowLeft size={20} />
           </button>
-          <h1 className="text-xl font-bold">{dairy.name}</h1>
+          <h1 className="text-xl font-bold text-slate-900">{dairy.name}</h1>
         </div>
       </div>
 
-      {/* CONTENT */}
-      <div className="w-full px-6 lg:px-10 py-6 grid lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 grid lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 space-y-8">
+          <div className="aspect-video w-full rounded-[40px] overflow-hidden shadow-2xl bg-slate-200">
+            {dairy.image ? (
+              <img src={dairy.image} alt={dairy.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-slate-400">No Image Available</div>
+            )}
+          </div>
 
-        {/* LEFT SECTION */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* IMAGE */}
-          <img
-            src={dairy.image}
-            alt={dairy.name}
-            className="w-full h-[420px] object-cover rounded-2xl"
-          />
-
-          {/* ABOUT */}
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-2">About this Dairy</h2>
-            <p className="text-gray-600">{dairy.description}</p>
+          <section className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
+            <h2 className="text-2xl font-bold mb-4">About this Farm</h2>
+            <p className="text-slate-600 leading-relaxed">{dairy.description}</p>
           </section>
+        </div>
 
-          {/* MILK DETAILS */}
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">Milk Details</h2>
-            <div className="grid sm:grid-cols-2 gap-4 text-sm text-gray-700">
-              <div className="flex gap-2">
-                <Droplets size={16} /> Type: {dairy.milkInfo.type}
-              </div>
-              <div>Fat Content: {dairy.milkInfo.fat}</div>
-              <div>Processing: {dairy.milkInfo.processing}</div>
-              <div>{dairy.milkInfo.testing}</div>
-            </div>
-          </section>
-
-          {/* DELIVERY INFO */}
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">Delivery Information</h2>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li>⏰ Timing: {dairy.deliveryInfo.timing}</li>
-              <li>📅 Holidays: {dairy.deliveryInfo.holidays}</li>
-              <li>🕘 Cut-off Time: {dairy.deliveryInfo.cutoff}</li>
-            </ul>
-          </section>
-
-          {/* SUBSCRIPTION FLEXIBILITY */}
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">
-              Subscription Flexibility
-            </h2>
-            <ul className="grid sm:grid-cols-2 gap-3 text-sm">
-              {dairy.subscriptionRules.map((rule, i) => (
-                <li key={i} className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  {rule}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {/* HYGIENE */}
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">
-              Hygiene & Safety Standards
-            </h2>
-            <ul className="grid sm:grid-cols-2 gap-3 text-sm">
-              {dairy.hygiene.map((item, i) => (
-                <li key={i} className="flex items-center gap-2">
-                  <BadgeCheck size={16} className="text-blue-600" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {/* REVIEWS */}
-          <section className="bg-white rounded-2xl p-6">
-            <h2 className="text-lg font-bold mb-4">Customer Reviews</h2>
-            <div className="space-y-3">
-              {dairy.reviewsData.map((r, i) => (
-                <div key={i} className="text-sm text-gray-700">
-                  ⭐⭐⭐⭐⭐
-                  <p className="italic">"{r.text}"</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    — {r.name}
-                  </p>
+        <div className="lg:col-span-1">
+          <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-slate-200 border border-white sticky top-28">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Starting from</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-black text-slate-900">Rs {currentPrice}</span>
+                  <span className="text-slate-400 font-medium">/L</span>
                 </div>
-              ))}
+              </div>
+              <div className="bg-green-500 text-white px-3 py-1 rounded-xl flex items-center gap-1 font-bold">
+                {dairy.rating} <Star size={14} fill="white" />
+              </div>
             </div>
-          </section>
 
-        </div>
-
-        {/* RIGHT CARD */}
-        <div className="bg-white rounded-2xl p-6 h-fit lg:sticky lg:top-24">
-
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex items-center gap-1 bg-green-100 px-2 py-1 rounded text-sm font-bold text-green-700">
-              {dairy.rating}
-              <Star size={14} fill="currentColor" />
+            <div className="space-y-4 mb-8">
+              <div className="flex items-center gap-3 text-slate-600 bg-slate-50 p-4 rounded-2xl">
+                <ShieldCheck className="text-blue-600" size={20} />
+                <span className="text-sm font-semibold">100% Organic & Verified</span>
+              </div>
+              <div className="flex items-center gap-3 text-slate-600 bg-slate-50 p-4 rounded-2xl">
+                <Truck className="text-blue-600" size={20} />
+                <span className="text-sm font-semibold">Free Delivery (6 AM - 9 AM)</span>
+              </div>
             </div>
-            <span className="text-sm text-gray-500">
-              ({dairy.reviews} reviews)
-            </span>
-          </div>
 
-          <div className="text-sm text-gray-600 flex gap-2 mb-2">
-            <MapPin size={16} />
-            {dairy.address}
-          </div>
+            {isSubscribedToThis ? (
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate("/customer/dashboard/subscriptions")}
+                  className="w-full bg-green-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-green-100 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={20} /> Active Subscription
+                </button>
+                <button
+                  onClick={handleBuyOnceClick}
+                  className="w-full bg-white text-slate-900 py-4 rounded-[20px] font-bold border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Calendar size={18} /> Buy Once
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <button
+                  onClick={handleSubscribeClick}
+                  className="w-full bg-blue-600 text-white py-5 rounded-[24px] font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
+                >
+                  Subscribe Now <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+                <button
+                  onClick={handleBuyOnceClick}
+                  className="w-full bg-white text-slate-900 py-4 rounded-[20px] font-bold border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Calendar size={18} /> Buy Once
+                </button>
+              </div>
+            )}
 
-          <div className="text-sm text-gray-600 flex gap-2 mb-4">
-            <Clock size={16} />
-            {dairy.distance}
-          </div>
-
-          <div className="border-t pt-4 mb-4">
-            <p className="text-sm text-gray-500">Starting at</p>
-            <p className="text-2xl font-bold">
-              ₹{dairy.minPrice}
-              <span className="text-sm text-gray-500"> /L</span>
+            <p className="mt-4 text-xs text-slate-500">
+              Buy once from the dedicated order page, or choose subscription for recurring delivery plans.
             </p>
-            <p className="text-xs text-gray-500 mt-1">
-              ≈ ₹{dairy.minPrice * 30}/month (1L daily)
-            </p>
           </div>
-
-          <button
-            onClick={() => navigate(`/subscribe/${dairy.id}`)}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 flex items-center justify-center gap-2"
-          >
-            <Truck size={18} />
-            Subscribe Now
-          </button>
-
         </div>
       </div>
+
+      {showSubscribe && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-xl rounded-[40px] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h2 className="text-xl font-bold">Setup Subscription</h2>
+                <div className="flex gap-1.5 mt-2">
+                  {[1, 2, 3, 4].map(s => (
+                    <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? 'w-8 bg-blue-600' : 'w-2 bg-slate-200'}`} />
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => setShowSubscribe(false)} className="p-2 hover:bg-white rounded-full border shadow-sm">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8">
+              {step === 1 && (
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <Layers size={16} /> Select Variant
+                    </label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {dairy.productItems.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setSubscription({...subscription, milkType: item.name})}
+                          className={`flex justify-between items-center p-4 border-2 rounded-2xl transition-all ${subscription.milkType === item.name ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
+                        >
+                          <span className="font-bold">{item.name}</span>
+                          <span className="text-blue-600 font-black">Rs {item.ratePerUnit}/{item.unit}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold">Daily Qty (L)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500"
+                        value={subscription.quantity}
+                        onChange={(e) => setSubscription({ ...subscription, quantity: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold">Time Slot</label>
+                      <select
+                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none"
+                        value={subscription.slot}
+                        onChange={(e) => setSubscription({ ...subscription, slot: e.target.value })}
+                      >
+                        <option>Morning</option>
+                        <option>Evening</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button onClick={() => setStep(2)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-black transition-all">Continue to Address</button>
+                </div>
+              )}
+
+              {/* Step 2: Address */}
+         {step === 2 && (
+  <div className="space-y-6">
+    <div className="space-y-2">
+      <label className="text-sm font-bold flex items-center gap-2">
+        <MapPin size={16} className="text-red-500" /> Delivery Address *
+      </label>
+      <textarea 
+        value={address} 
+        onChange={e => setAddress(e.target.value)} 
+        rows={4} 
+        className={`w-full p-4 bg-slate-50 rounded-2xl border-2 outline-none transition-all ${
+          !address.trim() ? 'border-red-100' : 'border-transparent focus:border-blue-500'
+        }`}
+        placeholder="Enter your full address (Flat No, Building, Street...)" 
+      />
+      {!address.trim() && (
+        <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">
+          Address cannot be empty
+        </p>
+      )}
+    </div>
+
+    <div className="flex gap-3">
+      <button onClick={() => setStep(1)} className="flex-1 py-4 font-bold text-slate-500">
+        Back
+      </button>
+      <button 
+        onClick={handleContinueFromStep2} 
+        disabled={!address.trim()} // ⬅️ Disables the button if address is empty
+        className="flex-[2] bg-slate-900 text-white py-4 rounded-2xl font-bold disabled:bg-slate-300 disabled:cursor-not-allowed"
+      >
+        Next: Payment
+      </button>
+    </div>
+  </div>
+)}
+
+              {step === 3 && (
+  <div className="p-6 space-y-4"> {/* ⬇️ Reduced from p-8 and space-y-6 */}
+    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+      Payment Method
+    </label>
+    
+    <div className="space-y-2"> {/* ⬇️ Reduced from space-y-3 */}
+      {[
+        { id: 'UPI', icon: <Wallet size={18}/>, label: 'UPI' },
+        { id: 'Card', icon: <CreditCard size={18}/>, label: 'Card' },
+        { id: 'COD', icon: <Banknote size={18}/>, label: 'Cash' }
+      ].map(m => (
+        <button 
+          key={m.id}
+          onClick={() => setPaymentMethod(m.id)}
+          className={`w-full flex items-center gap-3 p-3 border-2 rounded-xl transition-all ${
+            paymentMethod === m.id ? 'border-blue-600 bg-blue-50' : 'border-slate-100'
+          }`}
+        >
+          {/* ⬆️ Reduced padding (p-3) and rounded corners (rounded-xl) */}
+          <div className={paymentMethod === m.id ? 'text-blue-600' : 'text-slate-400'}>
+            {m.icon}
+          </div>
+          <span className="font-bold text-sm">{m.label}</span>
+        </button>
+      ))}
+    </div>
+    
+    {/* Compact Summary Box */}
+    <div className="bg-slate-50 p-4 rounded-2xl text-sm border border-slate-100">
+      <div className="flex justify-between">
+        <span className="text-slate-500">Total Payable(Daily)</span>
+        <span className="font-black text-blue-600">₹{currentPrice * subscription.quantity}</span>
+      </div>
+    </div>
+
+    <button 
+      disabled={saving}
+      onClick={handleConfirmSubscription} 
+      className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold"
+    >
+      {saving ? "Processing..." : "Confirm Subscription"}
+    </button>
+  </div>
+)}
+
+              {step === 4 && (
+                <div className="py-10 text-center space-y-6">
+                  <div className="h-24 w-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={48} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black">Subscription Started!</h3>
+                    <p className="text-slate-500 mt-2">Your first delivery from {dairy.name} arrives tomorrow morning.</p>
+                  </div>
+                  <button onClick={() => navigate("/customer/dashboard")} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold">
+                    Go to Dashboard
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default DairyDetailsPage;
+
+

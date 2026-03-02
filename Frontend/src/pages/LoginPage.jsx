@@ -1,23 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useAuth } from "./hooks/useAuth.jsx";
+import { useAuth } from "../hooks/useAuth.jsx"; // Adjust path if needed
 
 import {
-  Loader2,
-  ShieldCheck,
-  MapPin,
-  Eye,
-  EyeOff,
-  Lock,
-  User,
-  ChevronRight,
-  AlertCircle,
-  Briefcase,
-  Mail,
-  Smartphone,
-  Edit2,
-  ArrowRight
+  Loader2, ShieldCheck, MapPin, Eye, EyeOff, Lock, User,
+  ChevronRight, AlertCircle, Briefcase, Mail, Smartphone,
+  Edit2, ArrowRight
 } from "lucide-react";
 
 import dairyImage from "../assets/dairyproduct.png";
@@ -27,12 +16,18 @@ import {
   detectUserApi,
   requestOtpApi,
   verifyOtpApi,
-  adminLoginApi
-} from "./services/auth.api";
+  adminLoginApi,
+  agentLoginApi, // ✅ ADDED: Import agent login API
+  requestAdminPasswordResetOtpApi,
+  resetAdminPasswordWithOtpApi,
+  requestAgentPasswordResetOtpApi,
+  resetAgentPasswordWithOtpApi
+} from "../services/auth.api.js"; // Adjust path if needed
 
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const inputRef = useRef(null);
 
   // ================= STATES =================
@@ -41,10 +36,24 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [detectedUser, setDetectedUser] = useState(null);
   const [selectedDairy, setSelectedDairy] = useState(null);
   const [otpTimer, setOtpTimer] = useState(30);
+  const [adminResetMode, setAdminResetMode] = useState(false);
+  const [adminResetOtpSent, setAdminResetOtpSent] = useState(false);
+  const [adminResetOtp, setAdminResetOtp] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+  const [adminOtpRequestsRemaining, setAdminOtpRequestsRemaining] = useState(null);
+  const [agentResetMode, setAgentResetMode] = useState(false);
+  const [agentResetOtpSent, setAgentResetOtpSent] = useState(false);
+  const [agentResetOtp, setAgentResetOtp] = useState("");
+  const [newAgentPassword, setNewAgentPassword] = useState("");
+  const [confirmAgentPassword, setConfirmAgentPassword] = useState("");
+  const [agentOtpRequestsRemaining, setAgentOtpRequestsRemaining] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,6 +79,18 @@ const LoginPage = () => {
     setOtp("");
     setSelectedDairy(null);
     setError("");
+    setAdminResetMode(false);
+    setAdminResetOtpSent(false);
+    setAdminResetOtp("");
+    setNewAdminPassword("");
+    setConfirmAdminPassword("");
+    setAdminOtpRequestsRemaining(null);
+    setAgentResetMode(false);
+    setAgentResetOtpSent(false);
+    setAgentResetOtp("");
+    setNewAgentPassword("");
+    setConfirmAgentPassword("");
+    setAgentOtpRequestsRemaining(null);
   };
 
   // ================= IDENTIFIER SUBMIT =================
@@ -92,15 +113,19 @@ const LoginPage = () => {
       const response = await detectUserApi(identifier);
 
       if (!response.exists) {
-      toast("User not found. Please register first");
-      navigate("/customer/register", {
-        state: { identifier }
-      });
-      return;
-    }
+        toast("User not found. Please register first");
+        // If it looks like a mobile number, offer registration
+        if(isMobile) {
+            navigate("/customer/register", { state: { identifier } });
+        } else {
+            setError("User ID not found.");
+        }
+        return;
+      }
 
       setDetectedUser(response);
 
+      // Routing based on backend "nextStep" instruction
       if (response.nextStep === "EXPLORE") {
         toast("No dairy assigned. Please explore dairies.");
         navigate("/explore", { state: { identifier } });
@@ -111,6 +136,7 @@ const LoginPage = () => {
         setSelectedDairy(response.dairy);
       }
 
+      // If backend says OTP, go straight there (Customer)
       if (response.nextStep === "OTP") {
         setOtpTimer(30);
         setStep("OTP");
@@ -121,7 +147,15 @@ const LoginPage = () => {
         return;
       }
 
-      setStep(response.nextStep);
+      // Otherwise, follow the step (usually PASSWORD for Admin/Agent)
+      setStep(response.nextStep); // e.g., "PASSWORD"
+      setAdminResetMode(false);
+      setAdminResetOtpSent(false);
+      setAdminOtpRequestsRemaining(null);
+      setAgentResetMode(false);
+      setAgentResetOtpSent(false);
+      setAgentOtpRequestsRemaining(null);
+      
     } catch (err) {
       const backendMessage =
         err.response?.data?.message ||
@@ -136,82 +170,264 @@ const LoginPage = () => {
     }
   };
 
-  // ================= DAIRY SELECT =================
+  // ================= DAIRY SELECT (If multiple) =================
   const handleDairySelect = (dairy) => {
     setSelectedDairy(dairy);
     setOtpTimer(30);
     setStep("OTP");
   };
 
-  // ================= FINAL LOGIN =================
-  const handleFinalLogin = async (e) => {
-    e.preventDefault();
+  const handleAdminForgotPasswordRequest = async () => {
+    const normalizedIdentifier = String(identifier || "").trim();
+    if (!normalizedIdentifier) {
+      toast.error("Identifier is required");
+      return;
+    }
+
     setLoading(true);
-
+    setError("");
     try {
-      const role = detectedUser?.userType;
-
-      // ADMIN LOGIN
-      if (role === "ADMIN") {
-        const result = await adminLoginApi({
-          email: identifier,
-          password,
-        });
-
-        login(result);
-        toast.success(`Welcome back, ${result.user?.name || "Admin"}!`);
-        navigate("/admin/dashboard", { replace: true });
-        return;
-      }
-
-      // CUSTOMER / STAFF OTP LOGIN
-      const result = await verifyOtpApi({
-        identifier,
-        otp,
-        dairyId: selectedDairy?.id,
+      const result = await requestAdminPasswordResetOtpApi({
+        identifier: normalizedIdentifier,
       });
-
-      login(result);
-      toast.success(`Welcome back, ${result.user?.name || "User"}!`);
-
-      if (role === "CUSTOMER") {
-        navigate(result.redirect || "/customer-dashboard", { replace: true });
-      } else if (role === "STAFF") {
-        navigate("/staff/home", { replace: true });
-      }
+      setAdminResetMode(true);
+      setAdminResetOtpSent(true);
+      setAgentResetMode(false);
+      setAgentResetOtpSent(false);
+      setAdminOtpRequestsRemaining(
+        typeof result?.remainingRequests === "number" ? result.remainingRequests : null
+      );
+      setAgentOtpRequestsRemaining(null);
+      toast.success(result?.message || "OTP sent to registered admin email");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Login failed");
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to send OTP";
+      setError(backendMessage);
+      if (typeof err.response?.data?.remainingRequests === "number") {
+        setAdminOtpRequestsRemaining(err.response.data.remainingRequests);
+      }
+      toast.error(backendMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  // ================= IDENTITY BADGE =================
+  const handleAdminPasswordReset = async (e) => {
+    e.preventDefault();
+
+    if (!adminResetOtp.trim()) {
+      toast.error("Please enter OTP");
+      return;
+    }
+    if (newAdminPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await resetAdminPasswordWithOtpApi({
+        identifier: String(identifier || "").trim(),
+        otp: adminResetOtp.trim(),
+        newPassword: newAdminPassword,
+      });
+
+      toast.success(result?.message || "Password reset successful. Please login.");
+      setAdminResetMode(false);
+      setAdminResetOtpSent(false);
+      setAdminResetOtp("");
+      setNewAdminPassword("");
+      setConfirmAdminPassword("");
+      setPassword("");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to reset password";
+      setError(backendMessage);
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAgentForgotPasswordRequest = async () => {
+    const normalizedStaffId = String(identifier || "").trim().toUpperCase();
+    if (!normalizedStaffId) {
+      toast.error("Staff ID is required");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await requestAgentPasswordResetOtpApi({
+        agentId: normalizedStaffId,
+      });
+      setAgentResetMode(true);
+      setAgentResetOtpSent(true);
+      setAdminResetMode(false);
+      setAdminResetOtpSent(false);
+      setAgentOtpRequestsRemaining(
+        typeof result?.remainingRequests === "number" ? result.remainingRequests : null
+      );
+      setAdminOtpRequestsRemaining(null);
+      toast.success(result?.message || "OTP sent to registered agent email");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to send OTP";
+      setError(backendMessage);
+      if (typeof err.response?.data?.remainingRequests === "number") {
+        setAgentOtpRequestsRemaining(err.response.data.remainingRequests);
+      }
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAgentPasswordReset = async (e) => {
+    e.preventDefault();
+
+    if (!agentResetOtp.trim()) {
+      toast.error("Please enter OTP");
+      return;
+    }
+    if (newAgentPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    if (newAgentPassword !== confirmAgentPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const result = await resetAgentPasswordWithOtpApi({
+        agentId: String(identifier || "").trim().toUpperCase(),
+        otp: agentResetOtp.trim(),
+        newPassword: newAgentPassword,
+      });
+
+      toast.success(result?.message || "Password reset successful. Please login.");
+      setAgentResetMode(false);
+      setAgentResetOtpSent(false);
+      setAgentResetOtp("");
+      setNewAgentPassword("");
+      setConfirmAgentPassword("");
+      setPassword("");
+    } catch (err) {
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to reset password";
+      setError(backendMessage);
+      toast.error(backendMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ================= FINAL LOGIN =================
+ const handleFinalLogin = async (e) => {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
+  try {
+    const role = detectedUser?.userType; // This comes from the first 'Detect' step
+
+    // --- CASE 1: ADMIN ---
+    if (role === "ADMIN") {
+      const result = await adminLoginApi({ identifier, password });
+      localStorage.setItem("adminToken", result.token);
+      localStorage.setItem("userRole", "ADMIN");
+      
+      login({ token: result.token, user: { ...result.user, role: "ADMIN" }, role: "ADMIN" });
+      toast.success("Admin Login Successful");
+      navigate("/admin/AdminDashboard", { replace: true });
+    } 
+
+    // --- CASE 2: AGENT (The Fix) ---
+    else if (role === "AGENT" || role === "STAFF") {
+  const result = await agentLoginApi({ agentId: identifier, password });
+
+  // Use the new standardized login call
+  login({
+    token: result.token,
+    role: "AGENT", // Explicitly set it
+    user: result.user
+  });
+
+  toast.success("Welcome, Agent!");
+  navigate("/agent/dashboard", { replace: true });
+}
+    // --- CASE 3: CUSTOMER ---
+    else if (role === "CUSTOMER") {
+      const result = await verifyOtpApi({ identifier, otp, dairyId: selectedDairy?.id });
+      localStorage.setItem("token", result.token);
+      localStorage.setItem("userRole", "CUSTOMER");
+      login(result);
+      const redirectOverride = location.state?.postLoginRedirect;
+      const redirectState = location.state?.postLoginState;
+      navigate(redirectOverride || result.redirect || "/customer/dashboard", {
+        replace: true,
+        state: redirectState || null,
+      });
+    }
+
+  } catch (err) {
+    toast.error(err.response?.data?.error || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // ================= IDENTITY BADGE COMPONENT =================
   const IdentityDisplay = () => {
     if (!detectedUser) return null;
 
     let Icon = User;
     let label = "User";
+    let badgeColor = "bg-blue-200 text-blue-700";
 
     if (detectedUser.userType === "ADMIN") {
       Icon = Mail;
-      label = "Admin Email";
-    } else if (detectedUser.userType === "STAFF") {
+      label = "Admin ID";
+      badgeColor = "bg-purple-200 text-purple-700";
+    } else if (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF") {
       Icon = Briefcase;
       label = "Staff ID";
+      badgeColor = "bg-orange-200 text-orange-700";
     } else if (detectedUser.userType === "CUSTOMER") {
       Icon = Smartphone;
-      label = "Mobile";
+      label = "Email/Mobile";
+      badgeColor = "bg-green-200 text-green-700";
     }
 
     return (
-      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-3 rounded-lg mb-6">
+      <div className="flex items-center justify-between bg-gray-50 border border-gray-200 p-3 rounded-lg mb-6">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="bg-blue-200 p-2 rounded-full text-blue-700">
+          <div className={`p-2 rounded-full ${badgeColor}`}>
             <Icon size={16} />
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">
+            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">
               {label}
             </span>
             <span className="text-sm font-semibold text-gray-900 truncate">
@@ -223,6 +439,7 @@ const LoginPage = () => {
           type="button"
           onClick={handleReset}
           className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+          title="Change User"
         >
           <Edit2 size={16} />
         </button>
@@ -234,7 +451,7 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen bg-slate-50 grid lg:grid-cols-2">
 
-      {/* ================= LEFT BRAND ================= */}
+      {/* ================= LEFT BRAND SECTION ================= */}
       <div className="hidden lg:flex flex-col justify-center px-20 bg-blue-600 text-white relative overflow-hidden">
         <div className="relative z-10">
           <h1 className="text-4xl font-bold tracking-tight">DairyStream</h1>
@@ -257,10 +474,11 @@ const LoginPage = () => {
             </Link>
           </div>
         </div>
+        {/* Decorative Blur */}
         <div className="absolute -bottom-40 -right-20 w-96 h-96 bg-blue-500/50 rounded-full blur-3xl"></div>
       </div>
 
-      {/* ================= RIGHT LOGIN FORM ================= */}
+      {/* ================= RIGHT LOGIN FORM SECTION ================= */}
       <div className="flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
 
@@ -277,37 +495,35 @@ const LoginPage = () => {
             <p className="text-gray-500 text-sm mt-1">
               {step === "IDENTIFIER" && "Enter your Email, Mobile, or Staff ID"}
               {step === "CONFIRMATION" && "Verify your account details"}
-              {step === "SELECT_DAIRY" && "Select a dairy to continue"}
               {step === "OTP" && `Verifying ${identifier}`}
               {step === "PASSWORD" && `Enter password for ${identifier}`}
             </p>
 
+            {/* Role Tag */}
             {detectedUser && (
               <div className="flex justify-center mt-3">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border uppercase ${
                   detectedUser.userType === "ADMIN"
                     ? "bg-purple-50 text-purple-700 border-purple-200"
-                    : detectedUser.userType === "STAFF"
+                    : (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF")
                     ? "bg-orange-50 text-orange-700 border-orange-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-green-50 text-green-700 border-green-200"
                 }`}>
-                  {detectedUser.userType === "ADMIN"
-                    ? "Dairy Admin"
-                    : detectedUser.userType === "STAFF"
-                    ? "Staff Member"
-                    : "Customer"}
+                  {detectedUser.userType === "ADMIN" ? "Dairy Admin" : 
+                   (detectedUser.userType === "AGENT" || detectedUser.userType === "STAFF") ? "Delivery Agent" : "Customer"}
                 </span>
               </div>
             )}
           </div>
 
+          {/* ERROR ALERT */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm flex items-center gap-2">
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm flex items-center gap-2 animate-pulse">
               <AlertCircle size={16} /> {error}
             </div>
           )}
 
-          {/* IDENTIFIER */}
+          {/* STEP 1: IDENTIFIER INPUT */}
           {step === "IDENTIFIER" && (
             <form onSubmit={handleIdentifierSubmit} className="space-y-5">
               <div className="relative">
@@ -316,126 +532,353 @@ const LoginPage = () => {
                   ref={inputRef}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Mobile, email, or staff ID"
-                  className="w-full pl-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Mobile, email, or staff ID (STF...)"
+                  className="w-full pl-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  autoFocus
                 />
               </div>
               <button
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                disabled={loading || !identifier}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <Loader2 className="animate-spin" /> : "Continue"}
                 {!loading && <ArrowRight size={18} />}
               </button>
             </form>
-            
           )}
 
-          {/* CONFIRMATION */}
-          {step === "CONFIRMATION" && selectedDairy && (
-            <div className="space-y-6">
-              <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center">
-                <p className="text-xs text-blue-600 font-bold uppercase mb-2">
-                  Signing in to
-                </p>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {selectedDairy.name}
-                </h3>
-              </div>
-              <button
-                onClick={() =>
-                  setStep(
-                    detectedUser.userType === "CUSTOMER"
-                      ? "OTP"
-                      : "PASSWORD"
-                  )
-                }
-                className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold"
-              >
-                Continue to Login
-              </button>
-              <button
-                onClick={handleReset}
-                className="w-full text-gray-500 text-sm"
-              >
-                Change Account
-              </button>
-            </div>
-          )}
-
-          {/* SELECT DAIRY */}
-          {step === "SELECT_DAIRY" && (
-            <div className="space-y-3">
-              {detectedUser.dairies.map((dairy) => (
-                <button
-                  key={dairy.id}
-                  onClick={() => handleDairySelect(dairy)}
-                  className="w-full p-4 bg-gray-50 border rounded-xl flex justify-between"
-                >
-                  <div>
-                    <h4 className="font-semibold">{dairy.name}</h4>
-                    <p className="text-sm text-gray-500">{dairy.location}</p>
-                  </div>
-                  <ChevronRight />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* PASSWORD */}
+          {/* STEP 2: PASSWORD INPUT (Admin & Agent) */}
           {step === "PASSWORD" && (
-            <form onSubmit={handleFinalLogin} className="space-y-5">
+            <form
+              onSubmit={
+                adminResetMode
+                  ? handleAdminPasswordReset
+                  : agentResetMode
+                  ? handleAgentPasswordReset
+                  : handleFinalLogin
+              }
+              className="space-y-5"
+            >
               <IdentityDisplay />
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
-                  className="w-full pl-10 pr-10 py-3 bg-gray-50 border rounded-xl"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                >
-                  {showPassword ? <EyeOff /> : <Eye />}
-                </button>
-              </div>
-              <button className="w-full bg-blue-600 text-white py-3 rounded-xl">
-                Login
-              </button>
+
+              {!adminResetMode && !agentResetMode ? (
+                <>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+
+                  {(detectedUser?.userType === "ADMIN" ||
+                    detectedUser?.userType === "AGENT" ||
+                    detectedUser?.userType === "STAFF") && (
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (detectedUser?.userType === "ADMIN") {
+                            handleAdminForgotPasswordRequest();
+                          } else {
+                            handleAgentForgotPasswordRequest();
+                          }
+                        }}
+                        className="text-xs text-blue-600 font-semibold hover:underline"
+                        disabled={loading}
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    disabled={loading || !password}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                  >
+                    {loading ? <Loader2 className="animate-spin" /> : "Login"}
+                  </button>
+                </>
+              ) : adminResetMode ? (
+                <>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                    OTP will be sent to your registered admin email, irrespective of email/mobile login method.
+                  </div>
+
+                  {!adminResetOtpSent ? (
+                    <button
+                      type="button"
+                      onClick={handleAdminForgotPasswordRequest}
+                      disabled={loading}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      {loading ? <Loader2 className="animate-spin" /> : "Send OTP"}
+                    </button>
+                  ) : (
+                    <>
+                      {typeof adminOtpRequestsRemaining === "number" && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">
+                            OTP requests remaining: {adminOtpRequestsRemaining}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleAdminForgotPasswordRequest}
+                            disabled={loading || adminOtpRequestsRemaining <= 0}
+                            className="text-blue-600 font-semibold hover:underline disabled:text-gray-400 disabled:no-underline"
+                          >
+                            Resend OTP
+                          </button>
+                        </div>
+                      )}
+                      {adminOtpRequestsRemaining === 0 && (
+                        <p className="text-xs text-red-600 font-medium">
+                          Limit reached. Try after 15 minutes.
+                        </p>
+                      )}
+
+                      <input
+                        value={adminResetOtp}
+                        onChange={(e) => setAdminResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="Enter 6-digit OTP"
+                        className="w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                        autoFocus
+                      />
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newAdminPassword}
+                          onChange={(e) => setNewAdminPassword(e.target.value)}
+                          placeholder="New password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmAdminPassword}
+                          onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <button
+                        disabled={loading || adminResetOtp.length < 6 || !newAdminPassword || !confirmAdminPassword}
+                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="animate-spin" /> : "Reset Password"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminResetMode(false);
+                          setAdminResetOtpSent(false);
+                          setAdminResetOtp("");
+                          setNewAdminPassword("");
+                          setConfirmAdminPassword("");
+                          setAdminOtpRequestsRemaining(null);
+                        }}
+                        className="w-full text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        Back to Login
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                    OTP will be sent to the agent's registered email using your staff ID.
+                  </div>
+
+                  {!agentResetOtpSent ? (
+                    <button
+                      type="button"
+                      onClick={handleAgentForgotPasswordRequest}
+                      disabled={loading}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      {loading ? <Loader2 className="animate-spin" /> : "Send OTP"}
+                    </button>
+                  ) : (
+                    <>
+                      {typeof agentOtpRequestsRemaining === "number" && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">
+                            OTP requests remaining: {agentOtpRequestsRemaining}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleAgentForgotPasswordRequest}
+                            disabled={loading || agentOtpRequestsRemaining <= 0}
+                            className="text-blue-600 font-semibold hover:underline disabled:text-gray-400 disabled:no-underline"
+                          >
+                            Resend OTP
+                          </button>
+                        </div>
+                      )}
+                      {agentOtpRequestsRemaining === 0 && (
+                        <p className="text-xs text-red-600 font-medium">
+                          Limit reached. Try after 15 minutes.
+                        </p>
+                      )}
+
+                      <input
+                        value={agentResetOtp}
+                        onChange={(e) => setAgentResetOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="Enter 6-digit OTP"
+                        className="w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                        autoFocus
+                      />
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newAgentPassword}
+                          onChange={(e) => setNewAgentPassword(e.target.value)}
+                          placeholder="New password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmAgentPassword}
+                          onChange={(e) => setConfirmAgentPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+
+                      <button
+                        disabled={loading || agentResetOtp.length < 6 || !newAgentPassword || !confirmAgentPassword}
+                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="animate-spin" /> : "Reset Password"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAgentResetMode(false);
+                          setAgentResetOtpSent(false);
+                          setAgentResetOtp("");
+                          setNewAgentPassword("");
+                          setConfirmAgentPassword("");
+                          setAgentOtpRequestsRemaining(null);
+                        }}
+                        className="w-full text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        Back to Login
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
             </form>
           )}
 
-          {/* OTP */}
+          {/* STEP 3: OTP INPUT (Customer) */}
           {step === "OTP" && (
             <form onSubmit={handleFinalLogin} className="space-y-5">
               <IdentityDisplay />
-              <input
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                maxLength={6}
-                className="w-full text-center text-3xl py-4 border rounded-xl"
-              />
-              <button className="w-full bg-green-600 text-white py-3 rounded-xl">
-                Verify & Login
+              
+              <div className="text-center">
+                 <input
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  placeholder="• • • • • •"
+                  className="w-full text-center text-3xl tracking-widest py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-mono"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-400 mt-2">Enter the 6-digit code sent to your email/mobile</p>
+              </div>
+
+              <button 
+                disabled={loading || otp.length < 4}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="animate-spin" /> : "Verify & Login"}
               </button>
+
+              <div className="text-center">
+                 {otpTimer > 0 ? (
+                    <span className="text-xs text-gray-400">Resend in {otpTimer}s</span>
+                 ) : (
+                    <button 
+                        type="button"
+                        onClick={() => {/* logic to resend */}}
+                        className="text-xs text-blue-600 font-semibold hover:underline"
+                    >
+                        Resend Code
+                    </button>
+                 )}
+              </div>
             </form>
           )}
 
-          <div className="text-center mt-4">
+          {/* FOOTER LINK */}
+          <div className="text-center mt-6 pt-6 border-t border-gray-100">
             <p className="text-sm text-gray-500">
               New user?{" "}
               <Link
                 to="/customer/register"
-                className="text-blue-600 font-medium hover:underline"
+                className="text-blue-600 font-bold hover:underline"
               >
                 Create account
               </Link>
             </p>
           </div>
+
         </div>
       </div>
     </div>
