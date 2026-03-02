@@ -5,26 +5,28 @@ import {
 
 export const getPublicDairies = async (req, res) => {
   try {
-    const { search = "", lat, lng, radius = 10, city, pincode } = req.query;
+    const { search, city, pincode, lat, lng, radius } = req.query;
 
-    const filters = {
+    const parsedLat = lat !== undefined ? Number(lat) : null;
+    const parsedLng = lng !== undefined ? Number(lng) : null;
+    const parsedRadius =
+      radius !== undefined && !Number.isNaN(Number(radius))
+        ? Number(radius)
+        : 10;
+
+    const dairies = await listPublicDairies({
       search,
-      lat: lat ? parseFloat(lat) : null,
-      lng: lng ? parseFloat(lng) : null,
-      radius: parseFloat(radius),
-      city: city || null,
-      pincode: pincode || null,
-    };
-
-    const dairies = await listPublicDairies(filters);
+      city,
+      pincode,
+      lat: parsedLat,
+      lng: parsedLng,
+      radius: parsedRadius,
+    });
 
     res.json({ dairies });
   } catch (err) {
     console.error("PUBLIC DAIRIES ERROR:", err.message);
-
-    res.status(500).json({
-      message: "Failed to fetch dairies",
-    });
+    res.status(500).json({ message: "Failed to fetch dairies" });
   }
 };
 

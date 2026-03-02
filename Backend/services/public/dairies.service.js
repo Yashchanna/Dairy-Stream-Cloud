@@ -30,23 +30,13 @@ const getPublicProductsByDairyId = async (dairyId) => {
 
   if (error) {
     const message = String(error?.message || "").toLowerCase();
-    const isMissingRelation =
-      message.includes("relation") && message.includes("does not exist");
-    const isMissingColumn =
-      message.includes("column") && message.includes("does not exist");
-
-    if (isMissingRelation || isMissingColumn) {
-      return {
-        productItems: [],
-        products: {},
-      };
+    if (message.includes("relation") || message.includes("column")) {
+      return { productItems: [], products: {} };
     }
-
     throw error;
   }
 
   const productItems = (data || []).map(mapProductForPublic);
-
   return {
     productItems,
     products: buildLegacyProductsMap(productItems),
@@ -56,22 +46,20 @@ const getPublicProductsByDairyId = async (dairyId) => {
 /* ---------------- DISTANCE HELPER ---------------- */
 
 const getDistance = (lat1, lon1, lat2, lon2) => {
-  if (!lat2 || !lon2) return Infinity;
-
+ if (
+  lat1 === null || lon1 === null ||
+  lat2 === null || lon2 === null
+) return Infinity; 
   const R = 6371;
-
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
   return R * c;
 };
 
@@ -79,62 +67,60 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
 
 export const listPublicDairies = async ({
   search = "",
+  city = "",
+  pincode = "",
   lat = null,
   lng = null,
   radius = 10,
-  city = null,
-  pincode = null,
 }) => {
-  const PUBLIC_DAIRY_FIELDS =
-    "id, dairy_name, category, address, city, state, pincode, image_url, latitude, longitude, service_type, service_pincodes, service_radius, selected_plan, status, created_at";
+  const PUBLIC_DAIRY_FIELDS = "id, dairy_name, category, address, city, state, pincode, image_url, latitude, longitude, status, created_at";
 
   let query = supabase
     .from("dairies")
-    .select(PUBLIC_DAIRY_FIELDS)
-    .eq("status", "ACTIVE")
-    .order("created_at", { ascending: false });
+    .select(PUBLIC_DAIRY_FIELDS);
+    // REMOVED .eq("status", "ACTIVE") since you mentioned it's not set
 
-  /* -------- SEARCH -------- */
+  // Filter Logic
+if (search) {
+  query = query.or(`dairy_name.ilike.%${search}%,address.ilike.%${search}%`);
+}
 
-  if (search) {
-    query = query.or(
-      `dairy_name.ilike.%${search}%,city.ilike.%${search}%,address.ilike.%${search}%`,
-    );
-  }
+if (city) {
+  query = query.ilike("city", `%${city}%`);
+}
 
-  /* -------- CITY FILTER -------- */
-
-  if (city) {
-    query = query.ilike("city", `%${city}%`);
-  }
-
-  /* -------- PINCODE FILTER -------- */
-
-  if (pincode) {
-    query = query.eq("pincode", pincode);
-  }
+if (pincode) {
+  query = query.eq("pincode", pincode);
+}
 
   const { data, error } = await query;
-
   if (error) throw error;
 
   let dairies = data || [];
 
-  /* -------- GPS RADIUS FILTER -------- */
+  // Define these INSIDE the function so they are accessible
+  const hasUserCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
+  const isExplicitSearch = Boolean(search || city || pincode);
 
-  if (lat && lng) {
+  if (hasUserCoords) {
     dairies = dairies
-      .map((d) => {
-        const distance = getDistance(lat, lng, d.latitude, d.longitude);
+      .map((row) => {
+        const dLat = parseFloat(row.latitude);
+        const dLng = parseFloat(row.longitude);
 
-        return {
-          ...d,
-          distance: `${distance.toFixed(1)} km`,
-          _distanceValue: distance,
-        };
+        const distanceKm = (!isNaN(dLat) && !isNaN(dLng)) 
+          ? getDistance(lat, lng, dLat, dLng) 
+          : Infinity;
+
+        return { ...row, distance: distanceKm };
       })
-      .filter((d) => d._distanceValue <= radius)
-      .sort((a, b) => a._distanceValue - b._distanceValue);
+      .filter((row) => {
+        // This is the most important part: 
+        // If user searched for a name or clicked a city, DO NOT filter by radius.
+        if (isExplicitSearch) return true; 
+        return row.distance <= radius;
+      })
+      .sort((a, b) => a.distance - b.distance);
   }
 
   return dairies;
