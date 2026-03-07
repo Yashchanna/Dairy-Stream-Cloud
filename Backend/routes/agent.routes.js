@@ -10,6 +10,10 @@ import {
   fetchAgentSelfProfile,
   patchAssignedDeliveryStatus,
 } from "../controllers/agent/delivery.controller.js";
+import {
+  updateAgentLocation,
+  startDelivery,
+} from "../controllers/agent/location.controller.js";
 
 const router = express.Router();
 
@@ -26,6 +30,12 @@ router.get("/deliveries/history", verifyAgent, fetchAgentHistory);
 router.patch("/deliveries/:id/status", verifyAgent, patchAssignedDeliveryStatus);
 router.get("/profile", verifyAgent, fetchAgentSelfProfile);
 router.patch("/profile/availability", verifyAgent, patchAgentAvailability);
+
+// ==========================================
+// 📍 LOCATION TRACKING & ETA ROUTES
+// ==========================================
+router.post("/deliveries/location/update", verifyAgent, updateAgentLocation);
+router.post("/deliveries/start", verifyAgent, startDelivery);
 
 
 // ==========================================
