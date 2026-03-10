@@ -37,6 +37,10 @@ import {
 } from "../controllers/authentication/customer/password.controller.js";
 
 import { verifyEmail } from "../controllers/customer/verifyEmail.controller.js";
+import {
+  subscribeToNotifications,
+  fetchDeliveryETA,
+} from "../controllers/customer/notification.controller.js";
 import { uploadSingleImage } from "../middleware/upload.middleware.js";
 
 // Middleware
@@ -75,5 +79,11 @@ router.post("/payments/verify", authenticate, verifyPayment);
 router.get("/subscription", authenticate, getSubscription);
 router.post("/subscription", authenticate, saveSubscription);
 router.delete("/subscription", authenticate, clearSubscription);
+
+// ==========================================
+// 📱 NOTIFICATIONS & ETA ROUTES
+// ==========================================
+router.post("/notifications/subscribe", authenticate, subscribeToNotifications);
+router.get("/deliveries/:id/eta", authenticate, fetchDeliveryETA);
 
 export default router;
