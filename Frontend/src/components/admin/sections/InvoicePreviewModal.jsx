@@ -1,12 +1,12 @@
-import React, { useState, useRef } from 'react';
-import { X, Printer, Download, Save, Smartphone, MapPin } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import React, { useState, useRef } from "react";
+import { X, Printer, Download, Save, Smartphone, MapPin } from "lucide-react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 const InvoicePreviewModal = ({ customer, adminName, dairyName, onClose }) => {
   const invoiceRef = useRef();
   const [isEditing, setIsEditing] = useState(false);
-  
+
   // Local state for "Editable" fields
   const [invoiceData, setInvoiceData] = useState({
     billNo: `INV-${Date.now().toString().slice(-6)}`,
@@ -14,63 +14,92 @@ const InvoicePreviewModal = ({ customer, adminName, dairyName, onClose }) => {
     discount: 0,
     notes: "Thank you for choosing our dairy services!",
     contact: "+91 98765 43210",
-    address: "123 Dairy Lane, Milk City"
+    address: "123 Dairy Lane, Milk City",
   });
 
   const totalDue = (customer.outstanding_balance || 0) - invoiceData.discount;
 
+  const [editData, setEditData] = useState({
+    discount: 0,
+    notes: "Thank you for choosing our dairy services!",
+  });
+
   const handleDownloadPDF = async () => {
     const element = invoiceRef.current;
     const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
     const imgProps = pdf.getImageProperties(imgData);
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
     pdf.save(`${customer.customer_name}_Bill.pdf`);
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
       <div className="bg-slate-100 w-full max-w-4xl max-h-[95vh] overflow-hidden rounded-[40px] shadow-2xl flex flex-col">
-        
         {/* Header / Actions */}
         <div className="p-6 bg-white border-b flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-black text-gray-900">Invoice Preview</h2>
-            <p className="text-xs font-bold text-gray-400 uppercase">Review and Edit before issuing</p>
+            <h2 className="text-xl font-black text-gray-900">
+              Invoice Preview
+            </h2>
+            <p className="text-xs font-bold text-gray-400 uppercase">
+              Review and Edit before issuing
+            </p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setIsEditing(!isEditing)} className="px-4 py-2 bg-gray-100 rounded-xl font-bold text-sm">
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="px-4 py-2 bg-gray-100 rounded-xl font-bold text-sm"
+            >
               {isEditing ? "View Preview" : "Edit Fields"}
             </button>
-            <button onClick={handleDownloadPDF} className="bg-blue-600 text-white px-6 py-2 rounded-xl font-black text-sm flex items-center gap-2">
-              <Download size={18}/> Download PDF
+            <button
+              onClick={handleDownloadPDF}
+              className="bg-blue-600 text-white px-6 py-2 rounded-xl font-black text-sm flex items-center gap-2"
+            >
+              <Download size={18} /> Download PDF
             </button>
-            <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-              <X size={24}/>
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <X size={24} />
             </button>
           </div>
         </div>
 
         {/* The Actual Bill Area */}
         <div className="flex-1 overflow-y-auto p-12 bg-gray-200/50">
-          <div ref={invoiceRef} className="bg-white w-[210mm] min-h-[297mm] mx-auto p-[20mm] shadow-lg text-gray-800">
-            
+          <div
+            ref={invoiceRef}
+            className="bg-white w-[210mm] min-h-[297mm] mx-auto p-[20mm] shadow-lg text-gray-800"
+          >
             {/* Dairy Info */}
             <div className="flex justify-between items-start border-b-4 border-blue-600 pb-8">
               <div>
-                <h1 className="text-4xl font-black text-blue-600 tracking-tighter">{dairyName || "DAIRY STREAM"}</h1>
+                <h1 className="text-4xl font-black text-blue-600 tracking-tighter">
+                  {dairyName || "DAIRY STREAM"}
+                </h1>
                 <div className="mt-4 space-y-1 text-sm font-bold text-gray-500">
-                  <p className="flex items-center gap-2"><MapPin size={14}/> {invoiceData.address}</p>
-                  <p className="flex items-center gap-2"><Smartphone size={14}/> {invoiceData.contact}</p>
+                  <p className="flex items-center gap-2">
+                    <MapPin size={14} /> {invoiceData.address}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Smartphone size={14} /> {invoiceData.contact}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Invoice Number</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                  Invoice Number
+                </p>
                 <p className="text-lg font-black">#{invoiceData.billNo}</p>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-2">Issue Date</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-2">
+                  Issue Date
+                </p>
                 <p className="text-sm font-bold">{invoiceData.date}</p>
               </div>
             </div>
@@ -78,12 +107,18 @@ const InvoicePreviewModal = ({ customer, adminName, dairyName, onClose }) => {
             {/* Customer & Admin Info */}
             <div className="grid grid-cols-2 gap-12 my-12">
               <div>
-                <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Billed To</p>
+                <p className="text-[10px] font-black text-blue-600 uppercase mb-2">
+                  Billed To
+                </p>
                 <h3 className="text-xl font-black">{customer.customer_name}</h3>
-                <p className="font-bold text-gray-500">{customer.phone_number}</p>
+                <p className="font-bold text-gray-500">
+                  {customer.phone_number}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Generated By</p>
+                <p className="text-[10px] font-black text-blue-600 uppercase mb-2">
+                  Generated By
+                </p>
                 <h3 className="text-lg font-black">{adminName}</h3>
                 <p className="font-bold text-gray-500 italic">Administrator</p>
               </div>
@@ -93,19 +128,39 @@ const InvoicePreviewModal = ({ customer, adminName, dairyName, onClose }) => {
             <table className="w-full border-collapse mt-8">
               <thead>
                 <tr className="bg-gray-50 text-left">
-                  <th className="p-4 text-[10px] font-black uppercase text-gray-400 border-b">Description</th>
-                  <th className="p-4 text-[10px] font-black uppercase text-gray-400 border-b text-right">Amount</th>
+                  <th className="p-4 text-[10px] font-black uppercase text-gray-400 border-b">
+                    Description
+                  </th>
+                  <th className="p-4 text-[10px] font-black uppercase text-gray-400 border-b text-right">
+                    Amount
+                  </th>
                 </tr>
               </thead>
               <tbody className="font-bold">
                 <tr>
-                  <td className="p-4 border-b">Previous Month Outstanding Balance</td>
-                  <td className="p-4 border-b text-right">₹{customer.outstanding_balance || 0}</td>
+                  <td className="p-4 border-b">
+                    Previous Month Outstanding Balance
+                  </td>
+                  <td className="p-4 border-b text-right">
+                    ₹{customer.outstanding_balance || 0}
+                  </td>
                 </tr>
                 {invoiceData.discount > 0 && (
                   <tr className="text-emerald-600">
-                    <td className="p-4 border-b">Special Discount / Adjustment</td>
-                    <td className="p-4 border-b text-right">-₹{invoiceData.discount}</td>
+                    <td className="p-4 border-b italic">
+                      Add Discount / Adjustment
+                    </td>
+                    <td className="p-4 border-b text-right">
+                      ₹
+                      <input
+                        type="number"
+                        value={editData.discount}
+                        onChange={(e) =>
+                          setEditData({ ...editData, discount: e.target.value })
+                        }
+                        className="w-20 bg-transparent border-b border-emerald-200 outline-none text-right"
+                      />
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -120,8 +175,14 @@ const InvoicePreviewModal = ({ customer, adminName, dairyName, onClose }) => {
                 </div>
                 <div className="flex justify-between text-2xl font-black text-gray-900 pt-3 border-t-2 border-gray-100">
                   <span>Net Due</span>
-                  <span className={totalDue < 0 ? "text-emerald-600" : "text-red-600"}>
-                    {totalDue < 0 ? `CR ₹${Math.abs(totalDue)}` : `₹${totalDue}`}
+                  <span
+                    className={
+                      totalDue < 0 ? "text-emerald-600" : "text-red-600"
+                    }
+                  >
+                    {totalDue < 0
+                      ? `CR ₹${Math.abs(totalDue)}`
+                      : `₹${totalDue}`}
                   </span>
                 </div>
               </div>
@@ -130,13 +191,29 @@ const InvoicePreviewModal = ({ customer, adminName, dairyName, onClose }) => {
             {/* QR & E-Sign Placeholder */}
             <div className="mt-20 flex justify-between items-end">
               <div className="p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 text-center">
-                <div className="w-24 h-24 bg-gray-300 rounded-lg mb-2 mx-auto flex items-center justify-center text-[10px] font-black uppercase text-gray-500">QR Code</div>
-                <p className="text-[10px] font-black uppercase text-gray-400">Scan to Pay Online</p>
+                <div className="w-24 h-24 bg-gray-300 rounded-lg mb-2 mx-auto flex items-center justify-center text-[10px] font-black uppercase text-gray-500">
+                  QR Code
+                </div>
+                <p className="text-[10px] font-black uppercase text-gray-400">
+                  Scan to Pay Online
+                </p>
               </div>
               <div className="text-center w-48">
                 <div className="h-12 border-b-2 border-gray-200 mb-2"></div>
-                <p className="text-[10px] font-black uppercase text-gray-400 tracking-tighter">Authorized Signatory</p>
+                <p className="text-[10px] font-black uppercase text-gray-400 tracking-tighter">
+                  Authorized Signatory
+                </p>
               </div>
+            </div>
+            <div className="mt-4 text-xs font-medium text-gray-400">
+              <textarea
+                value={editData.notes}
+                onChange={(e) =>
+                  setEditData({ ...editData, notes: e.target.value })
+                }
+                className="w-full bg-transparent outline-none resize-none border-none focus:ring-0"
+                placeholder="Add special instructions here..."
+              />
             </div>
           </div>
         </div>
