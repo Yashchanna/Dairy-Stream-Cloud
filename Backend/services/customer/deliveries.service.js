@@ -348,6 +348,42 @@ const getTodayDeliveryFallback = (subscription) => {
   };
 };
 
+const buildDeliveryInsights = (rows = [], referenceDate = new Date()) => {
+  const targetMonth = referenceDate.getMonth();
+  const targetYear = referenceDate.getFullYear();
+
+  const baseInsights = {
+    monthLabel: referenceDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+    monthlyDeliveryCount: 0,
+    skippedDays: 0,
+    extraOrders: 0,
+  };
+
+  return (rows || []).reduce((acc, row) => {
+    const sourceDate = row?.delivery_date || row?.date || row?.created_at || row?.updated_at;
+    if (!sourceDate) return acc;
+
+    const parsedDate = new Date(sourceDate);
+    if (Number.isNaN(parsedDate.getTime())) return acc;
+    if (parsedDate.getMonth() !== targetMonth || parsedDate.getFullYear() !== targetYear) {
+      return acc;
+    }
+
+    const normalizedStatus = toTitleStatus(row?.status);
+    if (normalizedStatus === "DELIVERED") {
+      acc.monthlyDeliveryCount += 1;
+    }
+    if (normalizedStatus === "SKIPPED") {
+      acc.skippedDays += 1;
+    }
+    if (parseOneTimeNotes(row?.notes).isOneTimeOrder) {
+      acc.extraOrders += 1;
+    }
+
+    return acc;
+  }, baseInsights);
+};
+
 const tryFetchFromTable = async (table, customerId) => {
   const { data, error } = await supabase
     .from(table)
@@ -497,9 +533,12 @@ export const getCustomerDeliveries = async (customerId) => {
   const mappedRows = rows.map((row, index) =>
     mapDeliveryRow(row, index, null, null, dairyNamesMap || {})
   );
+  const insights = buildDeliveryInsights(rows);
+
   return {
     deliveries: mappedRows,
     todayDelivery,
+    insights,
   };
 };
 
