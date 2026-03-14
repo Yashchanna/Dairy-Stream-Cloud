@@ -318,3 +318,24 @@ export const fetchAdminAgentEarningsSummary = async ({ agentId, startDate = "", 
   const { data } = await client.get('/admin/earnings/summary', { params });
   return data;
 };
+
+
+
+/* =========================
+   PROCUREMENT & SUPPLY
+========================= */
+export const fetchProcurementLogs = async () => {
+  const { data } = await client.get("/admin/procurement");
+  return data;
+};
+
+export const addProcurementLog = async (logData) => {
+  const { data } = await client.post("/admin/procurement", logData);
+  return data;
+};
+
+// Use this for recording manual payments via the modal
+export const recordManualPayment = async (payload) => {
+  const { data } = await client.post("/admin/payments/manual", payload);
+  return data;
+};
