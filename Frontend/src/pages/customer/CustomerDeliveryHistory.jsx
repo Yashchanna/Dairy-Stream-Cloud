@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
-import { CheckCircle, XCircle, Clock, Loader2, MapPin, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Loader2, MapPin, RefreshCw, CalendarCheck2, CalendarX2, CirclePlus } from 'lucide-react';
 import { fetchCustomerDeliveries } from '../../api/customer.api.js';
 
 const Deliveries = () => {
   const navigate = useNavigate();
   const [deliveries, setDeliveries] = useState([]);
   const [todayDelivery, setTodayDelivery] = useState(null);
+  const [insights, setInsights] = useState({
+    monthLabel: '',
+    monthlyDeliveryCount: 0,
+    skippedDays: 0,
+    extraOrders: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,10 +26,22 @@ const Deliveries = () => {
       
       setDeliveries(Array.isArray(deliveryData?.deliveries) ? deliveryData.deliveries : []);
       setTodayDelivery(deliveryData?.todayDelivery || null);
+      setInsights({
+        monthLabel: deliveryData?.insights?.monthLabel || '',
+        monthlyDeliveryCount: Number(deliveryData?.insights?.monthlyDeliveryCount || 0),
+        skippedDays: Number(deliveryData?.insights?.skippedDays || 0),
+        extraOrders: Number(deliveryData?.insights?.extraOrders || 0),
+      });
     } catch (err) {
       setError(err?.message || 'Could not load delivery history.');
       setDeliveries([]);
       setTodayDelivery(null);
+      setInsights({
+        monthLabel: '',
+        monthlyDeliveryCount: 0,
+        skippedDays: 0,
+        extraOrders: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -59,6 +77,30 @@ const Deliveries = () => {
       ? `Expected in ${todayDelivery.slot} slot`
       : 'Expected today';
 
+  const insightCards = [
+    {
+      id: 'monthly-deliveries',
+      label: insights?.monthLabel ? `${insights.monthLabel} Deliveries` : 'Monthly Deliveries',
+      value: insights.monthlyDeliveryCount,
+      icon: CalendarCheck2,
+      tone: 'bg-emerald-50 border-emerald-100 text-emerald-700',
+    },
+    {
+      id: 'skipped-days',
+      label: 'Skipped Days',
+      value: insights.skippedDays,
+      icon: CalendarX2,
+      tone: 'bg-rose-50 border-rose-100 text-rose-700',
+    },
+    {
+      id: 'extra-orders',
+      label: 'Extra Orders',
+      value: insights.extraOrders,
+      icon: CirclePlus,
+      tone: 'bg-blue-50 border-blue-100 text-blue-700',
+    },
+  ];
+
   return (
     <CustomerLayout>
       <div className="space-y-8 max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -83,6 +125,26 @@ const Deliveries = () => {
           <div className="bg-red-50 text-red-700 p-4 rounded-2xl border border-red-100 flex items-center gap-3">
             <XCircle size={20} />
             <span className="text-sm font-medium">{error}</span>
+          </div>
+        )}
+
+        {!loading && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {insightCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <div
+                  key={card.id}
+                  className={`rounded-2xl border p-5 ${card.tone}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] font-black opacity-80">{card.label}</p>
+                    <Icon size={18} />
+                  </div>
+                  <p className="mt-3 text-3xl font-black leading-none">{card.value}</p>
+                </div>
+              );
+            })}
           </div>
         )}
 
