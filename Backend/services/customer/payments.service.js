@@ -1,7 +1,10 @@
 import { supabase } from "../../config/supabase.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { getCurrentMonthSuccessfulSubscriptionDue } from "./monthlyBilling.service.js";
+import {
+  getCurrentMonthSuccessfulSubscriptionDue,
+  parseMonthlyBillMeta,
+} from "./monthlyBilling.service.js";
 
 const PAYMENT_CUSTOMER_COLUMNS = ["customer_id", "user_id", "customerId", "customerid"];
 const MEMBERSHIP_CUSTOMER_COLUMNS = ["customer_id", "user_id", "customerId", "customerid"];
@@ -152,6 +155,8 @@ const fetchPaymentsRows = async (customerId, dairyId = null) => {
 
   return data || [];
 };
+
+const isMonthlyBillPaymentRow = (row) => parseMonthlyBillMeta(row?.description).isMonthlyBill;
 
 const mapPaymentRow = (row, index) => {
   const amount = extractPaymentAmount(row);

@@ -82,6 +82,27 @@ function buildGroups(deliveries, view) {
 function DeliveryRow({ item, muted = false }) {
   const cfg  = getCfg(item.status);
   const Icon = cfg.icon;
+  const hasIssue = Boolean(String(item?.customerIssue || '').trim());
+  const issueStatus = String(item?.issueStatus || '').toUpperCase();
+  const hasAdminAction = Boolean(String(item?.issueAdminAction || '').trim());
+  const metaParts = [
+    <span key="delivery-meta">{cfg.sub(item)}</span>,
+    hasIssue ? (
+      <span key="reported-issue" className="font-medium text-rose-700">
+        Reported Issue: {item.customerIssue}
+      </span>
+    ) : null,
+    hasIssue && issueStatus === 'OPEN' ? (
+      <span key="pending-issue" className="font-medium text-amber-700">
+        Status: Pending resolution
+      </span>
+    ) : null,
+    hasAdminAction ? (
+      <span key="admin-action" className="font-medium text-emerald-700">
+        Action Taken: {item.issueAdminAction}
+      </span>
+    ) : null,
+  ].filter(Boolean);
   return (
     <div className={`flex items-center gap-4 px-6 py-4 border-b border-gray-50 last:border-none transition-colors hover:bg-gray-50/60 ${muted ? 'opacity-40' : ''}`}>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.iconBg}`}>
@@ -91,7 +112,14 @@ function DeliveryRow({ item, muted = false }) {
         <p className={`font-semibold truncate ${muted ? 'text-sm text-gray-500' : 'text-sm text-gray-900'}`}>
           {item.qty} {item.product}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">{cfg.sub(item)}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
+          {metaParts.map((part, index) => (
+            <React.Fragment key={part.key || index}>
+              {index > 0 && <span className="text-gray-300">|</span>}
+              {part}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
       <div className="text-right flex-shrink-0">
         <p className="text-xs text-gray-300 mb-1">{item.date}</p>
@@ -111,7 +139,7 @@ function CollapsedSummary({ items, onExpand }) {
     delivered ? `${delivered} delivered` : '',
     skipped   ? `${skipped} skipped`     : '',
     pending   ? `${pending} pending`     : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' Â· ');
 
   return (
     <button onClick={onExpand} className="w-full flex items-center justify-between px-6 py-3.5 text-left hover:bg-gray-50/60 transition-colors">
@@ -215,12 +243,34 @@ export default function Deliveries() {
   const todayStatus      = String(todayDelivery?.status || 'PENDING').toUpperCase();
   const todayCfg         = getCfg(todayStatus);
   const canTrack         = !!todayDelivery?.canTrackAgent;
+  const todayHasIssue    = Boolean(String(todayDelivery?.customerIssue || '').trim());
+  const todayIssueStatus = String(todayDelivery?.issueStatus || '').toUpperCase();
+  const todayHasAdminAction = Boolean(String(todayDelivery?.issueAdminAction || '').trim());
   const todayTimingLabel =
     todayStatus === 'DELIVERED'
       ? todayDelivery?.time ? `Delivered at ${todayDelivery.time}` : 'Delivered'
       : todayDelivery?.slotWindow  ? `Expected ${todayDelivery.slotWindow}`
       : todayDelivery?.slot && todayDelivery.slot !== '-' ? `${todayDelivery.slot} slot`
       : 'Expected today';
+  const todayMetaParts = [
+    <span key="today-meta">{todayTimingLabel}</span>,
+    todayDelivery?.dairyName ? <span key="today-dairy">{todayDelivery.dairyName}</span> : null,
+    todayHasIssue ? (
+      <span key="today-issue" className="font-medium text-rose-700">
+        Reported Issue: {todayDelivery.customerIssue}
+      </span>
+    ) : null,
+    todayHasIssue && todayIssueStatus === 'OPEN' ? (
+      <span key="today-status" className="font-medium text-amber-700">
+        Status: Pending resolution
+      </span>
+    ) : null,
+    todayHasAdminAction ? (
+      <span key="today-action" className="font-medium text-emerald-700">
+        Action Taken: {todayDelivery.issueAdminAction}
+      </span>
+    ) : null,
+  ].filter(Boolean);
 
   const insightCards = [
     { label: insights.monthLabel ? `${insights.monthLabel} Deliveries` : 'Monthly', value: insights.monthlyDeliveryCount, color: 'text-emerald-600', iconBg: 'bg-emerald-50 text-emerald-500', Icon: CalendarCheck2 },
@@ -231,12 +281,12 @@ export default function Deliveries() {
   return (
     <CustomerLayout>
       {/*
-        Single-column, full-width — matches the rest of the dashboard layout.
+        Single-column, full-width â€” matches the rest of the dashboard layout.
         No max-w constraint; CustomerLayout's own padding/max-w handles the outer bounds.
       */}
       <div className="w-full px-6 py-8 space-y-6" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
-        {/* ── Header ── */}
+        {/* â”€â”€ Header â”€â”€ */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-gray-900">
             Delivery History
@@ -247,7 +297,7 @@ export default function Deliveries() {
             className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800 hover:border-gray-300 transition disabled:opacity-40"
           >
             {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            {loading ? 'Refreshing…' : 'Refresh'}
+            {loading ? 'Refreshingâ€¦' : 'Refresh'}
           </button>
         </div>
 
@@ -257,7 +307,7 @@ export default function Deliveries() {
           </div>
         )}
 
-        {/* ── Stat cards — always 3 columns ── */}
+        {/* â”€â”€ Stat cards â€” always 3 columns â”€â”€ */}
         {!loading && (
           <div className="grid grid-cols-3 gap-4">
             {insightCards.map(({ label, value, color, iconBg, Icon }) => (
@@ -277,7 +327,7 @@ export default function Deliveries() {
           </div>
         )}
 
-        {/* ── Today card — full width banner ── */}
+        {/* â”€â”€ Today card â€” full width banner â”€â”€ */}
         {todayDelivery && (
           <div className="bg-white border border-gray-100 rounded-2xl p-6 relative overflow-hidden">
             <MapPin className="absolute -right-4 -bottom-4 text-gray-100" size={120} />
@@ -309,12 +359,15 @@ export default function Deliveries() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
                   <Clock size={11} className="flex-shrink-0" />
-                  {todayTimingLabel}
-                  {todayDelivery.dairyName && <span className="text-gray-300 mx-1">·</span>}
-                  {todayDelivery.dairyName && <span>{todayDelivery.dairyName}</span>}
-                </p>
+                  {todayMetaParts.map((part, index) => (
+                    <React.Fragment key={part.key || index}>
+                      {index > 0 && <span className="text-gray-300">|</span>}
+                      {part}
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
               <button
                 onClick={() => navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })}
@@ -328,11 +381,11 @@ export default function Deliveries() {
           </div>
         )}
 
-        {/* ── Recent deliveries ── */}
+        {/* â”€â”€ Recent deliveries â”€â”€ */}
         {loading ? (
           <div className="bg-white rounded-2xl border border-gray-100 py-32 flex flex-col items-center gap-3">
             <Loader2 size={32} className="animate-spin text-blue-500" />
-            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Loading…</p>
+            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Loadingâ€¦</p>
           </div>
         ) : deliveries.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-20 text-center">
@@ -373,3 +426,4 @@ export default function Deliveries() {
     </CustomerLayout>
   );
 }
+
