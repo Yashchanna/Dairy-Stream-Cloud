@@ -173,8 +173,6 @@ export const getSubscriptionByCustomerId = async (customerId) => {
 };
 
 export const upsertSubscription = async (customerId, payload) => {
-  let existingSubscription = null;
-  let resolvedAssignedAgentId;
   let resolvedApprovalStatus = payload.approval_status;
   let existingAssignedAgentId = null;
   if (!resolvedApprovalStatus) {
