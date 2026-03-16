@@ -22,6 +22,8 @@ import {
   X,
 } from "lucide-react";
 
+const DASHBOARD_VISITED_FLAG = "customerDashboardVisited";
+
 const CustomerDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,6 +46,10 @@ const CustomerDashboard = () => {
   useEffect(() => {
     if (data) setDashboardData(data);
   }, [data]);
+
+  useEffect(() => {
+    sessionStorage.setItem(DASHBOARD_VISITED_FLAG, "true");
+  }, []);
 
   useEffect(() => {
     const incomingState = location.state;
