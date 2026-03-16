@@ -49,6 +49,7 @@ const Payments = () => {
   const [summary, setSummary] = useState({
     monthlyDue: 0,
     walletBalance: 0,
+    payableTillDate: 0,
     dueInDays: null,
     beneficiary: null,
   });
@@ -69,6 +70,7 @@ const Payments = () => {
       setSummary({
         monthlyDue: Number(data?.summary?.monthlyDue || 0),
         walletBalance: Number(data?.summary?.walletBalance || 0),
+        payableTillDate: Number(data?.summary?.payableTillDate || 0),
         dueInDays:
           data?.summary?.dueInDays === null || data?.summary?.dueInDays === undefined
             ? null
@@ -81,6 +83,7 @@ const Payments = () => {
       setSummary({
         monthlyDue: 0,
         walletBalance: 0,
+        payableTillDate: 0,
         dueInDays: null,
         beneficiary: null,
       });
@@ -207,6 +210,10 @@ const Payments = () => {
             <p className="text-sm text-gray-400">Wallet Balance</p>
             <p className="text-lg font-semibold text-gray-900">
               {formatCurrency(summary.walletBalance)}
+            </p>
+            <p className="text-sm text-gray-400 pt-2">Payable Till Date</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatCurrency(summary.payableTillDate)}
             </p>
           </div>
         </div>

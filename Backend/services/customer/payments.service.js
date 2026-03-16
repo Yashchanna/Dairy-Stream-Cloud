@@ -1,6 +1,12 @@
 import { supabase } from "../../config/supabase.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import {
+  getCurrentMonthSuccessfulSubscriptionDue,
+  MONTHLY_BILL_MARKER,
+  parseMonthlyBillMeta,
+  syncCustomerMonthlyBills,
+} from "./monthlyBilling.service.js";
 
 const isMissingColumnError = (error) => {
   const message = String(error?.message || "").toLowerCase();
@@ -103,6 +109,8 @@ const fetchPaymentsRows = async (customerId, dairyId = null) => {
   return [];
 };
 
+const isMonthlyBillPaymentRow = (row) => parseMonthlyBillMeta(row?.description).isMonthlyBill;
+
 const mapPaymentRow = (row, index) => {
   const amount = toNumber(
     row.amount ?? row.total_amount ?? row.total ?? row.bill_amount ?? 0,
@@ -110,11 +118,15 @@ const mapPaymentRow = (row, index) => {
   );
   const status = normalizeStatus(row.status);
   const dateSource = row.payment_date || row.date || row.created_at || row.updated_at;
-  const monthLabel = row.billing_month || row.month || null;
+  const monthMeta = parseMonthlyBillMeta(row.description);
+  const monthLabel = row.billing_month || row.month || monthMeta.monthKey || null;
+  const title = monthMeta.isMonthlyBill
+    ? `${monthLabel ? `${monthLabel} Monthly Bill` : "Monthly Bill"}`
+    : row.title || row.description || "Payment";
 
   return {
     id: row.id ?? `payment-${index}`,
-    title: row.title || row.description || (monthLabel ? `${monthLabel} Milk Bill` : "Milk Bill"),
+    title,
     date: formatDate(dateSource),
     amount,
     status,
@@ -171,19 +183,25 @@ const getDairyBankDetails = async (dairyId) => {
 };
 
 const getPendingPaymentForCustomer = async (customerId, paymentId = null, dairyId = null) => {
+  if (paymentId !== null && paymentId !== undefined) {
+    const normalized = normalizePaymentId(paymentId);
+    const rows = await fetchPaymentsRows(customerId, dairyId);
+    return (
+      rows.find(
+        (row) =>
+          String(row?.id) === String(normalized) &&
+          ["PENDING", "OVERDUE"].includes(String(row?.status || "").toUpperCase())
+      ) || null
+    );
+  }
+
   let query = supabase
     .from("payments")
     .select("*")
     .eq("customer_id", customerId)
-    .in("status", ["PENDING", "OVERDUE"]);
-
-  if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
-    query = query.eq("dairy_id", dairyId);
-  }
-
-  if (paymentId !== null && paymentId !== undefined) {
-    query = query.eq("id", normalizePaymentId(paymentId));
-  }
+    .in("status", ["PENDING", "OVERDUE"])
+    .ilike("description", `%${MONTHLY_BILL_MARKER}%`);
+  if (dairyId !== null && dairyId !== undefined && dairyId !== "") query = query.eq("dairy_id", dairyId);
 
   const { data, error } = await query
     .order("due_date", { ascending: true, nullsFirst: false })
@@ -196,11 +214,14 @@ const getPendingPaymentForCustomer = async (customerId, paymentId = null, dairyI
 };
 
 const getPendingPaymentsForCustomer = async (customerId, dairyId = null) => {
+  await syncCustomerMonthlyBills(customerId);
+
   let query = supabase
     .from("payments")
     .select("*")
     .eq("customer_id", customerId)
     .in("status", ["PENDING", "OVERDUE"])
+    .ilike("description", `%${MONTHLY_BILL_MARKER}%`)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -437,16 +458,24 @@ export const verifyCustomerPayment = async ({
 };
 
 export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
+  await syncCustomerMonthlyBills(customerId);
+
   const [walletBalance, paymentRows, beneficiary] = await Promise.all([
     getCustomerWalletBalance(customerId),
     fetchPaymentsRows(customerId, dairyId),
     getDairyBankDetails(dairyId),
   ]);
+  const { payableTillDate } = await getCurrentMonthSuccessfulSubscriptionDue(customerId);
 
-  const history = paymentRows.map(mapPaymentRow);
-  const pendingCandidates = history.filter(
+  const history = paymentRows
+    .filter(isMonthlyBillPaymentRow)
+    .map(mapPaymentRow);
+  const pendingCandidates = paymentRows
+    .filter(isMonthlyBillPaymentRow)
+    .map(mapPaymentRow)
+    .filter(
     (item) => item.status === "PENDING" || item.status === "OVERDUE"
-  );
+    );
   const totalPendingAndOverdue = pendingCandidates.reduce(
     (sum, item) => sum + toNumber(item.amount, 0),
     0
@@ -462,6 +491,7 @@ export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
     summary: {
       monthlyDue: totalPendingAndOverdue,
       walletBalance: toNumber(walletBalance, 0),
+      payableTillDate: toNumber(payableTillDate, 0),
       dueInDays: nearestDueInDays,
       beneficiary,
     },

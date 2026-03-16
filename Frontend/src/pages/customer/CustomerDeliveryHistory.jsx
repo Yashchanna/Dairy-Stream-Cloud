@@ -55,6 +55,7 @@ const Deliveries = () => {
   const isTodayPending = todayStatus === 'PENDING';
   const isTodayApprovalPending = todayStatus === 'PENDING_APPROVAL';
   const isTodayDelivered = todayStatus === 'DELIVERED';
+  const isTodayFailed = todayStatus === 'FAILED';
   const isTodayPartnerUnassigned =
     (isTodayPending || isTodayApprovalPending) && !todayDelivery?.canTrackAgent;
   const todayStatusClass = isTodayPending
@@ -63,12 +64,16 @@ const Deliveries = () => {
     ? 'bg-indigo-100 text-indigo-700'
     : isTodayDelivered
     ? 'bg-green-100 text-green-700'
+    : isTodayFailed
+    ? 'bg-red-100 text-red-700'
     : 'bg-slate-100 text-slate-700';
   const todayTimingLabel =
     todayStatus === 'NOT_SUBSCRIBED' || todayStatus === 'NOT_SCHEDULED'
       ? 'No confirmed delivery slot for today'
       : todayStatus === 'DELIVERED'
       ? (todayDelivery?.time ? `Delivered at ${todayDelivery.time}` : 'Delivered')
+      : todayStatus === 'FAILED'
+      ? 'Auto-marked failed at end of day'
       : todayDelivery?.expectedWindow
       ? `Expected in ${todayDelivery.expectedWindow}`
       : todayDelivery?.slotWindow
@@ -251,6 +256,8 @@ const Deliveries = () => {
               const itemStatusClass =
                 itemStatus === 'DELIVERED'
                   ? 'bg-green-50 text-green-700'
+                  : itemStatus === 'FAILED'
+                  ? 'bg-red-50 text-red-600'
                   : itemStatus === 'SKIPPED'
                   ? 'bg-red-50 text-red-600'
                   : itemStatus === 'PENDING_APPROVAL'
@@ -265,10 +272,10 @@ const Deliveries = () => {
                 <div className="flex items-center gap-5">
                   <div className={`p-4 rounded-2xl ${
                     item.status === 'DELIVERED' ? 'bg-green-50 text-green-600' : 
-                    item.status === 'SKIPPED' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'
+                    item.status === 'SKIPPED' || item.status === 'FAILED' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'
                   }`}>
                     {item.status === 'DELIVERED' ? <CheckCircle size={24} /> : 
-                     item.status === 'SKIPPED' ? <XCircle size={24} /> : <Clock size={24} />}
+                     item.status === 'SKIPPED' || item.status === 'FAILED' ? <XCircle size={24} /> : <Clock size={24} />}
                   </div>
                   
                   <div>

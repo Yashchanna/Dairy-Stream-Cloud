@@ -1,9 +1,8 @@
 import { supabase } from "../../config/supabase.js";
 import {
   ensureCustomerSubscriptionDeliveryForDate,
-  ensureDeliveredSubscriptionPaymentsForCustomer,
-  getUnpaidDeliveredSubscriptionPaymentSummary,
 } from "./subscription.automation.service.js";
+import { getUnpaidDeliveredSubscriptionMonthlySummary } from "./monthlyBilling.service.js";
 
 const isMissingColumnError = (error) => {
   const message = String(error?.message || "").toLowerCase();
@@ -130,18 +129,30 @@ export const getSubscriptionByCustomerId = async (customerId) => {
 };
 
 export const upsertSubscription = async (customerId, payload) => {
+  let existingSubscription = null;
+  let resolvedAssignedAgentId;
   let resolvedApprovalStatus = payload.approval_status;
-  if (!resolvedApprovalStatus) {
-    const { data: existingApproval, error: existingApprovalError } = await supabase
+  if (!resolvedApprovalStatus || !Object.prototype.hasOwnProperty.call(payload, "assigned_agent_id")) {
+    const { data: existingRow, error: existingApprovalError } = await supabase
       .from("subscriptions")
-      .select("approval_status")
+      .select("id, approval_status, assigned_agent_id")
       .eq("customer_id", customerId)
       .eq("dairy_id", payload.dairy_id)
       .limit(1)
       .maybeSingle();
 
     if (existingApprovalError) throw existingApprovalError;
-    resolvedApprovalStatus = existingApproval?.approval_status || "PENDING";
+    existingSubscription = existingRow || null;
+
+    if (!resolvedApprovalStatus) {
+      resolvedApprovalStatus = existingSubscription?.approval_status || "PENDING";
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "assigned_agent_id")) {
+    resolvedAssignedAgentId = payload.assigned_agent_id ?? null;
+  } else {
+    resolvedAssignedAgentId = existingSubscription?.assigned_agent_id ?? null;
   }
 
   const body = {
@@ -155,7 +166,7 @@ export const upsertSubscription = async (customerId, payload) => {
     payment_method: payload.payment_method,
     status: payload.status || "ACTIVE",
     approval_status: String(resolvedApprovalStatus || "PENDING").toUpperCase(),
-    assigned_agent_id: payload.assigned_agent_id ?? null,
+    assigned_agent_id: resolvedAssignedAgentId,
   };
 
   let data;
@@ -233,11 +244,10 @@ export const upsertSubscription = async (customerId, payload) => {
 };
 
 export const clearSubscriptionByCustomerId = async (customerId) => {
-  await ensureDeliveredSubscriptionPaymentsForCustomer(customerId);
-  const unpaidSummary = await getUnpaidDeliveredSubscriptionPaymentSummary(customerId);
+  const unpaidSummary = await getUnpaidDeliveredSubscriptionMonthlySummary(customerId);
   if (unpaidSummary.unpaidCount > 0) {
     const error = new Error(
-      `Please clear all pending subscription dues before closing. Unpaid delivered entries: ${unpaidSummary.unpaidCount}`
+      `Please clear all pending monthly subscription dues before closing. Unpaid delivered entries: ${unpaidSummary.unpaidCount}`
     );
     error.statusCode = 400;
     throw error;
