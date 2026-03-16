@@ -49,6 +49,25 @@ const parseDeliveryIdFromPaymentDescription = (description) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const syncExistingSubscriptionDeliveryAgent = async ({ deliveryId, assignedAgentId }) => {
+  const parsedDeliveryId = Number(deliveryId);
+  const parsedAgentId = Number(assignedAgentId);
+
+  if (!Number.isFinite(parsedDeliveryId) || parsedDeliveryId <= 0) return;
+  if (!Number.isFinite(parsedAgentId) || parsedAgentId <= 0) return;
+
+  const { error } = await supabase
+    .from("deliveries")
+    .update({
+      agent_id: parsedAgentId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", parsedDeliveryId)
+    .is("agent_id", null);
+
+  if (error) throw error;
+};
+
 const getLatestDeliverableSubscription = async (customerId) => {
   const { data, error } = await supabase
     .from("subscriptions")
@@ -153,7 +172,7 @@ const ensureDailyDeliveryForSubscription = async ({
 
   const { data: existingRows, error: existingError } = await supabase
     .from("deliveries")
-    .select("id, customer_id, dairy_id, delivery_date, milk_type, quantity_liters, status, notes")
+    .select("id, customer_id, dairy_id, delivery_date, milk_type, quantity_liters, status, notes, agent_id")
     .eq("customer_id", customerId)
     .eq("dairy_id", subscription.dairy_id)
     .eq("delivery_date", targetDate)
@@ -167,6 +186,13 @@ const ensureDailyDeliveryForSubscription = async ({
   });
 
   if (existing) {
+    if (!existing?.agent_id && subscription?.assigned_agent_id) {
+      await syncExistingSubscriptionDeliveryAgent({
+        deliveryId: existing.id,
+        assignedAgentId: subscription.assigned_agent_id,
+      });
+    }
+
     await ensurePaymentForDelivery({
       customerId,
       dairyId: subscription.dairy_id,
@@ -193,7 +219,7 @@ const ensureDailyDeliveryForSubscription = async ({
       approval_status: "APPROVED",
       notes: deliveryNotes,
     })
-    .select("id, customer_id, dairy_id, delivery_date, milk_type, quantity_liters, status, notes")
+    .select("id, customer_id, dairy_id, delivery_date, milk_type, quantity_liters, status, notes, agent_id")
     .maybeSingle();
 
   if (createDeliveryError) throw createDeliveryError;

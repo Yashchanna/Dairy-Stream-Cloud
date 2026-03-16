@@ -29,6 +29,50 @@ const isActiveSubscriptionStatus = (status) => {
   return value !== "CLOSED" && value !== "CANCELLED" && value !== "CANCELED";
 };
 
+const normalizeRouteValue = (value) => String(value || "").trim().toLowerCase();
+
+const findAutoAssignedAgentId = async ({ customerId, dairyId }) => {
+  if (!customerId || !dairyId) return null;
+
+  const { data: customer, error: customerError } = await supabase
+    .from("customers")
+    .select("id, building_name")
+    .eq("id", customerId)
+    .limit(1)
+    .maybeSingle();
+
+  if (customerError) {
+    if (isMissingTableError(customerError) || isMissingColumnError(customerError) || isUuidSyntaxError(customerError)) {
+      return null;
+    }
+    throw customerError;
+  }
+
+  const customerRoute = normalizeRouteValue(customer?.building_name);
+  if (!customerRoute) return null;
+
+  const { data: agents, error: agentError } = await supabase
+    .from("agents")
+    .select("id, building, status")
+    .eq("dairy_id", dairyId)
+    .order("id", { ascending: true });
+
+  if (agentError) {
+    if (isMissingTableError(agentError) || isMissingColumnError(agentError) || isUuidSyntaxError(agentError)) {
+      return null;
+    }
+    throw agentError;
+  }
+
+  const matchedAgent = (agents || []).find((agent) => {
+    const agentRoute = normalizeRouteValue(agent?.building);
+    const agentStatus = String(agent?.status || "ACTIVE").trim().toUpperCase();
+    return agentRoute === customerRoute && agentStatus !== "INACTIVE";
+  });
+
+  return matchedAgent?.id ?? null;
+};
+
 const ensureCustomerDairyAssignment = async ({ customerId, dairyId }) => {
   if (!customerId) return;
 
@@ -132,27 +176,49 @@ export const upsertSubscription = async (customerId, payload) => {
   let existingSubscription = null;
   let resolvedAssignedAgentId;
   let resolvedApprovalStatus = payload.approval_status;
-  if (!resolvedApprovalStatus || !Object.prototype.hasOwnProperty.call(payload, "assigned_agent_id")) {
-    const { data: existingRow, error: existingApprovalError } = await supabase
+  let existingAssignedAgentId = null;
+  if (!resolvedApprovalStatus) {
+    const { data: existingApproval, error: existingApprovalError } = await supabase
       .from("subscriptions")
-      .select("id, approval_status, assigned_agent_id")
+      .select("approval_status, assigned_agent_id")
       .eq("customer_id", customerId)
       .eq("dairy_id", payload.dairy_id)
       .limit(1)
       .maybeSingle();
 
     if (existingApprovalError) throw existingApprovalError;
-    existingSubscription = existingRow || null;
-
-    if (!resolvedApprovalStatus) {
-      resolvedApprovalStatus = existingSubscription?.approval_status || "PENDING";
-    }
+    resolvedApprovalStatus = existingApproval?.approval_status || "PENDING";
+    existingAssignedAgentId = existingApproval?.assigned_agent_id ?? null;
   }
 
-  if (Object.prototype.hasOwnProperty.call(payload, "assigned_agent_id")) {
-    resolvedAssignedAgentId = payload.assigned_agent_id ?? null;
-  } else {
-    resolvedAssignedAgentId = existingSubscription?.assigned_agent_id ?? null;
+  if (existingAssignedAgentId == null) {
+    const { data: existingAssignment, error: existingAssignmentError } = await supabase
+      .from("subscriptions")
+      .select("assigned_agent_id")
+      .eq("customer_id", customerId)
+      .eq("dairy_id", payload.dairy_id)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingAssignmentError) throw existingAssignmentError;
+    existingAssignedAgentId = existingAssignment?.assigned_agent_id ?? null;
+  }
+
+  let resolvedAssignedAgentId =
+    payload.assigned_agent_id !== undefined ? payload.assigned_agent_id : existingAssignedAgentId;
+
+  const normalizedStatus = String(payload.status || "ACTIVE").toUpperCase();
+  const normalizedApprovalStatus = String(resolvedApprovalStatus || "PENDING").toUpperCase();
+
+  if (
+    (resolvedAssignedAgentId == null || resolvedAssignedAgentId === "") &&
+    normalizedStatus === "ACTIVE" &&
+    normalizedApprovalStatus === "APPROVED"
+  ) {
+    resolvedAssignedAgentId = await findAutoAssignedAgentId({
+      customerId,
+      dairyId: payload.dairy_id,
+    });
   }
 
   const body = {
@@ -165,8 +231,8 @@ export const upsertSubscription = async (customerId, payload) => {
     address: payload.address,
     payment_method: payload.payment_method,
     status: payload.status || "ACTIVE",
-    approval_status: String(resolvedApprovalStatus || "PENDING").toUpperCase(),
-    assigned_agent_id: resolvedAssignedAgentId,
+    approval_status: normalizedApprovalStatus,
+    assigned_agent_id: resolvedAssignedAgentId ?? null,
   };
 
   let data;
