@@ -79,14 +79,23 @@ function buildGroups(deliveries, view) {
   return Array.from(map.values());
 }
 
+function getDeliveryTypeLabel(item) {
+  const normalizedType = String(item?.deliveryType || "").toUpperCase();
+  if (normalizedType === "ONE_TIME") return "One-time";
+  if (normalizedType === "SUBSCRIPTION") return "Subscription";
+  return item?.isOneTimeOrder ? "One-time" : "Subscription";
+}
+
 function DeliveryRow({ item, muted = false }) {
   const cfg  = getCfg(item.status);
   const Icon = cfg.icon;
   const hasIssue = Boolean(String(item?.customerIssue || '').trim());
   const issueStatus = String(item?.issueStatus || '').toUpperCase();
   const hasAdminAction = Boolean(String(item?.issueAdminAction || '').trim());
+  const deliveryTypeLabel = getDeliveryTypeLabel(item);
   const metaParts = [
     <span key="delivery-meta">{cfg.sub(item)}</span>,
+    <span key="delivery-type">{deliveryTypeLabel}</span>,
     hasIssue ? (
       <span key="reported-issue" className="font-medium text-rose-700">
         Reported Issue: {item.customerIssue}
@@ -254,6 +263,7 @@ export default function Deliveries() {
       : 'Expected today';
   const todayMetaParts = [
     <span key="today-meta">{todayTimingLabel}</span>,
+    <span key="today-type">{getDeliveryTypeLabel(todayDelivery)}</span>,
     todayDelivery?.dairyName ? <span key="today-dairy">{todayDelivery.dairyName}</span> : null,
     todayHasIssue ? (
       <span key="today-issue" className="font-medium text-rose-700">
@@ -343,11 +353,9 @@ export default function Deliveries() {
                   <span className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full ${todayCfg.badge}`}>
                     {todayDelivery.status}
                   </span>
-                  {todayDelivery.isOneTimeOrder && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-indigo-50 text-indigo-600">
-                      One-time
-                    </span>
-                  )}
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-indigo-50 text-indigo-600">
+                    {getDeliveryTypeLabel(todayDelivery)}
+                  </span>
                   {todayDelivery.slot && todayDelivery.slot !== '-' && (
                     <span className="text-[10px] font-semibold px-3 py-1 rounded-full bg-gray-50 text-gray-500">
                       {todayDelivery.slot}

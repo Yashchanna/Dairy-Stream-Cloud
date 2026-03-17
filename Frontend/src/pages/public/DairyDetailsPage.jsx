@@ -23,26 +23,7 @@ import {
   saveCustomerSubscription,
 } from "../../api/customer/customer.api.js";
 import LoadingIndicator from "../../components/common/LoadingIndicator.jsx";
-
-const buildAddressFromParts = (source = {}) => {
-  const directAddress = [
-    source.address,
-    source.fullAddress,
-    source.areaSectorLocality,
-  ].find((value) => typeof value === "string" && value.trim().length > 0);
-
-  if (directAddress) return directAddress.trim();
-
-  const parts = [
-    source.building_name || source.buildingName || "",
-    source.wing || "",
-    source.room_no || source.roomNo || "",
-  ]
-    .map((part) => String(part || "").trim())
-    .filter(Boolean);
-
-  return parts.join(", ");
-};
+import { buildCustomerAddress } from "../../utils/customerAddress.js";
 
 const normalizeProducts = (dairy = {}) => {
   const explicitItems = Array.isArray(dairy?.productItems) ? dairy.productItems : [];
@@ -111,15 +92,23 @@ const DairyDetailsPage = () => {
           } catch {
             setExistingSubscription(null);
           }
+
+          try {
+            const profile = await fetchCustomerProfile();
+            setAddress(buildCustomerAddress(profile));
+          } catch {
+            const storedUser = localStorage.getItem("user");
+            if (storedUser) {
+              try {
+                const user = JSON.parse(storedUser);
+                setAddress(buildCustomerAddress(user?.user || user || {}));
+              } catch {
+                // ignore malformed localStorage
+              }
+            }
+          }
         } else {
           setExistingSubscription(null);
-        }
-        
-        // Load User Address from local storage
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          setAddress(user?.user?.address || user?.address || "");
         }
       } catch (err) {
         toast.error("Error loading dairy details");
