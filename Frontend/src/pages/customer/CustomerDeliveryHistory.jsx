@@ -102,32 +102,16 @@ function toDeliveryViewState(data) {
   };
 }
 
+function getDeliveryTypeLabel(delivery = {}) {
+  const normalizedType = String(delivery?.deliveryType || '').toUpperCase();
+  if (normalizedType === 'ONE_TIME') return 'One-time';
+  if (normalizedType === 'SUBSCRIPTION') return 'Subscription';
+  return delivery?.isOneTimeOrder ? 'One-time' : 'Subscription';
+}
+
 function DeliveryRow({ item, muted = false }) {
   const cfg  = getCfg(item.status);
   const Icon = cfg.icon;
-  const hasIssue = Boolean(String(item?.customerIssue || '').trim());
-  const issueStatus = String(item?.issueStatus || '').toUpperCase();
-  const hasAdminAction = Boolean(String(item?.issueAdminAction || '').trim());
-  const deliveryTypeLabel = getDeliveryTypeLabel(item);
-  const metaParts = [
-    <span key="delivery-meta">{cfg.sub(item)}</span>,
-    <span key="delivery-type">{deliveryTypeLabel}</span>,
-    hasIssue ? (
-      <span key="reported-issue" className="font-medium text-rose-700">
-        Reported Issue: {item.customerIssue}
-      </span>
-    ) : null,
-    hasIssue && issueStatus === 'OPEN' ? (
-      <span key="pending-issue" className="font-medium text-amber-700">
-        Status: Pending resolution
-      </span>
-    ) : null,
-    hasAdminAction ? (
-      <span key="admin-action" className="font-medium text-emerald-700">
-        Action Taken: {item.issueAdminAction}
-      </span>
-    ) : null,
-  ].filter(Boolean);
   return (
     <div className={`flex items-center gap-4 border-b border-[#F2EDE4] px-6 py-4 transition-colors hover:bg-[#FBF7F0] last:border-none ${muted ? 'opacity-45' : ''}`}>
       <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] ${cfg.iconBg}`}>
@@ -348,20 +332,24 @@ export default function Deliveries() {
         {/* â”€â”€ Stat cards â€” always 3 columns â”€â”€ */}
         {!loading && (
           <div className="mt-7 grid gap-5 sm:grid-cols-3">
-            {insightCards.map(({ label, value, color, iconBg, Icon }) => (
-              <div
-                key={label}
-                className="flex items-end justify-between rounded-[20px] border border-[#EDE8DF] bg-[#FFFDF7] p-5 transition-transform hover:-translate-y-0.5"
-              >
-                <div>
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">{label}</p>
-                  <p className={`text-4xl font-extrabold leading-none tracking-tight ${color}`}>{value}</p>
+            {insightCards.map((card) => {
+              const InsightIcon = card.Icon;
+
+              return (
+                <div
+                  key={card.label}
+                  className="flex items-end justify-between rounded-[20px] border border-[#EDE8DF] bg-[#FFFDF7] p-5 transition-transform hover:-translate-y-0.5"
+                >
+                  <div>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">{card.label}</p>
+                    <p className={`text-4xl font-extrabold leading-none tracking-tight ${card.color}`}>{card.value}</p>
+                  </div>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] ${card.iconBg}`}>
+                    <InsightIcon size={18} />
+                  </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] ${iconBg}`}>
-                  <Icon size={18} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
