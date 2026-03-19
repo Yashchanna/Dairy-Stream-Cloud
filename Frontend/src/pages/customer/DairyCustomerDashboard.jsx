@@ -879,10 +879,10 @@ export default function DairyCustomerDashboard() {
 
   return (
     <CustomerLayout>
-      <div className="space-y-8 lg:space-y-10" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <div className="space-y-5 lg:space-y-8" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         {toast && (
           <div
-            className={`fixed right-5 top-5 z-50 flex items-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold shadow-[0_16px_40px_rgba(84,52,16,0.14)] transition-all ${
+            className={`fixed inset-x-3 top-4 z-50 flex items-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold shadow-[0_16px_40px_rgba(84,52,16,0.14)] transition-all sm:left-auto sm:right-5 sm:top-5 sm:max-w-md ${
               toast.type === "success"
                 ? "border-[#CFE4C2] bg-[#EEF5E7] text-[#4A7C2F]"
                 : toast.type === "warning"
@@ -895,68 +895,70 @@ export default function DairyCustomerDashboard() {
           </div>
         )}
 
-        <div className="rounded-[30px] border border-[#EDE8DF] bg-[#F5F0E8] p-5 shadow-[0_20px_60px_rgba(84,52,16,0.08)] sm:p-7 xl:p-9">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
-                Customer Overview
-              </p>
-              <h1
-                className="mt-2 text-[32px] font-semibold leading-tight text-[#2C1A0E] sm:text-[38px]"
-                style={headingFont}
-              >
-                {greeting}, <span className="text-[#B8641A]">{customerName}</span>
-              </h1>
-              <p className="mt-2 text-sm text-[#8B7355]">
-                Member of{" "}
-                <span className="font-bold text-[#5C3D1E]">{dairyName}</span>
-              </p>
-            </div>
-
-            <div className="self-start rounded-[18px] border border-[#EDE8DF] bg-[#FFFDF7] px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
-                Plan Status
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-bold ${
-                    !subscription
-                      ? "bg-[#F5F0E8] text-[#8B7355]"
-                      : isPaused
-                      ? "bg-[#FFF1E4] text-[#C86A2B]"
-                      : "bg-[#EEF5E7] text-[#4A7C2F]"
-                  }`}
+        <div className="rounded-[24px] border-0 bg-transparent p-0 shadow-none sm:rounded-[30px] sm:bg-[#F5F0E8] sm:p-5 sm:shadow-[0_20px_60px_rgba(84,52,16,0.08)] xl:p-6">
+          <div className="rounded-[26px] border-0 bg-[linear-gradient(180deg,#F8F2E9_0%,#FFFDF8_100%)] p-4 shadow-[0_10px_24px_rgba(84,52,16,0.04)] sm:p-6 xl:p-7">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(260px,320px)] xl:items-start xl:gap-5">
+              <div className="min-w-0 max-w-3xl">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#C4A882]">
+                  Customer Overview
+                </p>
+                <h1
+                  className="mt-2 text-[26px] font-semibold leading-[1.08] text-[#2C1A0E] sm:text-[38px] xl:text-[35px]"
+                  style={headingFont}
                 >
-                  {subscription ? (isPaused ? "Paused" : "Active") : "Inactive"}
-                </span>
-                <span className="text-xs text-[#8B7355]">
-                  {subscription
-                    ? `${subscription.quantity || "-"} L ${subscription.milkType || "Milk"}`
-                    : "No active subscription"}
-                </span>
+                  {greeting}, <span className="text-[#B8641A]">{customerName}</span>
+                </h1>
+                <p className="mt-2 text-sm text-[#8B7355]">
+                  Member of{" "}
+                  <span className="font-bold text-[#5C3D1E]">{dairyName}</span>
+                </p>
+              </div>
+
+              <div className="w-full rounded-[18px] border border-[#E7DDCF] bg-white/90 px-4 py-3.5 backdrop-blur-sm xl:justify-self-end xl:py-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C4A882]">
+                  Plan Status
+                </p>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      !subscription
+                        ? "bg-[#F5F0E8] text-[#8B7355]"
+                        : isPaused
+                        ? "bg-[#FFF1E4] text-[#C86A2B]"
+                        : "bg-[#EEF5E7] text-[#4A7C2F]"
+                    }`}
+                  >
+                    {subscription ? (isPaused ? "Paused" : "Active") : "Inactive"}
+                  </span>
+                  <span className="text-xs font-medium text-[#8B7355]">
+                    {subscription
+                      ? `${subscription.quantity || "-"} L ${subscription.milkType || "Milk"}`
+                      : "No active subscription"}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {bannerVisible && upcomingMsg && (
+              <div className="mt-5 flex flex-col gap-3 rounded-[18px] border border-[#EFD7B3] bg-[#FFF8EC] px-3.5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:px-4 sm:py-4">
+                <div className="flex items-start gap-2.5 text-sm text-[#8C5A1A]">
+                  <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-[#B8641A]" />
+                  {upcomingMsg}
+                </div>
+                <button
+                  onClick={() => setBannerVisible(false)}
+                  className="ml-0 flex-shrink-0 rounded-full p-1 text-[#C4A882] transition hover:bg-white hover:text-[#8B7355] sm:ml-3"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
-          {bannerVisible && upcomingMsg && (
-            <div className="mt-7 flex items-start justify-between gap-3 rounded-[20px] border border-[#EFD7B3] bg-[#FFF8EC] px-4 py-4">
-              <div className="flex items-start gap-2.5 text-sm text-[#8C5A1A]">
-                <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-[#B8641A]" />
-                {upcomingMsg}
-              </div>
-              <button
-                onClick={() => setBannerVisible(false)}
-                className="ml-3 flex-shrink-0 rounded-full p-1 text-[#C4A882] transition hover:bg-white hover:text-[#8B7355]"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-
         {today && (
-          <div className="relative mt-8 overflow-hidden rounded-[28px] border border-[#5C3D1E]/10 bg-[linear-gradient(135deg,#2C2416_0%,#4A3820_60%,#6B4F2A_100%)] p-7 sm:p-8">
+          <div className="relative mt-5 overflow-hidden rounded-[24px] border border-[#5C3D1E]/10 bg-[linear-gradient(135deg,#2C2416_0%,#4A3820_60%,#6B4F2A_100%)] p-4 sm:mt-7 sm:rounded-[28px] sm:p-7">
             <div
-              className={`absolute inset-0 rounded-[28px] pointer-events-none ${
+              className={`pointer-events-none absolute inset-0 rounded-[24px] sm:rounded-[28px] ${
                 todayMeta.tone === "success"
                   ? "bg-[radial-gradient(circle_at_top_right,rgba(238,245,231,0.16),transparent_40%)]"
                   : todayMeta.tone === "approval"
@@ -971,40 +973,49 @@ export default function DairyCustomerDashboard() {
             <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/5" />
             <div className="absolute -bottom-14 left-7 h-36 w-36 rounded-full bg-[#D28A40]/10" />
 
-            <p className="relative mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
+            <p className="relative mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-white/50 sm:mb-4">
               Today&apos;s Delivery
             </p>
-            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div
-                className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[18px] ${
-                  todayMeta.tone === "success"
-                    ? "bg-[#EEF5E7] text-[#4A7C2F]"
-                    : todayMeta.tone === "approval"
-                    ? "bg-[#F6F0FF] text-[#7C4DAB]"
-                    : todayMeta.tone === "failed"
-                    ? "bg-[#FDECEA] text-[#C0392B]"
-                    : todayMeta.tone === "idle"
-                    ? "bg-white/10 text-white/80"
-                    : "bg-[#FFF1E4] text-[#D98A2B]"
-                }`}
-              >
-                {todayMeta.tone === "success" ? (
-                  <CheckCircle size={28} />
-                ) : (
-                  <AlertCircle size={28} />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="mb-1 text-[28px] font-semibold leading-tight text-white" style={headingFont}>
-                  {todayMeta.title}
-                </h3>
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-sm font-semibold text-white/80">
-                    {today.quantity || "-"} - {today.product || "Milk"}
-                  </p>
-                  <p className="text-sm font-medium text-white/85">{todayMeta.helperText}</p>
+            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] sm:h-14 sm:w-14 sm:rounded-[18px] ${
+                      todayMeta.tone === "success"
+                        ? "bg-[#EEF5E7] text-[#4A7C2F]"
+                        : todayMeta.tone === "approval"
+                        ? "bg-[#F6F0FF] text-[#7C4DAB]"
+                        : todayMeta.tone === "failed"
+                        ? "bg-[#FDECEA] text-[#C0392B]"
+                        : todayMeta.tone === "idle"
+                        ? "bg-white/10 text-white/80"
+                        : "bg-[#FFF1E4] text-[#D98A2B]"
+                    }`}
+                  >
+                    {todayMeta.tone === "success" ? (
+                      <CheckCircle size={22} />
+                    ) : (
+                      <AlertCircle size={22} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="mb-1 text-[22px] font-semibold leading-tight text-white sm:text-[28px]" style={headingFont}>
+                      {todayMeta.title}
+                    </h3>
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-sm font-semibold text-white/80">
+                        {today.quantity || "-"} - {today.product || "Milk"}
+                      </p>
+                      <p className="text-sm font-medium leading-6 text-white/85">
+                        {todayMeta.helperText}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-1.5">
                   {today?.agent?.name && (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-white/70">
+                    <p className="flex items-center gap-1.5 text-xs text-white/70">
                       <User size={11} />
                       Agent: {today.agent.name} {today.agent.phone ? `(${today.agent.phone})` : ""}
                     </p>
@@ -1017,7 +1028,7 @@ export default function DairyCustomerDashboard() {
                   )}
                 </div>
               </div>
-              <div className="flex flex-col gap-2 self-start">
+              <div className="grid w-full grid-cols-2 gap-2 self-start lg:w-auto lg:min-w-[260px]">
                 <button
                   onClick={() =>
                     navigate("/customer/dashboard/track/agent", { state: { delivery: today } })
@@ -1028,7 +1039,7 @@ export default function DairyCustomerDashboard() {
                       String(today?.status || "").toUpperCase()
                     )
                   }
-                  className="rounded-[14px] border border-white/15 bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="w-full rounded-[13px] border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Track Agent
                 </button>
@@ -1040,48 +1051,67 @@ export default function DairyCustomerDashboard() {
                       String(today?.status || "").toUpperCase()
                     )
                   }
-                  className="rounded-[14px] border border-[#F2D0C8]/70 bg-[#FDECEA] px-4 py-2.5 text-xs font-bold text-[#A33A2B] transition hover:bg-[#F8DDD6]"
+                  className="w-full rounded-[13px] border border-[#F2D0C8]/70 bg-[#FDECEA] px-3 py-2.5 text-xs font-bold text-[#A33A2B] transition hover:bg-[#F8DDD6]"
                 >
                   Report Issue
                 </button>
               </div>
             </div>
             {hasIssue && (
-              <div className="relative mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-rose-400">
-                  Reported Issue
-                </p>
-                <p className="mt-1 text-sm font-medium text-rose-700">{today.customerIssue}</p>
-                {issueStatus === "OPEN" && (
-                  <p className="mt-1 text-xs font-semibold text-amber-700">
-                    Status: Pending resolution
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="relative rounded-[16px] border border-rose-100 bg-rose-50 px-3 py-3 sm:rounded-[18px] sm:px-4">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-rose-400 sm:text-[10px] sm:tracking-widest">
+                    Reported Issue
                   </p>
-                )}
-                {hasAdminAction && (
-                  <p className="mt-1 text-xs font-semibold text-emerald-700">
-                    Action Taken: {today.issueAdminAction}
+                  <p className="mt-1 text-xs font-medium leading-5 text-rose-700 sm:text-sm">
+                    {today.customerIssue}
                   </p>
+                </div>
+
+                {(hasAdminAction || issueStatus === "OPEN") && (
+                  <div
+                    className={`relative rounded-[16px] border px-3 py-3 sm:rounded-[18px] sm:px-4 ${
+                      hasAdminAction
+                        ? "border-emerald-100 bg-emerald-50"
+                        : "border-amber-100 bg-amber-50"
+                    }`}
+                  >
+                    <p
+                      className={`text-[9px] font-bold uppercase tracking-[0.16em] sm:text-[10px] sm:tracking-widest ${
+                        hasAdminAction ? "text-emerald-500" : "text-amber-500"
+                      }`}
+                    >
+                      {hasAdminAction ? "Action Taken" : "Issue Status"}
+                    </p>
+                    <p
+                      className={`mt-1 text-xs font-medium leading-5 sm:text-sm ${
+                        hasAdminAction ? "text-emerald-700" : "text-amber-700"
+                      }`}
+                    >
+                      {hasAdminAction ? today.issueAdminAction : "Pending resolution"}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
           </div>
         )}
 
-        <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-5">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-7 md:grid-cols-4 lg:gap-4">
           {ACTIONS.map(({ key, label, Icon, bg, text, border }) => (
             <button
               key={key}
               onClick={() => handleAction(key)}
               disabled={key === "pause" && !canTogglePause}
-              className={`rounded-[20px] border bg-[#FFFDF7] px-4 py-4 text-left transition hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(100,72,35,0.08)] disabled:cursor-not-allowed disabled:opacity-50 ${border}`}
+              className={`rounded-[18px] border bg-[#FFFDF7] px-3.5 py-4 text-left transition hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(100,72,35,0.08)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 ${border}`}
             >
-              <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-[14px] ${bg} ${text}`}>
-                {key === "pause" && isPaused ? <PlayCircle size={20} /> : <Icon size={20} />}
+              <div className={`mb-2.5 flex h-10 w-10 items-center justify-center rounded-[13px] ${bg} ${text} sm:h-11 sm:w-11`}>
+                {key === "pause" && isPaused ? <PlayCircle size={18} /> : <Icon size={18} />}
               </div>
-              <span className="text-sm font-bold text-[#2C1A0E]">
+              <span className="text-[13px] font-bold text-[#2C1A0E] sm:text-sm">
                 {key === "pause" ? pauseToggleLabel : label}
               </span>
-              <p className="mt-1 text-xs text-[#B89970]">
+              <p className="mt-1 text-[11px] leading-5 text-[#B89970] sm:text-xs">
                 {key === "pause"
                   ? pauseToggleHelper
                   : key === "add"
@@ -1094,26 +1124,28 @@ export default function DairyCustomerDashboard() {
           ))}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="space-y-6 rounded-[24px] border border-[#EDE8DF] bg-[#FFFDF7] p-6 sm:p-7">
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:mt-7 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
+          <div className="space-y-4 rounded-[22px] border border-[#EDE8DF] bg-[#FFFDF7] p-4 sm:space-y-5 sm:p-6">
             {tomorrow && hasSubscription ? (
               <div>
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[#C4A882]">
                   Tomorrow
                 </p>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#FFF4E2] text-[#B8641A]">
-                    <Truck size={20} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-base font-bold text-[#2C1A0E]">
-                      {tomorrow.quantity || "-"} {subscription?.milkType || "Milk"}
-                    </p>
-                    <p className="mt-0.5 text-sm text-[#8B7355]">{tomorrow.slot || "-"} slot</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[13px] bg-[#FFF4E2] text-[#B8641A] sm:h-11 sm:w-11">
+                      <Truck size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-bold text-[#2C1A0E]">
+                        {tomorrow.quantity || "-"} {subscription?.milkType || "Milk"}
+                      </p>
+                      <p className="mt-0.5 text-sm text-[#8B7355]">{tomorrow.slot || "-"} slot</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => navigate("/customer/dashboard/subscriptions")}
-                    className="flex-shrink-0 rounded-[12px] border border-[#EDE8DF] bg-white px-3 py-1.5 text-xs font-bold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E]"
+                    className="w-full rounded-[12px] border border-[#EDE8DF] bg-white px-3 py-2 text-xs font-bold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E] sm:w-auto"
                   >
                     Edit
                   </button>
@@ -1121,10 +1153,10 @@ export default function DairyCustomerDashboard() {
               </div>
             ) : (
               <div>
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[#C4A882]">
                   Tomorrow
                 </p>
-                <div className="rounded-[18px] border border-dashed border-[#E7DAC6] bg-[#FBF7F0] px-4 py-5">
+                <div className="rounded-[16px] border border-dashed border-[#E7DAC6] bg-[#FBF7F0] px-4 py-4.5">
                   <p className="text-sm font-bold text-[#5C3D1E]">No active subscription</p>
                   <p className="mt-1 text-xs text-[#A88763]">
                     Subscribe to schedule your next delivery automatically.
@@ -1139,12 +1171,12 @@ export default function DairyCustomerDashboard() {
               </div>
             )}
 
-            <div className="border-t border-[#F2EDE4] pt-5">
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+            <div className="border-t border-[#F2EDE4] pt-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[#C4A882]">
                 Subscription
               </p>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold text-[#5C3D1E]">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <p className="text-sm font-semibold leading-6 text-[#5C3D1E]">
                   {subscription
                     ? `${subscription.milkType || "Milk"} - ${subscription.quantity || "-"} L Daily`
                     : "No active subscription"}
@@ -1164,7 +1196,7 @@ export default function DairyCustomerDashboard() {
               <p className="mb-4 text-xs text-[#A88763]">
                 Start date: {subscription?.startDate || "Not available"}
               </p>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={handlePauseResume}
                   disabled={!canTogglePause}
@@ -1186,21 +1218,21 @@ export default function DairyCustomerDashboard() {
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-[#EDE8DF] bg-[#FFFDF7] p-6 sm:p-7">
-            <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+          <div className="rounded-[22px] border border-[#EDE8DF] bg-[linear-gradient(180deg,#FFFDF7_0%,#FBF7F0_100%)] p-4 sm:p-6">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[#C4A882]">
               Billing Summary
             </p>
             <div className="mb-1">
-              <span className="text-4xl font-semibold tracking-tight text-[#2C1A0E]" style={headingFont}>
+              <span className="text-[34px] font-semibold tracking-tight text-[#2C1A0E] sm:text-4xl" style={headingFont}>
                 Rs.{billing.monthlyDue ?? 0}
               </span>
             </div>
             {billing.dueInDays != null && (
-              <p className="mb-4 text-xs font-semibold text-[#C0392B]">
+              <p className="mb-4 inline-flex rounded-full bg-[#FDECEA] px-3 py-1 text-xs font-semibold text-[#C0392B]">
                 {getBillingDueText(billing.dueInDays)}
               </p>
             )}
-            <div className="mb-5 space-y-0">
+            <div className="mb-4 space-y-0">
               {[
                 { label: "Wallet Balance", value: `Rs.${billing.walletBalance ?? 0}` },
                 { label: "Last Payment", value: "Not available" },
@@ -1209,7 +1241,7 @@ export default function DairyCustomerDashboard() {
               ].map(({ label, value, highlight }) => (
                 <div
                   key={label}
-                  className="flex items-center justify-between border-b border-[#F2EDE4] py-2.5 last:border-none"
+                  className="flex items-center justify-between gap-3 border-b border-[#F2EDE4] py-2.5 last:border-none"
                 >
                   <span className="text-xs text-[#8B7355]">{label}</span>
                   <span className={`text-xs font-semibold ${highlight ? "text-[#B8641A]" : "text-[#5C3D1E]"}`}>
@@ -1220,13 +1252,13 @@ export default function DairyCustomerDashboard() {
             </div>
             <button
               onClick={() => navigate("/customer/dashboard/payments")}
-              className="mb-2 w-full rounded-[16px] bg-[#2C2416] py-3 text-sm font-bold text-white transition hover:bg-[#4A3820]"
+              className="mb-2 w-full rounded-[14px] bg-[#2C2416] py-2.5 text-sm font-bold text-white transition hover:bg-[#4A3820]"
             >
               Pay Now
             </button>
             <button
               onClick={() => navigate("/customer/dashboard/payments")}
-              className="flex w-full items-center justify-center gap-1.5 rounded-[16px] border border-[#EDE8DF] bg-white py-2.5 text-xs font-semibold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E]"
+              className="flex w-full items-center justify-center gap-1.5 rounded-[14px] border border-[#EDE8DF] bg-white py-2.5 text-xs font-semibold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E]"
             >
               View Full Invoice <ChevronRight size={13} />
             </button>
@@ -1240,15 +1272,15 @@ export default function DairyCustomerDashboard() {
         )}
 
         {showAddExtraModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2C2416]/45 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-[#E7DAC6] bg-[#FFFDF7] shadow-[0_28px_80px_rgba(44,26,14,0.28)]">
-              <div className="flex items-start justify-between gap-4 border-b border-[#F2EDE4] px-6 py-5 sm:px-7">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#2C2416]/45 px-0 py-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
+            <div className="flex h-[100svh] max-h-[100svh] w-full max-w-5xl flex-col overflow-hidden rounded-none border border-[#E7DAC6] bg-[#FFFDF7] shadow-[0_28px_80px_rgba(44,26,14,0.28)] sm:max-h-[92vh] sm:rounded-[28px]">
+              <div className="flex items-start justify-between gap-4 border-b border-[#F2EDE4] px-4 py-4 sm:px-7 sm:py-5">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
                     Next-Day Extra Order
                   </p>
                   <h3
-                    className="mt-2 text-[28px] font-semibold leading-tight text-[#2C1A0E]"
+                    className="mt-2 text-[24px] font-semibold leading-tight text-[#2C1A0E] sm:text-[28px]"
                     style={headingFont}
                   >
                     Add Products From{" "}
@@ -1272,8 +1304,8 @@ export default function DairyCustomerDashboard() {
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 grid lg:grid-cols-[minmax(0,1.35fr)_360px]">
-                <div className="min-h-0 overflow-y-auto p-6 sm:p-7">
+              <div className="min-h-0 flex-1 grid xl:grid-cols-[minmax(0,1.35fr)_360px]">
+                <div className="min-h-0 overflow-y-auto p-4 sm:p-7">
                   {addExtraLoading ? (
                     <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-[22px] border border-dashed border-[#E7DAC6] bg-[#FBF7F0]">
                       <Loader2 size={28} className="animate-spin text-[#B8641A]" />
@@ -1361,9 +1393,9 @@ export default function DairyCustomerDashboard() {
                   )}
                 </div>
 
-                <div className="min-h-0 border-t border-[#F2EDE4] bg-[#FBF7F0] lg:border-l lg:border-t-0">
+                <div className="min-h-0 border-t border-[#F2EDE4] bg-[#FBF7F0] xl:border-l xl:border-t-0">
                   <div className="flex h-full min-h-0 flex-col">
-                    <div className="min-h-0 flex-1 overflow-y-auto p-6 sm:p-7">
+                    <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
                     Order Summary
                       </p>
@@ -1510,7 +1542,7 @@ export default function DairyCustomerDashboard() {
 
                   </div>
 
-                  <div className="space-y-3 border-t border-[#E7DAC6] bg-[#FBF7F0] p-6 sm:p-7">
+                  <div className="space-y-3 border-t border-[#E7DAC6] bg-[#FBF7F0] p-4 sm:p-7">
                     <div className="rounded-[18px] bg-[#2C2416] p-4 text-white">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm text-white/70">Grand Total</span>
@@ -1565,8 +1597,8 @@ export default function DairyCustomerDashboard() {
         )}
 
         {showAddExtraModal && showDuplicateExtraConfirm && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 px-4">
-            <div className="w-full max-w-md rounded-[24px] border border-[#E7DAC6] bg-[#FFFDF7] p-6 shadow-[0_24px_60px_rgba(44,26,14,0.28)]">
+          <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/20 px-4 pb-4 sm:items-center sm:pb-0">
+            <div className="w-full max-w-md rounded-[24px] border border-[#E7DAC6] bg-[#FFFDF7] p-5 shadow-[0_24px_60px_rgba(44,26,14,0.28)] sm:p-6">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
                 Duplicate Order
               </p>
@@ -1577,7 +1609,7 @@ export default function DairyCustomerDashboard() {
                 Do you want to place another extra order for the same product and date?
               </p>
 
-              <div className="mt-5 flex gap-3">
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => setShowDuplicateExtraConfirm(false)}
@@ -1612,8 +1644,8 @@ function ReportIssueModal({ issueText, saving, onClose, onChange, onSubmit }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
-      <div className="w-full max-w-lg rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 px-4 pb-4 sm:items-center sm:pb-0">
+      <div className="w-full max-w-lg rounded-t-[28px] border border-gray-200 bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-400">
@@ -1634,7 +1666,7 @@ function ReportIssueModal({ issueText, saving, onClose, onChange, onSubmit }) {
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
           {presets.map((preset) => (
             <button
               key={preset}
@@ -1661,7 +1693,7 @@ function ReportIssueModal({ issueText, saving, onClose, onChange, onSubmit }) {
           <p className="mt-2 text-xs text-gray-400">Minimum 5 characters.</p>
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             onClick={onClose}
             className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"

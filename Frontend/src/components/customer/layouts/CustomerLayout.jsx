@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   {
     icon: Home,
     label: "Home",
+    mobileLabel: "Home",
     path: "/customer/dashboard",
     preload: preloadDashboardPage,
     prefetchData: [prefetchCustomerDashboard],
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   {
     icon: Calendar,
     label: "Deliveries",
+    mobileLabel: "Deliveries",
     path: "/customer/dashboard/deliveries",
     preload: preloadDeliveriesPage,
     prefetchData: [prefetchCustomerDeliveries],
@@ -47,6 +49,7 @@ const NAV_ITEMS = [
   {
     icon: ShoppingBag,
     label: "My Subscription",
+    mobileLabel: "Plans",
     path: "/customer/dashboard/subscriptions",
     preload: preloadSubscriptionPage,
     prefetchData: [prefetchCustomerSubscription],
@@ -54,6 +57,7 @@ const NAV_ITEMS = [
   {
     icon: CreditCard,
     label: "Payments",
+    mobileLabel: "Payments",
     path: "/customer/dashboard/payments",
     preload: preloadPaymentsPage,
     prefetchData: [prefetchCustomerPayments],
@@ -61,6 +65,7 @@ const NAV_ITEMS = [
   {
     icon: MapPin,
     label: "Track Agent",
+    mobileLabel: "Track",
     path: "/customer/dashboard/track/agent",
     preload: preloadTrackAgentPage,
     prefetchData: [prefetchCustomerDeliveries],
@@ -68,6 +73,7 @@ const NAV_ITEMS = [
   {
     icon: User,
     label: "Profile",
+    mobileLabel: "Profile",
     path: "/customer/dashboard/profile",
     preload: preloadProfilePage,
     prefetchData: [prefetchCustomerProfile, prefetchCustomerDashboard],
@@ -227,11 +233,11 @@ const CustomerLayout = ({ children }) => {
         </div>
       </aside>
 
-      <main className="flex-1 pb-24 md:ml-64 md:pb-0">
+      <main className="flex-1 pb-28 md:ml-64 md:pb-0">
         <header className="sticky top-0 z-20 border-b border-[#EDE8DF] bg-[rgba(255,253,248,0.96)] px-4 py-3 backdrop-blur md:hidden">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl text-[#B8641A]" style={brandFont}>
+              <h1 className="text-lg text-[#B8641A]" style={brandFont}>
                 DairyStream
               </h1>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C4A882]">
@@ -244,12 +250,12 @@ const CustomerLayout = ({ children }) => {
           </div>
         </header>
 
-        <div className="mx-auto w-full max-w-[1480px] px-4 py-6 sm:px-5 md:px-6 lg:px-8 lg:py-8 xl:px-10 xl:py-10">
+        <div className="mx-auto w-full max-w-[1480px] px-3 pb-5 pt-2 sm:px-5 sm:pb-5 sm:pt-3 md:px-6 md:py-6 lg:px-8 lg:py-8 xl:px-10 xl:py-10">
           {children}
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#EDE8DF] bg-[rgba(255,253,248,0.98)] px-3 py-2 shadow-[0_-10px_30px_rgba(100,72,35,0.08)] backdrop-blur md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#EDE8DF] bg-[rgba(255,253,248,0.98)] px-2 py-2 shadow-[0_-10px_30px_rgba(100,72,35,0.08)] backdrop-blur md:hidden">
         <div className="grid grid-cols-6 gap-1">
           {NAV_ITEMS.map((item) => {
             const active = isActive(item.path);
@@ -261,14 +267,16 @@ const CustomerLayout = ({ children }) => {
                 onClick={() => navigate(item.path)}
                 onMouseEnter={() => warmRoute(item)}
                 onFocus={() => warmRoute(item)}
-                className={`flex flex-col items-center justify-center gap-1 rounded-[14px] px-1 py-2 transition ${
+                className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[14px] px-1 py-2 transition ${
                   active
                     ? "bg-[#FDE9C9] text-[#B8641A]"
                     : "text-[#B89970] hover:bg-[#FDF6EC] hover:text-[#8B7355]"
                 }`}
               >
                 <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                <span className="text-[10px] font-semibold leading-tight">{item.label}</span>
+                <span className="text-center text-[9px] font-semibold leading-tight">
+                  {item.mobileLabel || item.label}
+                </span>
               </button>
             );
           })}

@@ -1,4 +1,5 @@
 import { supabase } from "../../config/supabase.js";
+import { appendDeliveryBillingMeta } from "./monthlyBilling.service.js";
 
 const SUBSCRIPTION_DELIVERY_MARKER = "[SUBSCRIPTION_DAILY]";
 const ONE_TIME_ORDER_MARKER = "[ONE_TIME_ORDER]";
@@ -162,6 +163,44 @@ const getProductRateForSubscription = async ({ dairyId, milkType }) => {
   return Number.isFinite(rate) && rate >= 0 ? rate : null;
 };
 
+const ensureSubscriptionDeliveryBillingMeta = async ({ delivery, paymentMethod }) => {
+  if (!delivery?.id) {
+    return { delivery, updated: false };
+  }
+
+  const unitPrice = await getProductRateForSubscription({
+    dairyId: delivery?.dairy_id,
+    milkType: delivery?.milk_type || "Milk",
+  });
+  const nextNotes = appendDeliveryBillingMeta(delivery?.notes, {
+    paymentMethod,
+    unitPrice,
+  });
+  const currentNotes = String(delivery?.notes || "").trim();
+
+  if (nextNotes === currentNotes) {
+    return { delivery, updated: false };
+  }
+
+  const { error } = await supabase
+    .from("deliveries")
+    .update({
+      notes: nextNotes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", delivery.id);
+
+  if (error) throw error;
+
+  return {
+    delivery: {
+      ...delivery,
+      notes: nextNotes,
+    },
+    updated: true,
+  };
+};
+
 const ensurePaymentForDelivery = async ({ customerId, dairyId, delivery, paymentMethod }) => {
   if (!delivery?.id) return null;
 
@@ -253,18 +292,24 @@ const ensureDailyDeliveryForSubscription = async ({
       });
     }
 
-    await ensurePaymentForDelivery({
-      customerId,
-      dairyId: subscription.dairy_id,
+    await ensureSubscriptionDeliveryBillingMeta({
       delivery: existing,
       paymentMethod: subscription.payment_method,
     });
     return { created: false, reason: "already_exists", deliveryId: existing.id };
   }
 
-  const deliveryNotes = `${SUBSCRIPTION_DELIVERY_MARKER} subscription_id=${
+  const baseDeliveryNotes = `${SUBSCRIPTION_DELIVERY_MARKER} subscription_id=${
     subscription.id
   }; slot=${subscription.delivery_slot || "-"}`.slice(0, 500);
+  const unitPrice = await getProductRateForSubscription({
+    dairyId: subscription.dairy_id,
+    milkType: subscription.milk_type || "Milk",
+  });
+  const deliveryNotes = appendDeliveryBillingMeta(baseDeliveryNotes, {
+    paymentMethod: subscription.payment_method,
+    unitPrice,
+  });
 
   const { data: createdDelivery, error: createDeliveryError } = await supabase
     .from("deliveries")
@@ -284,13 +329,6 @@ const ensureDailyDeliveryForSubscription = async ({
 
   if (createDeliveryError) throw createDeliveryError;
   if (!createdDelivery) return { created: false, reason: "insert_failed" };
-
-  await ensurePaymentForDelivery({
-    customerId,
-    dairyId: subscription.dairy_id,
-    delivery: createdDelivery,
-    paymentMethod: subscription.payment_method,
-  });
 
   return { created: true, deliveryId: createdDelivery.id };
 };
@@ -354,13 +392,11 @@ export const ensureDeliveredSubscriptionPaymentsForCustomer = async (customerId)
 
   let ensured = 0;
   for (const delivery of candidateRows) {
-    const payment = await ensurePaymentForDelivery({
-      customerId,
-      dairyId: delivery.dairy_id,
+    const { updated } = await ensureSubscriptionDeliveryBillingMeta({
       delivery,
       paymentMethod: paymentMethodByDairy.get(delivery.dairy_id) || "UPI",
     });
-    if (payment?.id) ensured += 1;
+    if (updated) ensured += 1;
   }
 
   return { ensured };

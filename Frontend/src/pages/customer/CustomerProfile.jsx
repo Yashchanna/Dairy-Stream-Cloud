@@ -151,38 +151,38 @@ const CustomerProfile = () => {
 
   return (
     <CustomerLayout>
-      <div className="space-y-10 animate-in fade-in duration-500 lg:space-y-12" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-        <div className="flex justify-between items-center">
+      <div className="space-y-8 animate-in fade-in duration-500 lg:space-y-12" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">Profile Center</p>
-            <h2 className="mt-2 text-[32px] font-semibold text-[#2C1A0E]" style={headingFont}>My <span className="text-[#B8641A]">Profile</span></h2>
+            <h2 className="mt-2 text-[28px] font-semibold text-[#2C1A0E] sm:text-[32px]" style={headingFont}>My <span className="text-[#B8641A]">Profile</span></h2>
           </div>
           <button 
             onClick={() => navigate("/customer/dashboard")} 
-            className="text-sm font-bold text-[#B8641A] hover:underline"
+            className="self-start text-sm font-bold text-[#B8641A] hover:underline"
           >
             Back to Dashboard
           </button>
         </div>
 
         {/* Profile Header Card */}
-        <div className="flex flex-col items-center justify-between gap-8 rounded-[32px] border border-[#EDE8DF] bg-[#F5F0E8] p-9 shadow-sm md:flex-row">
-          <div className="flex items-center gap-6">
+        <div className="flex flex-col items-center justify-between gap-6 rounded-[32px] border border-[#EDE8DF] bg-[#F5F0E8] p-5 shadow-sm sm:p-7 md:flex-row md:gap-8 md:p-9">
+          <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:text-left sm:gap-6">
             <div className="relative group">
               <img
                 src={profile.photo || `https://ui-avatars.com/api/?name=${profile.name}&background=random`}
                 alt="profile"
-                className="h-28 w-28 rounded-full object-cover ring-4 ring-[#FFF8EC] shadow-md"
+                className="h-24 w-24 rounded-full object-cover ring-4 ring-[#FFF8EC] shadow-md sm:h-28 sm:w-28"
               />
             </div>
             <div>
-              <h3 className="text-[30px] font-semibold text-[#2C1A0E]" style={headingFont}>{profile.name}</h3>
-              <p className="mt-1 flex items-center gap-2 text-[#8B7355]">
+              <h3 className="text-[26px] font-semibold text-[#2C1A0E] sm:text-[30px]" style={headingFont}>{profile.name}</h3>
+              <p className="mt-1 flex flex-wrap items-center justify-center gap-2 text-[#8B7355] sm:justify-start">
                 <Home size={14} className="text-[#B8641A]" /> Member of <span className="font-bold text-[#5C3D1E]">{profile.farm}</span>
               </p>
             </div>
           </div>
-          <button onClick={() => { setFormData(profile); setShowModal(true); }} className="flex items-center gap-2 rounded-[16px] bg-[#2C2416] px-8 py-3 font-bold text-white shadow-lg transition hover:bg-[#4A3820]">
+          <button onClick={() => { setFormData(profile); setShowModal(true); }} className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[#2C2416] px-6 py-3 font-bold text-white shadow-lg transition hover:bg-[#4A3820] sm:w-auto sm:px-8">
             <Edit size={18} /> Edit Profile
           </button>
         </div>
@@ -196,16 +196,16 @@ const CustomerProfile = () => {
 
       {/* Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm">
-          <div className="w-full max-w-lg overflow-hidden rounded-[36px] border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-[#F2EDE4] bg-[#FBF7F0] p-8">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 bg-black/45 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="h-[100svh] w-full max-w-lg overflow-hidden rounded-none border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl animate-in zoom-in-95 sm:h-auto sm:max-h-[92vh] sm:rounded-[36px]">
+            <div className="flex items-center justify-between border-b border-[#F2EDE4] bg-[#FBF7F0] p-5 sm:p-8">
               <h3 className="text-xl font-semibold text-[#2C1A0E]" style={headingFont}>Edit Details</h3>
               <button onClick={() => setShowModal(false)} className="rounded-full border border-[#EDE8DF] p-2 transition-colors hover:bg-white">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-8 space-y-6">
+            <div className="space-y-6 overflow-y-auto p-5 sm:p-8">
               {/* Profile Photo Section */}
               <div className="flex flex-col items-center gap-3">
                 <div className="relative group">
@@ -225,7 +225,7 @@ const CustomerProfile = () => {
               <div className="space-y-4">
                  <Input label="Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                  <Input label="Phone" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                 <div className="grid grid-cols-2 gap-4">
+                 <div className="grid gap-4 sm:grid-cols-2">
                     <Input label="Building" value={formData.buildingName} onChange={e => setFormData({...formData, buildingName: e.target.value})} />
                     <Input label="Room No" value={formData.roomNo} onChange={e => setFormData({...formData, roomNo: e.target.value})} />
                  </div>
@@ -247,11 +247,11 @@ const CustomerProfile = () => {
 };
 
 const InfoCard = ({ icon, label, value, full }) => (
-  <div className={`flex items-center gap-4 rounded-[24px] border border-[#EDE8DF] bg-[#FFFDF7] p-6 shadow-sm ${full ? "md:col-span-2" : ""}`}>
+  <div className={`flex items-start gap-4 rounded-[24px] border border-[#EDE8DF] bg-[#FFFDF7] p-5 shadow-sm sm:items-center sm:p-6 ${full ? "md:col-span-2" : ""}`}>
     <div className="rounded-[16px] bg-[#FFF4E2] p-3 text-[#B8641A]">{icon}</div>
     <div>
       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">{label}</p>
-      <p className="text-lg font-bold text-[#2C1A0E]">{value}</p>
+      <p className="break-words text-base font-bold text-[#2C1A0E] sm:text-lg">{value}</p>
     </div>
   </div>
 );

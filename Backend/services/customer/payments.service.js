@@ -10,6 +10,9 @@ import {
 
 const PAYMENT_CUSTOMER_COLUMNS = ["customer_id", "user_id", "customerId", "customerid"];
 const MEMBERSHIP_CUSTOMER_COLUMNS = ["customer_id", "user_id", "customerId", "customerid"];
+const SUBSCRIPTION_DELIVERY_PAYMENT_MARKER = "[SUBSCRIPTION_DELIVERY_PAYMENT]";
+const ONE_TIME_PAYMENT_MARKER = "[ONE_TIME_PAYMENT]";
+const WALLET_TOPUP_MARKER = "[WALLET_TOPUP";
 
 const isMissingColumnError = (error) => {
   const message = String(error?.message || "").toLowerCase();
@@ -51,6 +54,35 @@ const normalizeStatus = (status) => {
   if (value === "OVERDUE") return "OVERDUE";
   if (value === "FAILED") return "FAILED";
   return "PENDING";
+};
+
+const isDeliveredStatus = (status) => {
+  const value = String(status || "").toUpperCase();
+  return value === "DELIVERED" || value === "COMPLETED";
+};
+
+const parseDeliveryIdFromPaymentDescription = (description) => {
+  const text = String(description || "");
+  const match = text.match(/delivery_id=(\d+)/i);
+  if (!match) return null;
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const isSubscriptionDeliveryPaymentRow = (row) =>
+  String(row?.description || "").includes(SUBSCRIPTION_DELIVERY_PAYMENT_MARKER);
+
+const isOneTimePaymentRow = (row) => {
+  const description = String(row?.description || "");
+  if (description.includes(ONE_TIME_PAYMENT_MARKER)) return true;
+  return /\bone[_ -]?time\b/i.test(description);
+};
+
+const isWalletTopupPaymentRow = (row) => {
+  const description = String(row?.description || "");
+  if (description.includes(WALLET_TOPUP_MARKER)) return true;
+  return /\bwallet\b/i.test(description);
 };
 
 const isMonthlyBillPaymentRow = (row) => {
@@ -100,7 +132,11 @@ const normalizeMonthKey = (value) => {
 
 const getPaymentMonthKey = (row) => {
   const monthMeta = parseMonthlyBillMeta(row?.description);
-  return normalizeMonthKey(monthMeta.monthKey || row?.billing_month || row?.month);
+  const fallbackDate =
+    row?.billing_month ||
+    row?.month ||
+    String(row?.due_date || row?.dueDate || row?.payment_date || row?.date || "").slice(0, 7);
+  return normalizeMonthKey(monthMeta.monthKey || fallbackDate);
 };
 
 const getCustomerWalletBalance = async (customerId) => {
@@ -182,6 +218,55 @@ const fetchPaymentsRows = async (customerId, dairyId = null) => {
   });
 
   return data || [];
+};
+
+const fetchCustomerDeliveryStatusById = async (customerId, dairyId = null) => {
+  const { data } = await runPaymentsCustomerQuery({
+    customerId,
+    emptyValue: [],
+    buildQuery: (customerColumn) => {
+      let query = supabase
+        .from("deliveries")
+        .select("id, status")
+        .eq(customerColumn, customerId)
+        .order("delivery_date", { ascending: false });
+
+      if (dairyId !== null && dairyId !== undefined && dairyId !== "") {
+        query = query.eq("dairy_id", dairyId);
+      }
+
+      return query.limit(2000);
+    },
+  });
+
+  return new Map(
+    (data || [])
+      .map((row) => [Number(row?.id), String(row?.status || "").toUpperCase()])
+      .filter(([deliveryId]) => Number.isFinite(deliveryId) && deliveryId > 0)
+  );
+};
+
+const isDeliveredSubscriptionPaymentRow = (row, deliveryStatusById) => {
+  if (!isSubscriptionDeliveryPaymentRow(row)) return false;
+
+  const deliveryId = parseDeliveryIdFromPaymentDescription(row?.description);
+  if (!deliveryId) return false;
+
+  return isDeliveredStatus(deliveryStatusById.get(deliveryId));
+};
+
+const isVisibleCustomerPaymentRow = (row, deliveryStatusById) => {
+  if (isWalletTopupPaymentRow(row)) return true;
+  if (isOneTimePaymentRow(row)) return true;
+  if (isMonthlyBillPaymentRow(row)) return true;
+  return false;
+};
+
+const isBillableCustomerPaymentRow = (row, deliveryStatusById) => {
+  if (isWalletTopupPaymentRow(row)) return false;
+  if (isOneTimePaymentRow(row)) return true;
+  if (isMonthlyBillPaymentRow(row)) return true;
+  return false;
 };
 
 const mapPaymentRow = (row, index) => {
@@ -516,6 +601,19 @@ const getPendingPaymentsForCustomer = async (customerId, dairyId = null) => {
   };
 };
 
+const getEligiblePendingPaymentsForCustomer = async (customerId, dairyId = null) => {
+  const { payments, customerColumn } = await getPendingPaymentsForCustomer(customerId, dairyId);
+
+  const eligiblePayments = (payments || []).filter((row) =>
+    isBillableCustomerPaymentRow(row)
+  );
+
+  return {
+    payments: eligiblePayments,
+    customerColumn,
+  };
+};
+
 const executePaymentUpdate = async ({
   customerColumn,
   customerId,
@@ -619,7 +717,7 @@ export const createCustomerPaymentOrder = async ({ customerId, paymentId, dairyI
   const resolvedDairyId = await resolveCustomerDairyId(customerId, dairyId);
 
   if (payAll) {
-    const { payments: pendingPayments } = await getPendingPaymentsForCustomer(
+    const { payments: pendingPayments } = await getEligiblePendingPaymentsForCustomer(
       customerId,
       resolvedDairyId
     );
@@ -663,11 +761,17 @@ export const createCustomerPaymentOrder = async ({ customerId, paymentId, dairyI
     };
   }
 
-  const { payment: pendingPayment } = await getPendingPaymentForCustomer(
-    customerId,
-    paymentId,
-    resolvedDairyId
-  );
+  let pendingPayment = null;
+
+  if (paymentId !== null && paymentId !== undefined) {
+    const { payment } = await getPendingPaymentForCustomer(customerId, paymentId, resolvedDairyId);
+    if (payment && isBillableCustomerPaymentRow(payment)) {
+      pendingPayment = payment;
+    }
+  } else {
+    const { payments } = await getEligiblePendingPaymentsForCustomer(customerId, resolvedDairyId);
+    pendingPayment = payments[0] || null;
+  }
 
   if (!pendingPayment) {
     throw new Error("No pending payment found");
@@ -742,7 +846,7 @@ export const verifyCustomerPayment = async ({
   });
 
   if (payAll) {
-    const { payments: pendingPayments, customerColumn } = await getPendingPaymentsForCustomer(
+    const { payments: pendingPayments, customerColumn } = await getEligiblePendingPaymentsForCustomer(
       customerId,
       resolvedDairyId
     );
@@ -751,13 +855,15 @@ export const verifyCustomerPayment = async ({
       throw new Error("No pending payment found");
     }
 
-    await updatePaymentsWithFallbacks({
-      customerColumn,
-      customerId,
-      dairyId: resolvedDairyId,
-      statuses: ["PENDING", "OVERDUE"],
-      payloadVariants,
-    });
+    for (const row of pendingPayments) {
+      await updatePaymentsWithFallbacks({
+        customerColumn,
+        customerId,
+        dairyId: resolvedDairyId,
+        paymentId: row.id,
+        payloadVariants,
+      });
+    }
 
     return {
       success: true,
@@ -773,8 +879,13 @@ export const verifyCustomerPayment = async ({
     payment: existingPayment,
     customerColumn,
   } = await getPendingPaymentForCustomer(customerId, normalizedPaymentId, resolvedDairyId);
+  const deliveryStatusById = await fetchCustomerDeliveryStatusById(customerId, resolvedDairyId);
 
-  if (!existingPayment || !customerColumn) {
+  if (
+    !existingPayment ||
+    !customerColumn ||
+    !isBillableCustomerPaymentRow(existingPayment, deliveryStatusById)
+  ) {
     throw new Error("Payment record not found");
   }
 
@@ -937,10 +1048,10 @@ export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
   const payableTillDate = Number(payableTillDateData?.payableTillDate || 0);
 
   const history = paymentRows
-    .filter(isMonthlyBillPaymentRow)
+    .filter((row) => isVisibleCustomerPaymentRow(row))
     .map(mapPaymentRow);
   const pendingCandidates = paymentRows
-    .filter(isMonthlyBillPaymentRow)
+    .filter((row) => isBillableCustomerPaymentRow(row))
     .map(mapPaymentRow)
     .filter(
     (item) => item.status === "PENDING" || item.status === "OVERDUE"
@@ -956,9 +1067,11 @@ export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
   const currentMonthPendingAndOverdue = pendingCandidates.reduce((sum, item) => {
     return item.monthKey === currentMonthKey ? sum + toNumber(item.amount, 0) : sum;
   }, 0);
-  const liveBillingSummaryAmount =
+  const fallbackLiveBillingSummaryAmount =
     historicalPendingAndOverdue +
     Math.max(currentMonthPendingAndOverdue, toNumber(payableTillDate, 0));
+  const liveBillingSummaryAmount =
+    totalPendingAndOverdue > 0 ? totalPendingAndOverdue : fallbackLiveBillingSummaryAmount;
   const nearestDueInDays = pendingCandidates.reduce((nearest, item) => {
     const days = diffDaysFromToday(item.dueDate);
     if (days === null) return nearest;

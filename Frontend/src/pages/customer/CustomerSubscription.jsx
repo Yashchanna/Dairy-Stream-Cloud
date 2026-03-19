@@ -318,7 +318,7 @@ const Subscribe = () => {
 
   return (
     <CustomerLayout>
-      <div className="w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 lg:space-y-10" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-4 lg:space-y-10" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <div className="rounded-[30px] border border-[#EDE8DF] bg-[#F5F0E8] p-5 shadow-[0_20px_60px_rgba(84,52,16,0.08)] sm:p-7 xl:p-9">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
             Subscription Center
@@ -335,7 +335,7 @@ const Subscribe = () => {
             <LoadingIndicator className="py-6" message="Loading subscription..." />
             <div className="space-y-8 animate-pulse">
               <div className="h-32 rounded-[24px] bg-[#EADFCC]"></div>
-              <div className="grid md:grid-cols-3 gap-6">
+              <div className="grid gap-4 md:grid-cols-3 md:gap-6">
                 <div className="h-24 rounded-[20px] bg-[#EADFCC]"></div>
                 <div className="h-24 rounded-[20px] bg-[#EADFCC]"></div>
                 <div className="h-24 rounded-[20px] bg-[#EADFCC]"></div>
@@ -346,7 +346,7 @@ const Subscribe = () => {
           <>
             {/* Status Card */}
             <div
-              className={`mt-8 w-full rounded-[26px] border p-8 shadow-sm transition hover:shadow-md ${
+              className={`mt-8 w-full rounded-[26px] border p-5 shadow-sm transition hover:shadow-md sm:p-8 ${
                 !subscription
                   ? 'bg-[#FBF7F0] border-[#E7DAC6]'
                   : subscription.status === 'ACTIVE'
@@ -356,12 +356,12 @@ const Subscribe = () => {
                   : 'bg-[#FDECEA] border-[#F2D0C8]'
               }`}
             >
-              <div className="flex flex-col gap-7 md:flex-row md:justify-between md:items-center">
+              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-[#A88763]">
                     {hasActivePlan ? `${subscription.status} PLAN` : 'NO ACTIVE PLAN'}
                   </p>
-                  <h3 className="mt-1 text-[30px] font-semibold text-[#2C1A0E]" style={headingFont}>
+                  <h3 className="mt-1 text-[26px] font-semibold text-[#2C1A0E] sm:text-[30px]" style={headingFont}>
                     {hasActivePlan ? `${subscription.quantity} Liters ${subscription.product}` : 'No subscription yet'}
                   </h3>
                   <p className="mt-1 text-sm text-[#8B7355]">
@@ -388,11 +388,11 @@ const Subscribe = () => {
                 </div>
 
                 {hasActivePlan ? (
-                  <div className="flex gap-3 flex-wrap">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <button
                       disabled={saving}
                       onClick={() => setShowUpdateModal(true)}
-                      className="flex items-center gap-2 rounded-[14px] border border-[#EDE8DF] bg-white px-5 py-2 text-sm font-medium text-[#B8641A] transition hover:bg-[#FFF8EC] disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-[14px] border border-[#EDE8DF] bg-white px-5 py-2 text-sm font-medium text-[#B8641A] transition hover:bg-[#FFF8EC] disabled:opacity-50 sm:w-auto"
                     >
                       <Edit size={16} /> Update Plan
                     </button>
@@ -401,7 +401,7 @@ const Subscribe = () => {
                       <button
                         disabled={!canTogglePauseResume}
                         onClick={pause}
-                        className="flex items-center gap-2 rounded-[14px] border border-[#F0D1B2] bg-white px-5 py-2 text-sm font-medium text-[#C86A2B] transition hover:bg-[#FFF1E4] disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-[14px] border border-[#F0D1B2] bg-white px-5 py-2 text-sm font-medium text-[#C86A2B] transition hover:bg-[#FFF1E4] disabled:opacity-50 sm:w-auto"
                       >
                         <PauseCircle size={16} /> Pause
                       </button>
@@ -409,7 +409,7 @@ const Subscribe = () => {
                       <button
                         disabled={!canTogglePauseResume}
                         onClick={resume}
-                        className="flex items-center gap-2 rounded-[14px] border border-[#DDE8D1] bg-white px-5 py-2 text-sm font-medium text-[#4A7C2F] transition hover:bg-[#EEF5E7] disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-[14px] border border-[#DDE8D1] bg-white px-5 py-2 text-sm font-medium text-[#4A7C2F] transition hover:bg-[#EEF5E7] disabled:opacity-50 sm:w-auto"
                       >
                         <PlayCircle size={16} /> Resume
                       </button>
@@ -418,7 +418,7 @@ const Subscribe = () => {
                     <button
                       disabled={saving}
                       onClick={() => setShowCancelModal(true)}
-                      className="rounded-[14px] border border-[#F2D0C8] bg-white px-5 py-2 text-sm font-medium text-[#C0392B] transition hover:bg-[#FDECEA] disabled:opacity-50"
+                      className="w-full rounded-[14px] border border-[#F2D0C8] bg-white px-5 py-2 text-sm font-medium text-[#C0392B] transition hover:bg-[#FDECEA] disabled:opacity-50 sm:w-auto"
                     >
                       {isApprovedSubscription ? 'Close Subscription' : 'Cancel Subscription'}
                     </button>
@@ -431,14 +431,14 @@ const Subscribe = () => {
                           state: { openSubscriptionModal: true, from: 'customer-subscriptions' },
                         })
                       }
-                      className="rounded-[14px] bg-[#B8641A] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#9F5313]"
+                      className="w-full rounded-[14px] bg-[#B8641A] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#9F5313] sm:w-auto"
                     >
                       Take Subscription for {guestDairyName || `Dairy #${guestDairyId}`}
                     </button>
                   ) : (
                     <button
                       onClick={() => navigate('/explore', { state: { from: 'customer-subscriptions' } })}
-                      className="rounded-[14px] bg-[#B8641A] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#9F5313]"
+                      className="w-full rounded-[14px] bg-[#B8641A] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#9F5313] sm:w-auto"
                     >
                       See Other Dairies
                     </button>
@@ -449,7 +449,7 @@ const Subscribe = () => {
 
             {/* Stats Grid */}
             {hasActivePlan && (
-              <div className="mt-8 grid gap-7 md:grid-cols-3">
+              <div className="mt-8 grid gap-4 md:grid-cols-3 md:gap-7">
                 <StatCard icon={<Droplet size={24} />} label="Daily Quantity" value={`${subscription.quantity} Liters`} />
                 <StatCard icon={<Clock size={24} />} label="Delivery Slot" value={subscription.slot} />
                 <StatCard
@@ -476,7 +476,7 @@ const Subscribe = () => {
             subtitle="Manage your milk delivery"
             onClose={() => setShowUpdateModal(false)}
           />
-          <div className="px-8 py-6 grid md:grid-cols-2 gap-5">
+          <div className="grid gap-5 px-5 py-5 sm:px-8 sm:py-6 md:grid-cols-2">
             <InputBlock label="Product">
               <select
                 className="w-full rounded-[14px] border border-[#EDE8DF] bg-[#FBF7F0] p-3 outline-none focus:ring-2 focus:ring-[#D4B896]"
@@ -569,7 +569,7 @@ const Subscribe = () => {
       {/* Cancel Modal */}
       {showCancelModal && (
         <ModalWrapper small>
-          <div className="p-8">
+          <div className="p-5 sm:p-8">
             <h3 className="text-2xl font-semibold text-[#2C1A0E]" style={headingFont}>
               {isApprovedSubscription ? 'Close Subscription?' : 'Cancel Subscription?'}
             </h3>
@@ -578,7 +578,7 @@ const Subscribe = () => {
                 ? 'Are you sure you want to close your subscription? This will stop deliveries immediately.'
                 : 'Are you sure you want to cancel your subscription? Your subscription is still pending approval, so cancelling will simply remove the pending request.'}
             </p>
-            <div className="flex justify-end gap-4 mt-8">
+            <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 onClick={() => setShowCancelModal(false)}
                 className="rounded-[14px] border border-[#EDE8DF] px-6 py-2 transition hover:bg-[#FBF7F0]"
@@ -602,9 +602,9 @@ const Subscribe = () => {
 
       {/* Custom Toast */}
       {toast && (
-        <div className="fixed top-6 right-6 z-50 animate-slide-in">
+        <div className="fixed inset-x-3 top-4 z-50 animate-slide-in sm:left-auto sm:right-6 sm:top-6">
           <div
-            className={`relative min-w-[260px] overflow-hidden rounded-[18px] px-6 py-4 text-white shadow-lg ${
+            className={`relative overflow-hidden rounded-[18px] px-4 py-3 text-white shadow-lg sm:min-w-[260px] sm:px-6 sm:py-4 ${
               toast.type === 'success' ? 'bg-[#4A7C2F]' : 'bg-[#C0392B]'
             }`}
           >
@@ -623,7 +623,7 @@ export default Subscribe;
 ====================================================== */
 
 const StatCard = ({ icon, label, value }) => (
-  <div className="flex items-center gap-4 rounded-[22px] border border-[#EDE8DF] bg-[#FFFDF7] p-7 shadow-sm transition hover:shadow-md">
+  <div className="flex items-center gap-4 rounded-[22px] border border-[#EDE8DF] bg-[#FFFDF7] p-5 shadow-sm transition hover:shadow-md sm:p-7">
     <div className="rounded-[14px] bg-[#FFF4E2] p-3 text-[#B8641A]">{icon}</div>
     <div>
       <p className="text-xs uppercase tracking-[0.16em] text-[#C4A882]">{label}</p>
@@ -648,7 +648,7 @@ const ExploreOtherDairiesSection = ({ onExplore }) => (
       </div>
       <button
         onClick={onExplore}
-        className="whitespace-nowrap rounded-[14px] bg-[#2C2416] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#4A3820]"
+        className="w-full rounded-[14px] bg-[#2C2416] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#4A3820] md:w-auto"
       >
         Browse Dairies
       </button>
@@ -657,15 +657,15 @@ const ExploreOtherDairiesSection = ({ onExplore }) => (
 );
 
 const ModalWrapper = ({ children, small }) => (
-  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
-    <div className={`w-full animate-in zoom-in-95 rounded-[28px] border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl ${small ? 'max-w-md' : 'max-w-xl'}`}>
+  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in sm:items-center">
+    <div className={`w-full animate-in zoom-in-95 rounded-t-[28px] border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl sm:rounded-[28px] ${small ? 'max-w-md' : 'max-w-xl'}`}>
       {children}
     </div>
   </div>
 );
 
 const ModalHeader = ({ title, subtitle, onClose }) => (
-  <div className="flex items-center justify-between border-b border-[#F2EDE4] px-8 py-6">
+  <div className="flex items-start justify-between gap-4 border-b border-[#F2EDE4] px-5 py-5 sm:px-8 sm:py-6">
     <div>
       <h3 className="text-2xl font-semibold text-[#2C1A0E]" style={headingFont}>{title}</h3>
       <p className="mt-1 text-sm text-[#8B7355]">{subtitle}</p>
@@ -677,7 +677,7 @@ const ModalHeader = ({ title, subtitle, onClose }) => (
 );
 
 const ModalFooter = ({ onCancel, onConfirm, confirmText }) => (
-  <div className="flex justify-end gap-4 border-t border-[#F2EDE4] px-8 py-6">
+  <div className="flex flex-col-reverse gap-3 border-t border-[#F2EDE4] px-5 py-5 sm:flex-row sm:justify-end sm:gap-4 sm:px-8 sm:py-6">
     <button onClick={onCancel} className="rounded-[14px] border border-[#EDE8DF] px-6 py-2 transition hover:bg-[#FBF7F0]">
       Cancel
     </button>

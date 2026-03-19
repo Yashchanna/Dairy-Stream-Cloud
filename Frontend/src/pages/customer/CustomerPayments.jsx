@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from "react";
 import {
+  CalendarDays,
   ChevronDown,
   ChevronUp,
   Clock,
   CreditCard,
+  Filter,
+  Info,
   Loader2,
+  Plus,
   RefreshCw,
   Wallet,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -21,14 +26,38 @@ import {
   verifyCustomerWalletTopup,
 } from "../../api/customer/customer.api.js";
 
-const headingFont = { fontFamily: "'Plus Jakarta Sans', sans-serif" };
+const bodyFont = { fontFamily: "'Plus Jakarta Sans', sans-serif" };
+const headingFont = { fontFamily: "'Lora', serif" };
+
+const FILTER_OPTIONS = [
+  { value: "ALL", label: "All records" },
+  { value: "PENDING", label: "Pending" },
+  { value: "OVERDUE", label: "Overdue" },
+  { value: "PAID", label: "Paid" },
+];
+
+const WALLET_TOPUP_PRESETS = [100, 250, 500, 1000];
 
 const getAuthToken = () => {
   const storedUser = localStorage.getItem("user");
   return JSON.parse(storedUser || "{}")?.token || localStorage.getItem("token") || null;
 };
 
-const fmt = (value) => `₹${Number(value || 0).toFixed(2)}`;
+const fmt = (value) => `\u20B9${Number(value || 0).toFixed(2)}`;
+
+const formatDateLabel = (
+  value,
+  options = { day: "numeric", month: "short", year: "numeric" }
+) => {
+  if (!value) return "";
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toLocaleDateString("en-IN", options);
+};
 
 const dueText = (dueInDays) => {
   if (dueInDays === null || dueInDays === undefined) return "Due date not set";
@@ -37,7 +66,7 @@ const dueText = (dueInDays) => {
   return `Due in ${dueInDays} days`;
 };
 
-const parseTitle = (raw = "", fallbackDate = "") => {
+const parseTitle = (raw = "") => {
   const up = raw.toUpperCase();
   let title = "Payment";
 
@@ -58,18 +87,10 @@ const parseTitle = (raw = "", fallbackDate = "") => {
 
   const dateStr = raw.match(/date=(\d{4}-\d{2}-\d{2})/i)?.[1];
   if (dateStr) {
-    parts.push(
-      new Date(dateStr).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    );
-  } else if (fallbackDate) {
-    parts.push(fallbackDate);
+    parts.push(formatDateLabel(dateStr));
   }
 
-  return { title, subtitle: parts.join(" · ") };
+  return { title, subtitle: parts.join(" \u2022 ") };
 };
 
 const statusCfg = (status) => {
@@ -121,6 +142,24 @@ const paymentTypeCfg = (raw = "") => {
   };
 };
 
+const getNextBillDateLabel = (payment, dueInDays) => {
+  const dueDateLabel = formatDateLabel(payment?.dueDate, { day: "numeric", month: "short" });
+  if (dueDateLabel) return dueDateLabel;
+
+  if (typeof dueInDays === "number") {
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + dueInDays);
+    return formatDateLabel(nextDate, { day: "numeric", month: "short" });
+  }
+
+  return "Not set";
+};
+
+const getNextSubscriptionDueDate = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 10);
+};
+
 const INITIAL_SHOW = 7;
 const EMPTY_SUMMARY = {
   monthlyDue: 0,
@@ -155,8 +194,12 @@ export default function Payments() {
   const [history, setHistory] = useState(initialPaymentsState.history);
   const [loading, setLoading] = useState(() => !cachedPayments);
   const [payingPaymentId, setPayingPaymentId] = useState(null);
+  const [walletTopupAmount, setWalletTopupAmount] = useState("250");
+  const [walletTopupLoading, setWalletTopupLoading] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const applyPaymentsState = (data) => {
     const nextState = toPaymentsViewState(data);
@@ -213,6 +256,30 @@ export default function Payments() {
     };
   }, []);
 
+  useEffect(() => {
+    setShowAll(false);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (!walletModalOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setWalletModalOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [walletModalOpen]);
+
   const loadRazorpay = () =>
     new Promise((resolve) => {
       if (window.Razorpay) return resolve(true);
@@ -256,7 +323,7 @@ export default function Payments() {
           });
           await loadPayments({ force: true });
         },
-        theme: { color: "#111111" },
+        theme: { color: "#2C1A0E" },
       });
 
       checkout.on("payment.failed", (res) => {
@@ -271,6 +338,51 @@ export default function Payments() {
     }
   };
 
+  const handleWalletTopup = async () => {
+    try {
+      const amount = Number(Number(walletTopupAmount || 0).toFixed(2));
+      if (!Number.isFinite(amount) || amount < 10) {
+        throw new Error("Minimum wallet top-up amount is 10.");
+      }
+
+      setWalletTopupLoading(true);
+      setError(null);
+
+      if (!(await loadRazorpay())) throw new Error("Could not load payment gateway.");
+
+      const orderPayload = await createCustomerWalletTopupOrder({ amount });
+      const checkout = new window.Razorpay({
+        key: orderPayload.keyId,
+        amount: orderPayload.order.amount,
+        currency: orderPayload.order.currency,
+        name: "Dairy Stream",
+        description: `Wallet Top-up ${fmt(amount)}`,
+        order_id: orderPayload.order.id,
+        handler: async (res) => {
+          await verifyCustomerWalletTopup({
+            amount,
+            razorpay_order_id: res.razorpay_order_id,
+            razorpay_payment_id: res.razorpay_payment_id,
+            razorpay_signature: res.razorpay_signature,
+          });
+          await loadPayments({ force: true });
+          setWalletModalOpen(false);
+        },
+        theme: { color: "#2C1A0E" },
+      });
+
+      checkout.on("payment.failed", (res) => {
+        setError(res?.error?.description || "Wallet top-up failed. Please try again.");
+      });
+
+      checkout.open();
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Unable to start wallet top-up.");
+    } finally {
+      setWalletTopupLoading(false);
+    }
+  };
+
   const nextUnpaidPayment =
     history.find((payment) =>
       ["PENDING", "OVERDUE"].includes(String(payment.status || "").toUpperCase())
@@ -278,48 +390,74 @@ export default function Payments() {
 
   const isOverdue = summary.dueInDays !== null && summary.dueInDays < 0;
   const hasDue = Number(summary.monthlyDue || 0) > 0;
-  const isBusy = Boolean(payingPaymentId) || loading;
-  const hasDeliveredRunningBill = Number(summary.payableTillDate || 0) > 0;
+  const walletTopupValue = Number(walletTopupAmount);
+  const canTopupWallet = Number.isFinite(walletTopupValue) && walletTopupValue >= 10;
+  const walletTopupButtonLabel =
+    walletTopupLoading || !canTopupWallet ? "Add Money" : `Add ${fmt(walletTopupValue)}`;
+  const projectedWalletBalance = summary.walletBalance + (canTopupWallet ? walletTopupValue : 0);
+  const isBusy = Boolean(payingPaymentId) || walletTopupLoading || loading;
+  const hasRunningSubscriptionBill = Number(summary.payableTillDate || 0) > 0;
+  const subscriptionDueDateLabel = formatDateLabel(getNextSubscriptionDueDate(), {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const heroAmount = hasDue ? summary.monthlyDue : summary.billingSummaryAmount;
+  const heroLabel = hasDue
+    ? "Amount Due Now"
+    : hasRunningSubscriptionBill
+    ? "Running Subscription Bill"
+    : "Amount Due This Month";
   const billingSummaryHelper = hasDue
     ? dueText(summary.dueInDays)
-    : hasDeliveredRunningBill
-    ? "Updates automatically as deliveries are completed"
+    : hasRunningSubscriptionBill
+    ? "Subscription deliveries are billed monthly and due by the 10th of next month"
     : "No delivered items billed yet";
 
   const payeeText = summary.beneficiary?.dairyName
     ? `${summary.beneficiary.dairyName}${
-        summary.beneficiary.bankName ? ` · ${summary.beneficiary.bankName}` : ""
+        summary.beneficiary.bankName ? ` \u2022 ${summary.beneficiary.bankName}` : ""
       }`
     : "Payee details will appear here";
 
   const heroTagClasses = isOverdue
     ? "border border-[#dc262640] bg-[#dc262626] text-[#fecaca]"
     : hasDue
-    ? "border border-[#d9770640] bg-[#d9770629] text-[#fcd34d]"
+    ? "border border-[#f59e0b40] bg-[#f59e0b21] text-[#FDE68A]"
     : "border border-white/10 bg-white/10 text-white/70";
 
   const payAllButtonClasses =
     hasDue && nextUnpaidPayment
-      ? "bg-[#D97706] text-white hover:bg-[#B45309] disabled:bg-white/15 disabled:text-white/45"
+      ? "bg-[#B8641A] text-white hover:bg-[#9F5414] disabled:bg-white/12 disabled:text-white/40"
       : "bg-white/12 text-white/40 hover:bg-white/12 disabled:bg-white/12 disabled:text-white/40";
 
-  const visibleHistory = showAll ? history : history.slice(0, INITIAL_SHOW);
-  const hiddenCount = history.length - INITIAL_SHOW;
+  const filteredHistory = history.filter((payment) => {
+    if (statusFilter === "ALL") return true;
+    return String(payment.status || "").toUpperCase() === statusFilter;
+  });
+
+  const visibleHistory = showAll ? filteredHistory : filteredHistory.slice(0, INITIAL_SHOW);
+  const hiddenCount = Math.max(filteredHistory.length - INITIAL_SHOW, 0);
+  const nextBillDateLabel = getNextBillDateLabel(nextUnpaidPayment, summary.dueInDays);
+  const nextBillHint =
+    summary.dueInDays === null
+      ? "Subscription bills are due by the 10th of the next month"
+      : dueText(summary.dueInDays);
 
   return (
     <CustomerLayout>
-      <div className="w-full px-2 py-8 md:px-4 lg:py-10" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-        <div className="rounded-[30px] border border-[#B491502E] bg-[#F5F0E8] p-5 shadow-[0_18px_60px_rgba(84,52,16,0.08)] sm:p-7 lg:p-9 xl:p-10">
-          <div className="space-y-7 lg:space-y-8">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="w-full px-2 py-8 md:px-4 lg:py-10" style={bodyFont}>
+        <div className="rounded-[30px] border border-[#E5DCCF] bg-[#F5EFE6] p-5 shadow-[0_18px_60px_rgba(84,52,16,0.08)] sm:p-7 lg:p-9 xl:p-10">
+          <div className="space-y-6 lg:space-y-7">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2
-                  className="text-[28px] font-extrabold tracking-[-0.03em] text-[#2C2416]"
+                  className="text-[30px] font-semibold tracking-[-0.03em] text-[#2C1A0E] sm:text-[34px]"
                   style={headingFont}
                 >
-                  My <span className="text-[#B45309]">Payments</span>
+                  My <span className="text-[#B8641A]">Payments</span>
                 </h2>
-                <p className="mt-1 text-sm text-[#8B7355]">
+                <p className="mt-1.5 text-sm text-[#B89970]">
                   Track bills, wallet credits, and recent payments in one place.
                 </p>
               </div>
@@ -327,9 +465,9 @@ export default function Payments() {
               <button
                 onClick={() => loadPayments({ force: true })}
                 disabled={loading}
-                className="inline-flex items-center gap-2 self-start rounded-[12px] border border-[#B491502E] bg-[#FFFDF7] px-4 py-2 text-xs font-semibold text-[#6B5B3E] transition hover:border-[#D97706] hover:text-[#B45309] disabled:opacity-50"
+                className="inline-flex items-center gap-2 self-start rounded-[10px] border border-[#E5DCCF] bg-white px-4 py-2.5 text-sm font-semibold text-[#8B7355] transition hover:border-[#D8C5AA] hover:text-[#5C3D1E] disabled:opacity-50"
               >
-                {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 {loading ? "Refreshing..." : "Refresh"}
               </button>
             </div>
@@ -341,179 +479,281 @@ export default function Payments() {
               </div>
             )}
 
-            <div className="grid gap-7 xl:grid-cols-[minmax(0,0.92fr)_minmax(380px,1.08fr)] xl:items-start xl:gap-8">
-              <div className="space-y-7">
-                <div className="rounded-[20px] border border-[#B4915020] bg-[#FFFDF7] px-5 py-4 xl:px-6">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#A8936A]">
-                    Payments Overview
+            <section className="relative overflow-hidden rounded-[22px] bg-[#2C1A0E] px-5 py-6 sm:px-8 lg:px-9 lg:py-8">
+              <div className="absolute -right-8 -top-10 h-52 w-52 rounded-full bg-[rgba(184,100,26,0.15)]" />
+              <div className="absolute bottom-[-52px] right-20 h-36 w-36 rounded-full bg-[rgba(245,200,122,0.08)]" />
+
+              <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[#F5C87A73]">
+                    {heroLabel}
                   </p>
-                  <div className="mt-2 flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-                    <div>
-                      <h3
-                        className="text-[26px] font-extrabold tracking-[-0.04em] text-[#2C2416]"
-                        style={headingFont}
-                      >
-                        Desktop-ready billing view
-                      </h3>
-                      <p className="mt-1 text-sm text-[#8B7355]">
-                        Summary cards stay on the left while recent payments get a full desktop panel.
-                      </p>
-                    </div>
-                    <div className="inline-flex items-center gap-2 rounded-full bg-[#FFF8EC] px-3 py-1 text-xs font-semibold text-[#B45309]">
+                  <h3
+                    className="mt-2 text-[36px] font-semibold leading-none tracking-[-0.04em] text-white sm:text-[52px]"
+                    style={headingFont}
+                  >
+                    {fmt(heroAmount)}
+                  </h3>
+
+                  <div className="mt-4">
+                    <span
+                      className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold ${heroTagClasses}`}
+                    >
                       <Clock size={12} />
-                      Live payment status
-                    </div>
+                      {billingSummaryHelper}
+                    </span>
                   </div>
                 </div>
 
-                <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(135deg,#2C2416_0%,#4A3820_60%,#6B4F2A_100%)] p-7 sm:p-9 xl:min-h-[320px]">
-                  <div className="absolute -right-10 -top-10 h-52 w-52 rounded-full bg-[rgba(217,119,6,0.12)]" />
-                  <div className="absolute -bottom-16 left-6 h-40 w-40 rounded-full bg-[rgba(255,255,255,0.04)]" />
+                <div className="flex flex-col items-start gap-4 lg:items-end">
+                  <div>
+                    <p className="text-[11px] text-white/40 lg:text-right">Pay to</p>
+                    <p className="mt-1 text-sm font-bold text-white/85 lg:text-right">{payeeText}</p>
+                  </div>
 
-                  <div className="relative z-10">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
-                      Billing Summary
-                    </p>
-                    <h3
-                      className="mt-2 text-[44px] font-extrabold leading-none tracking-[-0.05em] text-white sm:text-[52px]"
-                      style={headingFont}
-                    >
-                      {fmt(summary.billingSummaryAmount)}
-                    </h3>
-
-                    <div className="mt-4">
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${heroTagClasses}`}
-                      >
-                        <Clock size={12} />
-                        {billingSummaryHelper}
-                      </span>
-                    </div>
-
-                    {hasDeliveredRunningBill && (
-                      <p className="mt-3 text-sm text-white/60">
-                        Delivered till date:{" "}
-                        <span className="font-semibold text-white/80">{fmt(summary.payableTillDate)}</span>
-                      </p>
+                  <button
+                    onClick={() => handlePayNow(nextUnpaidPayment, { payAll: true })}
+                    disabled={isBusy || !nextUnpaidPayment || !hasDue}
+                    className={`inline-flex w-full items-center justify-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold transition sm:w-auto ${payAllButtonClasses}`}
+                  >
+                    {payingPaymentId === "__ALL__" ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <CreditCard size={15} />
                     )}
+                    {payingPaymentId === "__ALL__"
+                      ? "Opening checkout..."
+                      : `Pay Now ${fmt(summary.monthlyDue)}`}
+                  </button>
+                </div>
+              </div>
+            </section>
 
-                    <div className="mt-6 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm text-white/55">
-                        Payee: <span className="font-semibold text-white/80">{payeeText}</span>
-                      </p>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="flex flex-col rounded-[16px] border border-[#EDE8DF] bg-white p-4">
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#FDE9C9] text-[#B8641A]">
+                  <Wallet size={16} />
+                </div>
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#C4A882]">
+                  Wallet Balance
+                </p>
+                <p
+                  className="mt-1.5 text-[26px] font-semibold leading-none tracking-[-0.04em] text-[#4A7C2F]"
+                  style={headingFont}
+                >
+                  {fmt(summary.walletBalance)}
+                </p>
+                <p className="mt-1.5 text-[11px] text-[#B89970]">Available for payments</p>
+                <button
+                  type="button"
+                  onClick={() => setWalletModalOpen(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 self-start rounded-[9px] border border-[#C0DD97] bg-[#EAF3DE] px-3 py-1.5 text-xs font-bold text-[#3B6D11] transition hover:bg-[#D9EDBE]"
+                >
+                  <Plus size={13} />
+                  Add Money
+                </button>
+              </div>
 
-                      <button
-                        onClick={() => handlePayNow(nextUnpaidPayment, { payAll: true })}
-                        disabled={isBusy || !nextUnpaidPayment || !hasDue}
-                        className={`inline-flex items-center justify-center gap-2 rounded-[14px] px-5 py-3 text-sm font-bold transition ${payAllButtonClasses}`}
-                        style={headingFont}
-                      >
-                        {isBusy ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-                        {payingPaymentId === "__ALL__"
-                          ? "Opening checkout..."
-                          : `Pay Now ${fmt(summary.monthlyDue)}`}
-                      </button>
-                    </div>
-                  </div>
+              <div className="rounded-[16px] border border-[#EDE8DF] bg-white p-4">
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#FDECEA] text-[#C0392B]">
+                  <CreditCard size={16} />
+                </div>
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#C4A882]">
+                  Pending + Overdue
+                </p>
+                <p
+                  className="mt-1.5 text-[26px] font-semibold leading-none tracking-[-0.04em] text-[#C0392B]"
+                  style={headingFont}
+                >
+                  {fmt(summary.monthlyDue)}
+                </p>
+                <p className="mt-1.5 text-[11px] text-[#B89970]">All outstanding bills</p>
+              </div>
+
+              <div className="rounded-[16px] border border-[#EDE8DF] bg-white p-4">
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#EBF7F1] text-[#1A7A4A]">
+                  <RefreshCw size={16} />
+                </div>
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#C4A882]">
+                  Subscription Bill
+                </p>
+                <p
+                  className="mt-1.5 text-[26px] font-semibold leading-none tracking-[-0.04em] text-[#1A7A4A]"
+                  style={headingFont}
+                >
+                  {fmt(summary.payableTillDate)}
+                </p>
+                <p className="mt-1.5 text-[11px] leading-5 text-[#B89970]">
+                  {hasRunningSubscriptionBill
+                    ? "Running total from delivered subscription items"
+                    : "Starts building as subscription deliveries are completed"}
+                </p>
+                <p className="mt-2.5 text-[11px] font-semibold text-[#8B7355]">
+                  Payable by {subscriptionDueDateLabel}
+                </p>
+              </div>
+
+              <div className="rounded-[16px] border border-[#EDE8DF] bg-white p-4">
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#E8F4E0] text-[#4A7C2F]">
+                  <CalendarDays size={16} />
+                </div>
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#C4A882]">
+                  Next Bill Date
+                </p>
+                <p
+                  className="mt-1.5 text-[26px] font-semibold leading-none tracking-[-0.04em] text-[#B8641A]"
+                  style={headingFont}
+                >
+                  {nextBillDateLabel}
+                </p>
+                <p className="mt-1.5 text-[11px] text-[#B89970]">{nextBillHint}</p>
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-[18px] border border-[#EDE8DF] bg-white">
+              <div className="flex flex-col gap-3 border-b border-[#F2EDE4] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <div>
+                  <h4 className="text-base font-extrabold text-[#2C1A0E]">Recent Payments</h4>
+                  <p className="mt-1 text-xs text-[#B89970]">
+                    Review your latest bills, completed payments, and pending dues.
+                  </p>
                 </div>
 
-                <div className="grid gap-5 md:grid-cols-2">
-                  <div className="rounded-[18px] border border-[#B491502E] bg-[#FFFDF7] p-5">
-                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[12px] bg-[#EBF7F1] text-[#1A7A4A]">
-                      <Wallet size={18} />
-                    </div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#A8936A]">
-                      Wallet Balance
-                    </p>
-                    <p
-                      className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.04em] text-[#1A7A4A]"
-                      style={headingFont}
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="relative w-full sm:w-auto">
+                    <Filter
+                      size={14}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8B7355]"
+                    />
+                    <select
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                      className="w-full appearance-none rounded-[10px] border border-[#EDE8DF] bg-[#FAFAF7] py-2 pl-9 pr-9 text-sm font-semibold text-[#8B7355] outline-none transition hover:border-[#D8C5AA] focus:border-[#B8641A] sm:w-auto"
                     >
-                      {fmt(summary.walletBalance)}
-                    </p>
-                    <p className="mt-2 text-xs text-[#A8936A]">Available balance</p>
+                      {FILTER_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={14}
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8B7355]"
+                    />
                   </div>
 
-                  <div className="rounded-[18px] border border-[#B491502E] bg-[#FFFDF7] p-5">
-                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[12px] bg-[#FEF2F2] text-[#C53030]">
-                      <CreditCard size={18} />
-                    </div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#A8936A]">
-                      Pending + Overdue
-                    </p>
-                    <p
-                      className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.04em] text-[#C53030]"
-                      style={headingFont}
-                    >
-                      {fmt(summary.monthlyDue)}
-                    </p>
-                    <p className="mt-2 text-xs text-[#A8936A]">Outstanding bills</p>
-                  </div>
+                  <span className="self-start rounded-full bg-[#FDE9C9] px-3 py-1 text-xs font-bold text-[#B8641A]">
+                    {filteredHistory.length} {filteredHistory.length === 1 ? "record" : "records"}
+                  </span>
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-[24px] border border-[#B491502E] bg-[#FFFDF7] xl:min-h-[100%]">
-                <div className="flex items-center justify-between border-b border-[#B4915020] px-5 py-4 sm:px-6">
-                  <div>
-                    <h4 className="text-base font-extrabold text-[#2C2416]" style={headingFont}>
-                      Recent Payments
-                    </h4>
-                    <p className="mt-1 text-xs text-[#A8936A]">
-                      Recent transactions and pending bills
-                    </p>
+              {loading ? (
+                <LoadingIndicator className="py-16" message="Loading payments..." />
+              ) : filteredHistory.length === 0 ? (
+                <div className="px-6 py-16 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#EDE8DF] bg-[#FDF6EC] text-[#B89970]">
+                    <Wallet size={24} />
                   </div>
-                  <span className="rounded-full bg-[#FFF8EC] px-3 py-1 text-xs font-semibold text-[#A8936A]">
-                    {history.length} records
-                  </span>
+                  <p className="mt-4 text-sm font-bold text-[#5C3D1E]">
+                    {history.length === 0
+                      ? "No payment records yet"
+                      : "No payments match this filter"}
+                  </p>
+                  <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-[#B89970]">
+                    {history.length === 0
+                      ? "Your payment history will appear here once your first delivery is billed."
+                      : "Try switching the filter to see bills from another payment status."}
+                  </p>
                 </div>
-
-                {loading ? (
-                  <LoadingIndicator className="py-16" message="Loading payments..." />
-                ) : history.length === 0 ? (
-                  <div className="px-6 py-16 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FFF8EC] text-[#A8936A]">
-                      <Wallet size={24} />
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-[#6B5B3E]">No payment records found yet.</p>
-                    <p className="mt-1 text-xs text-[#A8936A]">
-                      Your transactions will appear here once deliveries begin.
+              ) : (
+                <>
+                  <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(120px,0.95fr)_minmax(130px,0.95fr)_minmax(170px,1fr)] md:gap-4 md:bg-[#FAFAF7] md:px-6 md:py-3">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#C4A882]">
+                      Description
+                    </p>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#C4A882]">
+                      Date
+                    </p>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#C4A882]">
+                      Status
+                    </p>
+                    <p className="text-right text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#C4A882]">
+                      Amount
                     </p>
                   </div>
-                ) : (
-                  <>
-                    {visibleHistory.map((payment) => {
-                      const cfg = statusCfg(payment.status);
-                      const typeCfg = paymentTypeCfg(payment.title);
-                      const { Icon } = typeCfg;
-                      const isUnpaid = ["PENDING", "OVERDUE"].includes(
-                        String(payment.status || "").toUpperCase()
-                      );
-                      const { title, subtitle } = parseTitle(payment.title || "", payment.date || "");
 
-                      return (
-                        <div
-                          key={payment.id}
-                          className="flex flex-col gap-3 border-b border-[#B4915020] px-5 py-4 transition hover:bg-[#FFF8EC] md:flex-row md:items-center md:justify-between sm:px-6"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
+                  {visibleHistory.map((payment) => {
+                    const cfg = statusCfg(payment.status);
+                    const typeCfg = paymentTypeCfg(payment.title);
+                    const { Icon } = typeCfg;
+                    const isUnpaid = ["PENDING", "OVERDUE"].includes(
+                      String(payment.status || "").toUpperCase()
+                    );
+                    const { title, subtitle } = parseTitle(payment.title || "");
+                    const paymentDateLabel = formatDateLabel(payment.date) || payment.date || "-";
+                    const mobileMeta = [
+                      subtitle,
+                      paymentDateLabel,
+                      payment.method && payment.method !== "-" ? payment.method : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" \u2022 ");
+
+                    return (
+                      <div
+                        key={payment.id}
+                        className="border-t border-[#F2EDE4] first:border-t-0 md:first:border-t-0"
+                      >
+                        <div className="grid gap-4 px-5 py-4 sm:px-6 md:grid-cols-[minmax(0,2.2fr)_minmax(120px,0.95fr)_minmax(130px,0.95fr)_minmax(170px,1fr)] md:items-center">
+                          <div className="flex min-w-0 items-start gap-3">
                             <div
-                              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] ${typeCfg.iconBg}`}
+                              className={`mt-0.5 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[12px] ${typeCfg.iconBg}`}
                             >
                               <Icon size={17} />
                             </div>
 
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-[#2C2416]">{title}</p>
-                              <p className="mt-0.5 truncate text-xs text-[#A8936A]">
-                                {subtitle || payment.date || "-"}
-                                {payment.method && payment.method !== "-" ? ` · ${payment.method}` : ""}
+                              <p className="truncate text-sm font-bold text-[#2C1A0E]">{title}</p>
+                              <p className="mt-1 text-xs leading-5 text-[#B89970] md:hidden">
+                                {mobileMeta || "Payment details will appear here."}
+                              </p>
+                              <p className="mt-1 hidden truncate text-xs text-[#B89970] md:block">
+                                {subtitle || "Monthly dairy billing"}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-2 pl-[52px] md:pl-0">
+                          <div className="hidden md:block">
+                            <p className="text-sm font-semibold text-[#5C3D1E]">{paymentDateLabel}</p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-start md:gap-1">
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ${cfg.pill}`}
+                            >
+                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+                              {cfg.label}
+                            </span>
+                            {isUnpaid && payment.dueDate ? (
+                              <p className="text-xs text-[#B89970]">
+                                {dueText(
+                                  Math.round(
+                                    (new Date(payment.dueDate).getTime() - new Date().getTime()) /
+                                      (1000 * 60 * 60 * 24)
+                                  )
+                                )}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-[#B89970]">
+                                {payment.method && payment.method !== "-" ? payment.method : "Recorded payment"}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col items-start gap-2 md:items-end">
                             <p
-                              className="mr-1 text-sm font-extrabold text-[#2C2416]"
+                              className="text-[22px] font-semibold leading-none tracking-[-0.03em] text-[#2C1A0E]"
                               style={headingFont}
                             >
                               {fmt(payment.amount)}
@@ -523,51 +763,176 @@ export default function Payments() {
                               <button
                                 onClick={() => handlePayNow(payment)}
                                 disabled={isBusy}
-                                className="inline-flex items-center gap-1 rounded-[10px] bg-[#2C2416] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#B45309] disabled:cursor-not-allowed disabled:bg-[#DDD2BF] disabled:text-[#8B7355]"
+                                className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#2C1A0E] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#B8641A] disabled:cursor-not-allowed disabled:bg-[#DDD2BF] disabled:text-[#8B7355]"
                               >
                                 {payingPaymentId === payment.id ? (
-                                  <Loader2 size={11} className="animate-spin" />
+                                  <Loader2 size={12} className="animate-spin" />
                                 ) : (
-                                  <CreditCard size={11} />
+                                  <CreditCard size={12} />
                                 )}
                                 {payingPaymentId === payment.id ? "Opening..." : "Pay Bill"}
                               </button>
                             )}
-
-                            <span
-                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ${cfg.pill}`}
-                            >
-                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-                              {cfg.label}
-                            </span>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    );
+                  })}
 
-                    {history.length > INITIAL_SHOW && (
+                  {filteredHistory.length > INITIAL_SHOW && (
+                    <button
+                      onClick={() => setShowAll((prev) => !prev)}
+                      className="flex w-full items-center justify-center gap-1.5 border-t border-[#F2EDE4] px-4 py-4 text-sm font-semibold text-[#8B7355] transition hover:bg-[#FDF6EC] hover:text-[#B8641A]"
+                    >
+                      {showAll ? (
+                        <>
+                          <ChevronUp size={14} /> Show less
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={14} /> Show {hiddenCount} more payments
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
+
+      {walletModalOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-[rgba(20,10,4,0.55)] px-0 py-0 sm:items-center sm:px-4 sm:py-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setWalletModalOpen(false);
+            }
+          }}
+        >
+          <div className="h-[100svh] w-full max-w-[420px] overflow-hidden rounded-none bg-white shadow-[0_30px_90px_rgba(30,16,8,0.24)] sm:h-auto sm:max-h-[92vh] sm:rounded-[22px]">
+            <div className="h-[3px] w-full bg-[linear-gradient(90deg,#3B6D11_0%,#97C459_100%)]" />
+
+            <div className="border-b border-[#F2EAE0] px-5 pb-5 pt-6 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[13px] bg-[#EAF3DE] text-[#3B6D11]">
+                    <Wallet size={20} />
+                  </div>
+                  <h3
+                    className="text-[28px] font-semibold leading-none tracking-[-0.03em] text-[#1E1008]"
+                    style={headingFont}
+                  >
+                    Add Money to Wallet
+                  </h3>
+                  <p className="mt-2 text-sm text-[#B89970]">
+                    Recharge instantly {"\u2022"} Used for future bills {"\u2022"} Min. {fmt(10)}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setWalletModalOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F7F2EB] text-[#8B7355] transition hover:bg-[#EDE4D8]"
+                  aria-label="Close wallet top-up"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto px-5 py-6 sm:px-6">
+              <div>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+                  Quick Select
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {WALLET_TOPUP_PRESETS.map((amount) => {
+                    const selected = walletTopupAmount === String(amount);
+
+                    return (
                       <button
-                        onClick={() => setShowAll((prev) => !prev)}
-                        className="flex w-full items-center justify-center gap-1.5 border-t border-[#B4915020] px-4 py-4 text-sm font-semibold text-[#A8936A] transition hover:bg-[#FFF8EC] hover:text-[#B45309]"
+                        key={amount}
+                        type="button"
+                        onClick={() => setWalletTopupAmount(String(amount))}
+                        className={`rounded-[10px] border px-3 py-2.5 text-sm font-bold transition ${
+                          selected
+                            ? "border-[#3B6D11] bg-[#EAF3DE] text-[#3B6D11]"
+                            : "border-[#EDE8DF] bg-[#FAFAF7] text-[#8B7355] hover:border-[#B8641A] hover:bg-[#FEF6EC] hover:text-[#B8641A]"
+                        }`}
                       >
-                        {showAll ? (
-                          <>
-                            <ChevronUp size={14} /> Show less
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown size={14} /> Show {hiddenCount} more payments
-                          </>
-                        )}
+                        {fmt(amount)}
                       </button>
-                    )}
-                  </>
-                )}
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+                  Or Enter Custom Amount
+                </p>
+                <label className="relative block">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-semibold text-[#8B7355]">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min="10"
+                    step="10"
+                    inputMode="decimal"
+                    value={walletTopupAmount}
+                    onChange={(event) => setWalletTopupAmount(event.target.value)}
+                    placeholder="Enter amount"
+                    className="w-full rounded-[11px] border-[1.5px] border-[#EDE8DF] bg-[#FAFAF7] py-3 pl-8 pr-4 text-base font-semibold text-[#1E1008] outline-none transition placeholder:font-normal placeholder:text-[#C4A882] focus:border-[#3B6D11]"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-2 rounded-[11px] border border-[#C0DD97] bg-[#F0F8E8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium text-[#4A7C2F]">
+                  Current balance {"\u2192"} New balance after top-up
+                </p>
+                <p
+                  className="text-[24px] font-semibold leading-none tracking-[-0.03em] text-[#3B6D11]"
+                  style={headingFont}
+                >
+                  {fmt(projectedWalletBalance)}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-[#B89970]">
+                <Info size={13} />
+                Amount will be credited instantly to your DairyStream wallet.
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setWalletModalOpen(false)}
+                  className="rounded-[11px] border border-[#EDE4D8] bg-[#F7F2EB] px-4 py-3 text-sm font-bold text-[#8B7355] transition hover:bg-[#EDE4D8]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleWalletTopup}
+                  disabled={loading || walletTopupLoading || !canTopupWallet}
+                  className="inline-flex items-center justify-center gap-2 rounded-[11px] bg-[#1E1008] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#3B6D11] disabled:cursor-not-allowed disabled:bg-[#D4C4A8] disabled:text-[#8B7355]"
+                >
+                  {walletTopupLoading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Plus size={14} />
+                  )}
+                  {walletTopupLoading ? "Opening checkout..." : walletTopupButtonLabel}
+                </button>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </CustomerLayout>
   );
 }

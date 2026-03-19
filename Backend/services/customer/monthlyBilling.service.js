@@ -3,6 +3,7 @@ import { supabase } from "../../config/supabase.js";
 export const MONTHLY_BILL_MARKER = "[MONTHLY_BILL]";
 export const ONE_TIME_ORDER_MARKER = "[ONE_TIME_ORDER]";
 export const ONE_TIME_PAYMENT_MARKER = "[ONE_TIME_PAYMENT]";
+const SUBSCRIPTION_DELIVERY_PAYMENT_MARKER = "[SUBSCRIPTION_DELIVERY_PAYMENT]";
 
 const normalizeDeliveryStatus = (status) => String(status || "").trim().toUpperCase();
 
@@ -37,6 +38,14 @@ export const getLocalTodayIso = () => {
   return `${y}-${m}-${d}`;
 };
 
+const formatDateAsIso = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 export const isDeliveredStatus = (status) => {
   const value = normalizeDeliveryStatus(status);
   return value === "DELIVERED" || value === "COMPLETED";
@@ -48,15 +57,27 @@ const getMonthEndDate = (monthKey) => {
   if (!/^\d{4}-\d{2}$/.test(String(monthKey || ""))) return null;
   const [year, month] = String(monthKey).split("-").map(Number);
   const date = new Date(year, month, 0);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return formatDateAsIso(date);
+};
+
+const getSubscriptionBillDueDate = (monthKey) => {
+  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ""))) return null;
+  const [year, month] = String(monthKey).split("-").map(Number);
+  const date = new Date(year, month, 10);
+  return formatDateAsIso(date);
 };
 
 const parseField = (text, field) => {
   const match = String(text || "").match(new RegExp(`${field}=([^;\\n]+)`, "i"));
   return match?.[1]?.trim() || null;
+};
+
+const parseDeliveryIdFromPaymentDescription = (description) => {
+  const match = String(description || "").match(/delivery_id=(\d+)/i);
+  if (!match) return null;
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
 export const parseMonthlyBillMeta = (description) => {
@@ -242,6 +263,43 @@ const fetchCustomerPayments = async (customerId) => {
   });
 };
 
+const buildSubscriptionPaymentAmountByDeliveryId = (paymentRows = []) => {
+  const amountByDeliveryId = new Map();
+
+  for (const row of paymentRows || []) {
+    const description = String(row?.description || "");
+    if (!description.includes(SUBSCRIPTION_DELIVERY_PAYMENT_MARKER)) continue;
+
+    const deliveryId = parseDeliveryIdFromPaymentDescription(description);
+    if (!deliveryId) continue;
+
+    const amount = extractPaymentAmount(row);
+    if (amount <= 0) continue;
+
+    const existingAmount = toNumber(amountByDeliveryId.get(deliveryId), 0);
+    if (amount > existingAmount) {
+      amountByDeliveryId.set(deliveryId, amount);
+    }
+  }
+
+  return amountByDeliveryId;
+};
+
+const resolveSubscriptionDeliveryAmount = async (
+  delivery,
+  rateCache,
+  subscriptionPaymentAmountByDeliveryId
+) => {
+  const amountFromMetadata = await resolveDeliveryAmount(delivery, rateCache);
+  if (amountFromMetadata > 0) return amountFromMetadata;
+
+  const fallbackAmount = toNumber(
+    subscriptionPaymentAmountByDeliveryId.get(Number(delivery?.id)),
+    0
+  );
+  return fallbackAmount > 0 ? fallbackAmount : 0;
+};
+
 export const syncCustomerMonthlyBills = async (customerId) => {
   if (!customerId) return { synced: 0 };
 
@@ -253,6 +311,8 @@ export const syncCustomerMonthlyBills = async (customerId) => {
 
   const todayIso = getLocalTodayIso();
   const rateCache = new Map();
+  const subscriptionPaymentAmountByDeliveryId =
+    buildSubscriptionPaymentAmountByDeliveryId(paymentRows);
   const groups = new Map();
 
   for (const row of deliveries) {
@@ -297,13 +357,18 @@ export const syncCustomerMonthlyBills = async (customerId) => {
 
   for (const group of groups.values()) {
     if (!group.deliveredRows.length) continue;
+    if (!shouldCloseMonth(group.monthKey, group.monthRows, todayIso)) continue;
 
     let totalAmount = 0;
     let subscriptionCount = 0;
     let paymentMethod = paymentMethods.get(String(group.dairyId)) || "UPI";
 
     for (const delivery of group.deliveredRows) {
-      totalAmount += await resolveDeliveryAmount(delivery, rateCache);
+      totalAmount += await resolveSubscriptionDeliveryAmount(
+        delivery,
+        rateCache,
+        subscriptionPaymentAmountByDeliveryId
+      );
       subscriptionCount += 1;
 
       const notesMeta = parseDeliveryBillingMeta(delivery?.notes);
@@ -315,7 +380,7 @@ export const syncCustomerMonthlyBills = async (customerId) => {
     totalAmount = Number(totalAmount.toFixed(2));
     if (totalAmount <= 0) continue;
 
-    const dueDate = getMonthEndDate(group.monthKey);
+    const dueDate = getSubscriptionBillDueDate(group.monthKey);
     const description = buildMonthlyBillDescription({
       monthKey: group.monthKey,
       deliveredCount: group.deliveredRows.length,
@@ -374,10 +439,15 @@ export const syncCustomerMonthlyBills = async (customerId) => {
 export const getCurrentMonthSuccessfulSubscriptionDue = async (customerId) => {
   if (!customerId) return { payableTillDate: 0 };
 
-  const deliveries = await fetchCustomerDeliveries(customerId);
+  const [deliveries, paymentRows] = await Promise.all([
+    fetchCustomerDeliveries(customerId),
+    fetchCustomerPayments(customerId),
+  ]);
   const todayIso = getLocalTodayIso();
   const currentMonthKey = getMonthKey(todayIso);
   const rateCache = new Map();
+  const subscriptionPaymentAmountByDeliveryId =
+    buildSubscriptionPaymentAmountByDeliveryId(paymentRows);
 
   let total = 0;
   for (const delivery of deliveries) {
@@ -387,7 +457,11 @@ export const getCurrentMonthSuccessfulSubscriptionDue = async (customerId) => {
     if (getMonthKey(delivery?.delivery_date) !== currentMonthKey) continue;
     if (String(delivery?.delivery_date || "") > todayIso) continue;
 
-    total += await resolveDeliveryAmount(delivery, rateCache);
+    total += await resolveSubscriptionDeliveryAmount(
+      delivery,
+      rateCache,
+      subscriptionPaymentAmountByDeliveryId
+    );
   }
 
   return {

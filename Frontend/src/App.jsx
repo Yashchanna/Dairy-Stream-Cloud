@@ -3,7 +3,6 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import LoadingIndicator from "./components/common/LoadingIndicator.jsx";
-import ThemeToggleButton from "./components/common/ThemeToggleButton.jsx";
 import ProtectedRoute from "./pages/ProtectedRoute.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 
@@ -39,148 +38,145 @@ const RouteFallback = () => (
 
 function App() {
   return (
-    <>
-      <ThemeToggleButton />
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={<LoginPage />} />
-          <Route path="/explore" element={<ExploreDairiesPage />} />
-          <Route path="/join/:id" element={<DairyDetailsPage />} />
-          <Route path="/buy-once/:id" element={<BuyOncePage />} />
-          <Route path="/customer/register" element={<RegisterNewuserPage />} />
-          <Route path="/register-dairy" element={<RegisterDairyPage />} />
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/explore" element={<ExploreDairiesPage />} />
+        <Route path="/join/:id" element={<DairyDetailsPage />} />
+        <Route path="/buy-once/:id" element={<BuyOncePage />} />
+        <Route path="/customer/register" element={<RegisterNewuserPage />} />
+        <Route path="/register-dairy" element={<RegisterDairyPage />} />
 
-          <Route
-            path="/customer/dashboard"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <DairyCustomerDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/customer/dashboard/deliveries"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <Deliveries />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/customer/dashboard/subscriptions"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <Subscription />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/customer/dashboard/payments"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <Payments />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/customer/dashboard/track/agent"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <TrackAgent />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/customer/dashboard/profile"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/customer/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <DairyCustomerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/dashboard/deliveries"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <Deliveries />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/dashboard/subscriptions"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <Subscription />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/dashboard/payments"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <Payments />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/dashboard/track/agent"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <TrackAgent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/dashboard/profile"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route
-            path="/admin/AdminDashboard"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/customers"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminCustomers />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/addCustomer"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <Navigate to="/admin/customers?addCustomer=1" replace />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/agents"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminAgents />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/addagent"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <Navigate to="/admin/agents?addAgent=1" replace />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/deliveries"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminDeliveries />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/payments"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminPayments />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/products"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminProducts />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/performance"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminPerformanceDashboard />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/admin/AdminDashboard"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/customers"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminCustomers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/addCustomer"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <Navigate to="/admin/customers?addCustomer=1" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/agents"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminAgents />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/addagent"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <Navigate to="/admin/agents?addAgent=1" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/deliveries"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminDeliveries />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/payments"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminPayments />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/products"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminProducts />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/performance"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminPerformanceDashboard />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route path="/agent/dashboard" element={<AgentDashboard />} />
-          <Route path="/agent/working" element={<AgentWorkingPage />} />
-          <Route path="/agent/profile" element={<AgentProfile />} />
-          <Route path="/agent/history" element={<AgentHistory />} />
+        <Route path="/agent/dashboard" element={<AgentDashboard />} />
+        <Route path="/agent/working" element={<AgentWorkingPage />} />
+        <Route path="/agent/profile" element={<AgentProfile />} />
+        <Route path="/agent/history" element={<AgentHistory />} />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

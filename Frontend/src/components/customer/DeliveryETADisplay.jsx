@@ -121,8 +121,8 @@ const DeliveryETADisplay = ({ deliveryId }) => {
   });
 
   return (
-    <div className="mt-6 rounded-[20px] border border-[#EFD7B3] bg-[linear-gradient(135deg,#FFF8EC_0%,#FFF1E4_100%)] p-5">
-      <div className="flex items-start justify-between">
+      <div className="mt-6 rounded-[20px] border border-[#EFD7B3] bg-[linear-gradient(135deg,#FFF8EC_0%,#FFF1E4_100%)] p-4 sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3 flex-1">
           <span className="text-3xl">🚚</span>
           <div className="flex-1">
@@ -159,7 +159,7 @@ const DeliveryETADisplay = ({ deliveryId }) => {
         </div>
 
         {/* Confidence Badge */}
-        <div className="ml-4">
+        <div className="sm:ml-4">
           <span className="inline-block rounded bg-[#FDE9C9] px-2 py-1 text-xs font-bold text-[#B8641A]">
             Live
           </span>

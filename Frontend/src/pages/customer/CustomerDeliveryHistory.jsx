@@ -1,10 +1,20 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
 import {
-  RefreshCw, Loader2, MapPin, CheckCircle, XCircle,
-  Clock, ChevronDown, ChevronUp, CalendarCheck2, CalendarX2, CirclePlus,
+  CalendarCheck2,
+  CalendarX2,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  CirclePlus,
+  Clock,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  XCircle,
 } from 'lucide-react';
+
+import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
 import {
   fetchCustomerDeliveries,
   getCachedCustomerDeliveries,
@@ -58,7 +68,7 @@ function getWeekBucket(dateStr) {
   try {
     const d = new Date(dateStr);
     const diff = Math.floor((Date.now() - d) / 86400000);
-    if (diff < 7)  return { key: 'w0', label: 'This week' };
+    if (diff < 7) return { key: 'w0', label: 'This week' };
     if (diff < 14) return { key: 'w1', label: 'Last week' };
     if (diff < 21) return { key: 'w2', label: '2 weeks ago' };
     if (diff < 28) return { key: 'w3', label: '3 weeks ago' };
@@ -81,10 +91,12 @@ function getMonthBucket(dateStr) {
 
 function buildGroups(deliveries, view) {
   const map = new Map();
-  deliveries.forEach((d) => {
-    const bucket = view === 'week' ? getWeekBucket(d.date) : getMonthBucket(d.date);
-    if (!map.has(bucket.key)) map.set(bucket.key, { label: bucket.label, items: [] });
-    map.get(bucket.key).items.push(d);
+  deliveries.forEach((delivery) => {
+    const bucket = view === 'week' ? getWeekBucket(delivery.date) : getMonthBucket(delivery.date);
+    if (!map.has(bucket.key)) {
+      map.set(bucket.key, { label: bucket.label, items: [] });
+    }
+    map.get(bucket.key).items.push(delivery);
   });
   return Array.from(map.values());
 }
@@ -110,49 +122,76 @@ function getDeliveryTypeLabel(delivery = {}) {
 }
 
 function DeliveryRow({ item, muted = false }) {
-  const cfg  = getCfg(item.status);
+  const cfg = getCfg(item.status);
   const Icon = cfg.icon;
+
   return (
-    <div className={`flex items-center gap-4 border-b border-[#F2EDE4] px-6 py-4 transition-colors hover:bg-[#FBF7F0] last:border-none ${muted ? 'opacity-45' : ''}`}>
-      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] ${cfg.iconBg}`}>
-        <Icon size={18} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={`truncate font-semibold ${muted ? 'text-sm text-[#8B7355]' : 'text-sm text-[#2C1A0E]'}`}>
-          {item.qty} {item.product}
-        </p>
-        <p className="mt-0.5 text-xs text-[#A88763]">{cfg.sub(item)}</p>
-      </div>
-      <div className="text-right flex-shrink-0">
-        <p className="mb-1 text-xs text-[#C4A882]">{item.date}</p>
-        <span className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ${cfg.badge}`}>
-          {cfg.label}
-        </span>
+    <div
+      className={`border-b border-[#F2EDE4] px-4 py-3 transition-colors hover:bg-[#FBF7F0] last:border-none sm:px-6 sm:py-3.5 ${
+        muted ? 'opacity-60' : ''
+      }`}
+    >
+      <div className="grid grid-cols-[auto_1fr] gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center sm:gap-4">
+        <div
+          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[11px] sm:h-10 sm:w-10 sm:rounded-[12px] ${cfg.iconBg}`}
+        >
+          <Icon size={16} />
+        </div>
+
+        <div className="min-w-0">
+          <p className={`truncate font-semibold ${muted ? 'text-sm text-[#8B7355]' : 'text-sm text-[#2C1A0E]'}`}>
+            {item.qty} {item.product}
+          </p>
+          <p className="mt-0.5 text-xs text-[#A88763]">{cfg.sub(item)}</p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 sm:hidden">
+            <span className="text-[11px] text-[#C4A882]">{item.date}</span>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${cfg.badge}`}>
+              {cfg.label}
+            </span>
+          </div>
+        </div>
+
+        <div className="hidden flex-shrink-0 sm:block sm:text-right">
+          <p className="mb-1 text-xs text-[#C4A882]">{item.date}</p>
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${cfg.badge}`}>
+            {cfg.label}
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
 function CollapsedSummary({ items, onExpand }) {
-  const delivered = items.filter((x) => String(x.status).toUpperCase() === 'DELIVERED').length;
-  const skipped   = items.filter((x) => String(x.status).toUpperCase() === 'SKIPPED').length;
-  const pending   = items.filter((x) => ['PENDING','PENDING_APPROVAL'].includes(String(x.status).toUpperCase())).length;
+  const delivered = items.filter((item) => String(item.status).toUpperCase() === 'DELIVERED').length;
+  const skipped = items.filter((item) => String(item.status).toUpperCase() === 'SKIPPED').length;
+  const pending = items.filter((item) =>
+    ['PENDING', 'PENDING_APPROVAL'].includes(String(item.status).toUpperCase())
+  ).length;
+
   const parts = [
     delivered ? `${delivered} delivered` : '',
-    skipped   ? `${skipped} skipped`     : '',
-    pending   ? `${pending} pending`     : '',
-  ].filter(Boolean).join(' Â· ');
+    skipped ? `${skipped} skipped` : '',
+    pending ? `${pending} pending` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
 
   return (
-    <button onClick={onExpand} className="w-full flex items-center justify-between px-6 py-3.5 text-left transition-colors hover:bg-[#FBF7F0]">
+    <button
+      onClick={onExpand}
+      className="flex w-full flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-[#FBF7F0] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5"
+    >
       <div className="flex items-center gap-2">
         <div className="flex gap-1.5">
           {delivered > 0 && <span className="h-2 w-2 rounded-full bg-[#4A7C2F]" />}
-          {skipped   > 0 && <span className="h-2 w-2 rounded-full bg-[#C0392B]" />}
-          {pending   > 0 && <span className="h-2 w-2 rounded-full bg-[#B8641A]" />}
+          {skipped > 0 && <span className="h-2 w-2 rounded-full bg-[#C0392B]" />}
+          {pending > 0 && <span className="h-2 w-2 rounded-full bg-[#B8641A]" />}
         </div>
         <span className="text-xs text-[#8B7355]">{parts}</span>
       </div>
+
       <span className="flex items-center gap-1 text-xs font-semibold text-[#C4A882]">
         Show all <ChevronDown size={13} />
       </span>
@@ -161,41 +200,50 @@ function CollapsedSummary({ items, onExpand }) {
 }
 
 function GroupBlock({ group, isFirst }) {
-  const [showMore,   setShowMore]   = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { label, items } = group;
 
   return (
-    <div className="mb-5 overflow-hidden rounded-[22px] border border-[#EDE8DF] bg-[#FFFDF7]">
-      <div className="flex items-center justify-between border-b border-[#F2EDE4] px-6 py-3.5">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">{label}</span>
+    <div className="mb-4 overflow-hidden rounded-[20px] border border-[#EDE8DF] bg-[#FFFDF7]">
+      <div className="flex flex-col gap-1 border-b border-[#F2EDE4] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+          {label}
+        </span>
         <span className="text-[10px] text-[#C4A882]">{items.length} deliveries</span>
       </div>
+
       {isFirst ? (
         <>
-          {items.slice(0, showMore ? items.length : PREVIEW).map((item, i) => (
-            <DeliveryRow key={item.id ?? i} item={item} muted={showMore && i >= PREVIEW} />
+          {items.slice(0, showMore ? items.length : PREVIEW).map((item, index) => (
+            <DeliveryRow key={item.id ?? index} item={item} muted={showMore && index >= PREVIEW} />
           ))}
+
           {items.length > PREVIEW && (
             <button
-              onClick={() => setShowMore((p) => !p)}
-              className="w-full flex items-center justify-between border-t border-[#F2EDE4] px-6 py-3.5 transition-colors hover:bg-[#FBF7F0]"
+              onClick={() => setShowMore((prev) => !prev)}
+              className="flex w-full items-center justify-between border-t border-[#F2EDE4] px-4 py-3 transition-colors hover:bg-[#FBF7F0] sm:px-6 sm:py-3.5"
             >
               <span className="text-xs text-[#8B7355]">
                 {showMore ? 'Hide extra rows' : `${items.length - PREVIEW} more deliveries`}
               </span>
-              {showMore
-                ? <ChevronUp size={14} className="text-[#C4A882]" />
-                : <ChevronDown size={14} className="text-[#C4A882]" />}
+              {showMore ? (
+                <ChevronUp size={14} className="text-[#C4A882]" />
+              ) : (
+                <ChevronDown size={14} className="text-[#C4A882]" />
+              )}
             </button>
           )}
         </>
       ) : isExpanded ? (
         <>
-          {items.map((item, i) => <DeliveryRow key={item.id ?? i} item={item} muted />)}
+          {items.map((item, index) => (
+            <DeliveryRow key={item.id ?? index} item={item} muted />
+          ))}
+
           <button
             onClick={() => setIsExpanded(false)}
-            className="w-full flex items-center justify-between border-t border-[#F2EDE4] px-6 py-3.5 transition-colors hover:bg-[#FBF7F0]"
+            className="flex w-full items-center justify-between border-t border-[#F2EDE4] px-4 py-3 transition-colors hover:bg-[#FBF7F0] sm:px-6 sm:py-3.5"
           >
             <span className="text-xs text-[#8B7355]">Collapse</span>
             <ChevronUp size={14} className="text-[#C4A882]" />
@@ -212,12 +260,13 @@ export default function Deliveries() {
   const navigate = useNavigate();
   const cachedDeliveries = getCachedCustomerDeliveries();
   const initialDeliveryState = toDeliveryViewState(cachedDeliveries);
+
   const [deliveries, setDeliveries] = useState(initialDeliveryState.deliveries);
   const [todayDelivery, setToday] = useState(initialDeliveryState.todayDelivery);
   const [insights, setInsights] = useState(initialDeliveryState.insights);
   const [loading, setLoading] = useState(() => !cachedDeliveries);
-  const [error,   setError]   = useState(null);
-  const [view,    setView]    = useState('week');
+  const [error, setError] = useState(null);
+  const [view, setView] = useState('week');
 
   const applyDeliveryState = (data) => {
     const nextState = toDeliveryViewState(data);
@@ -226,18 +275,23 @@ export default function Deliveries() {
     setInsights(nextState.insights);
   };
 
-  const load = async ({ force = false, showSpinner = force || !getCachedCustomerDeliveries() } = {}) => {
+  const load = async ({
+    force = false,
+    showSpinner = force || !getCachedCustomerDeliveries(),
+  } = {}) => {
     if (showSpinner) {
       setLoading(true);
     }
+
     setError(null);
+
     try {
       const data = await fetchCustomerDeliveries({ force });
       applyDeliveryState(data);
     } catch (err) {
       setError(err?.message || 'Could not load deliveries.');
-      const hasVisibleDeliveryState = deliveries.length > 0 || Boolean(todayDelivery);
 
+      const hasVisibleDeliveryState = deliveries.length > 0 || Boolean(todayDelivery);
       if (!hasVisibleDeliveryState) {
         setDeliveries([]);
         setToday(null);
@@ -248,157 +302,217 @@ export default function Deliveries() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const groups = useMemo(() => buildGroups(deliveries, view), [deliveries, view]);
 
-  const todayStatus      = String(todayDelivery?.status || 'PENDING').toUpperCase();
-  const todayCfg         = getCfg(todayStatus);
-  const canTrack         = !!todayDelivery?.canTrackAgent;
-  const todayHasIssue    = Boolean(String(todayDelivery?.customerIssue || '').trim());
+  const todayStatus = String(todayDelivery?.status || 'PENDING').toUpperCase();
+  const todayCfg = getCfg(todayStatus);
+  const canTrack = !!todayDelivery?.canTrackAgent;
+  const todayHasIssue = Boolean(String(todayDelivery?.customerIssue || '').trim());
   const todayIssueStatus = String(todayDelivery?.issueStatus || '').toUpperCase();
   const todayHasAdminAction = Boolean(String(todayDelivery?.issueAdminAction || '').trim());
   const todayTimingLabel =
     todayStatus === 'DELIVERED'
-      ? todayDelivery?.time ? `Delivered at ${todayDelivery.time}` : 'Delivered'
-      : todayDelivery?.slotWindow  ? `Expected ${todayDelivery.slotWindow}`
-      : todayDelivery?.slot && todayDelivery.slot !== '-' ? `${todayDelivery.slot} slot`
+      ? todayDelivery?.time
+        ? `Delivered at ${todayDelivery.time}`
+        : 'Delivered'
+      : todayDelivery?.slotWindow
+      ? `Expected ${todayDelivery.slotWindow}`
+      : todayDelivery?.slot && todayDelivery.slot !== '-'
+      ? `${todayDelivery.slot} slot`
       : 'Expected today';
+
   const todayMetaParts = [
-    <span key="today-meta">{todayTimingLabel}</span>,
-    <span key="today-type">{getDeliveryTypeLabel(todayDelivery)}</span>,
-    todayDelivery?.dairyName ? <span key="today-dairy">{todayDelivery.dairyName}</span> : null,
-    todayHasIssue ? (
-      <span key="today-issue" className="font-medium text-rose-700">
-        Reported Issue: {todayDelivery.customerIssue}
-      </span>
-    ) : null,
-    todayHasIssue && todayIssueStatus === 'OPEN' ? (
-      <span key="today-status" className="font-medium text-amber-700">
-        Status: Pending resolution
-      </span>
-    ) : null,
-    todayHasAdminAction ? (
-      <span key="today-action" className="font-medium text-emerald-700">
-        Action Taken: {todayDelivery.issueAdminAction}
-      </span>
-    ) : null,
+    todayTimingLabel,
+    getDeliveryTypeLabel(todayDelivery),
+    todayDelivery?.dairyName || null,
   ].filter(Boolean);
 
   const insightCards = [
-    { label: insights.monthLabel ? `${insights.monthLabel} Deliveries` : 'Monthly', value: insights.monthlyDeliveryCount, color: 'text-[#4A7C2F]', iconBg: 'bg-[#EEF5E7] text-[#4A7C2F]', Icon: CalendarCheck2 },
-    { label: 'Skipped Days',  value: insights.skippedDays,  color: 'text-[#C0392B]',  iconBg: 'bg-[#FDECEA] text-[#C0392B]',   Icon: CalendarX2 },
-    { label: 'Extra Orders',  value: insights.extraOrders,  color: 'text-[#B8641A]', iconBg: 'bg-[#FFF1E4] text-[#B8641A]', Icon: CirclePlus },
+    {
+      label: insights.monthLabel ? `${insights.monthLabel} Deliveries` : 'Monthly',
+      value: insights.monthlyDeliveryCount,
+      color: 'text-[#4A7C2F]',
+      iconBg: 'bg-[#EEF5E7] text-[#4A7C2F]',
+      Icon: CalendarCheck2,
+    },
+    {
+      label: 'Skipped Days',
+      value: insights.skippedDays,
+      color: 'text-[#C0392B]',
+      iconBg: 'bg-[#FDECEA] text-[#C0392B]',
+      Icon: CalendarX2,
+    },
+    {
+      label: 'Extra Orders',
+      value: insights.extraOrders,
+      color: 'text-[#B8641A]',
+      iconBg: 'bg-[#FFF1E4] text-[#B8641A]',
+      Icon: CirclePlus,
+    },
   ];
 
   return (
     <CustomerLayout>
-      {/*
-        Single-column, full-width â€” matches the rest of the dashboard layout.
-        No max-w constraint; CustomerLayout's own padding/max-w handles the outer bounds.
-      */}
-      <div className="space-y-8 lg:space-y-10" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <div className="space-y-4 sm:space-y-6 lg:space-y-8" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <div className="rounded-[24px] border border-[#EDE8DF] bg-[linear-gradient(180deg,#F7F1E8_0%,#FDF9F3_100%)] p-4 shadow-[0_20px_60px_rgba(84,52,16,0.08)] sm:rounded-[30px] sm:p-7 xl:p-9">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C4A882]">
+                Delivery Overview
+              </p>
+              <h1
+                className="mt-2 text-[28px] font-semibold leading-tight text-[#2C1A0E] sm:text-[36px]"
+                style={headingFont}
+              >
+                Delivery <span className="text-[#B8641A]">History</span>
+              </h1>
+              <p className="mt-2 text-sm text-[#8B7355]">
+                Review completed drops, skipped days, and today&apos;s delivery status.
+              </p>
+            </div>
 
-        {/* ── Header ── */}
-        <div className="rounded-[30px] border border-[#EDE8DF] bg-[#F5F0E8] p-5 shadow-[0_20px_60px_rgba(84,52,16,0.08)] sm:p-7 xl:p-9">
-          <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
-              Delivery Overview
-            </p>
-            <h1 className="mt-2 text-[32px] font-semibold text-[#2C1A0E] sm:text-[36px]" style={headingFont}>
-              Delivery <span className="text-[#B8641A]">History</span>
-            </h1>
-            <p className="mt-2 text-sm text-[#8B7355]">
-              Review completed drops, skipped days, and today&apos;s delivery status.
-            </p>
+            <button
+              onClick={() => load({ force: true })}
+              disabled={loading}
+              className="inline-flex items-center gap-2 self-start rounded-[12px] border border-[#EDE8DF] bg-white px-3.5 py-2 text-xs font-semibold text-[#6B5B3E] transition hover:border-[#D97706] hover:text-[#B45309] disabled:opacity-40"
+            >
+              {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
           </div>
-          <button
-            onClick={() => load({ force: true })}
-            disabled={loading}
-            className="inline-flex items-center gap-2 self-start rounded-[12px] border border-[#EDE8DF] bg-[#FFFDF7] px-4 py-2 text-xs font-semibold text-[#6B5B3E] transition hover:border-[#D97706] hover:text-[#B45309] disabled:opacity-40"
-          >
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            {loading ? 'Refreshingâ€¦' : 'Refresh'}
-          </button>
+
+          {error && (
+            <div className="mt-5 rounded-[16px] border border-[#F2D0C8] bg-[#FDECEA] px-4 py-3.5 text-sm text-[#C0392B]">
+              {error}
+            </div>
+          )}
+
+          {!loading && (
+            <div className="mt-5 grid grid-cols-3 gap-2 sm:mt-7 sm:gap-5">
+              {insightCards.map((card) => {
+                const InsightIcon = card.Icon;
+
+                return (
+                  <div
+                    key={card.label}
+                    className="relative flex min-h-[124px] flex-col justify-between overflow-hidden rounded-[18px] border border-[#EDE8DF] bg-white p-3 transition-transform hover:-translate-y-0.5 sm:min-h-0 sm:rounded-[20px] sm:p-5"
+                  >
+                    <div className="pr-9 sm:pr-10">
+                      <div>
+                        <p className="mb-1.5 max-w-[72px] text-[8px] font-bold uppercase leading-3.5 tracking-[0.14em] text-[#C4A882] sm:max-w-none sm:text-[10px] sm:leading-4 sm:tracking-[0.18em]">
+                          {card.label}
+                        </p>
+                        <p className={`text-[25px] font-extrabold leading-none tracking-tight sm:text-4xl ${card.color}`}>
+                          {card.value}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-[10px] sm:right-5 sm:top-5 sm:h-10 sm:w-10 sm:rounded-[12px] ${card.iconBg}`}
+                    >
+                      <InsightIcon size={14} className="sm:h-4 sm:w-4" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {error && (
-          <div className="mt-6 rounded-[16px] border border-[#F2D0C8] bg-[#FDECEA] px-4 py-3.5 text-sm text-[#C0392B]">
-            {error}
-          </div>
-        )}
-
-        {/* â”€â”€ Stat cards â€” always 3 columns â”€â”€ */}
-        {!loading && (
-          <div className="mt-7 grid gap-5 sm:grid-cols-3">
-            {insightCards.map((card) => {
-              const InsightIcon = card.Icon;
-
-              return (
-                <div
-                  key={card.label}
-                  className="flex items-end justify-between rounded-[20px] border border-[#EDE8DF] bg-[#FFFDF7] p-5 transition-transform hover:-translate-y-0.5"
-                >
-                  <div>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">{card.label}</p>
-                    <p className={`text-4xl font-extrabold leading-none tracking-tight ${card.color}`}>{card.value}</p>
-                  </div>
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] ${card.iconBg}`}>
-                    <InsightIcon size={18} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* â”€â”€ Today card â€” full width banner â”€â”€ */}
         {todayDelivery && (
-          <div className="relative mt-8 overflow-hidden rounded-[26px] border border-[#5C3D1E]/10 bg-[linear-gradient(135deg,#2C2416_0%,#4A3820_62%,#6B4F2A_100%)] p-7 sm:p-8">
-            <MapPin className="absolute -right-4 -bottom-4 text-white/10" size={120} />
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#F3D4A6]">
-              Today's Delivery
+          <div className="relative overflow-hidden rounded-[22px] border border-[#5C3D1E]/10 bg-[linear-gradient(135deg,#2C2416_0%,#4A3820_62%,#6B4F2A_100%)] p-4 sm:rounded-[26px] sm:p-8">
+            <MapPin className="pointer-events-none absolute bottom-3 right-3 h-20 w-20 text-white/10 sm:bottom-0 sm:right-0 sm:h-[120px] sm:w-[120px]" />
+
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#F3D4A6]">
+              Today&apos;s Delivery
             </p>
-            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex-1 min-w-0">
-                <h3 className="mb-3 text-[28px] font-semibold text-white" style={headingFont}>
+
+            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <h3 className="mb-3 text-[20px] font-semibold leading-tight text-white sm:text-[28px]" style={headingFont}>
                   {todayDelivery.quantity} {todayDelivery.product}
                 </h3>
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full ${todayCfg.badge}`}>
-                    {todayDelivery.status}
+
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${todayCfg.badge}`}>
+                    {todayCfg.label}
                   </span>
+
                   {todayDelivery.isOneTimeOrder && (
                     <span className="rounded-full bg-[#F6F0FF] px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-[#7C4DAB]">
                       One-time
                     </span>
                   )}
+
                   {todayDelivery.slot && todayDelivery.slot !== '-' && (
                     <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-semibold text-white/70">
                       {todayDelivery.slot}
                     </span>
                   )}
+
                   {todayDelivery.paymentMethod && todayDelivery.paymentMethod !== '-' && (
                     <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-semibold text-white/70">
                       {todayDelivery.paymentMethod}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 flex items-center gap-1.5 text-xs text-white/70">
-                  <Clock size={11} className="flex-shrink-0" />
+
+                <div className="flex flex-wrap gap-2">
                   {todayMetaParts.map((part, index) => (
-                    <React.Fragment key={part.key || index}>
-                      {index > 0 && <span className="text-gray-300">|</span>}
+                    <span
+                      key={`${part}-${index}`}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/80"
+                    >
+                      {index === 0 && <Clock size={11} className="flex-shrink-0" />}
                       {part}
-                    </React.Fragment>
+                    </span>
                   ))}
-                </p>
+                </div>
+
+                {(todayHasIssue || todayHasAdminAction) && (
+                  <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    {todayHasIssue && (
+                      <div className="rounded-[16px] border border-rose-200/40 bg-rose-50 px-3.5 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-400">
+                          Reported Issue
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-rose-700">
+                          {todayDelivery.customerIssue}
+                        </p>
+                      </div>
+                    )}
+
+                    {(todayIssueStatus === 'OPEN' || todayHasAdminAction) && (
+                      <div className="rounded-[16px] border border-white/12 bg-white/8 px-3.5 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                          Resolution
+                        </p>
+                        {todayIssueStatus === 'OPEN' && (
+                          <p className="mt-1 text-sm font-medium text-[#F5C87A]">
+                            Pending resolution
+                          </p>
+                        )}
+                        {todayHasAdminAction && (
+                          <p className="mt-1 text-sm font-medium text-[#8BE0A5]">
+                            {todayDelivery.issueAdminAction}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
               <button
-                onClick={() => navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })}
+                onClick={() =>
+                  navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })
+                }
                 disabled={!canTrack}
-                className="flex flex-shrink-0 items-center gap-2 rounded-[16px] bg-[#FFF4E2] px-6 py-3.5 text-sm font-bold text-[#B8641A] transition hover:bg-[#FDE9C9] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35"
+                className="flex w-full flex-shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#FFF4E2] px-5 py-3 text-sm font-bold text-[#B8641A] transition hover:bg-[#FDE9C9] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35 sm:w-auto"
               >
                 <MapPin size={16} />
                 Track Agent
@@ -407,49 +521,47 @@ export default function Deliveries() {
           </div>
         )}
 
-        {/* â”€â”€ Recent deliveries â”€â”€ */}
         {loading ? (
-          <div className="mt-8 flex flex-col items-center gap-3 rounded-[24px] border border-[#EDE8DF] bg-[#FFFDF7] py-32">
+          <div className="flex flex-col items-center gap-3 rounded-[22px] border border-[#EDE8DF] bg-[#FFFDF7] py-24 sm:rounded-[24px] sm:py-32">
             <Loader2 size={32} className="animate-spin text-[#B8641A]" />
-            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Loading…</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Loading...</p>
           </div>
         ) : deliveries.length === 0 ? (
-          <div className="mt-8 rounded-[24px] border border-dashed border-[#E7DAC6] bg-[#FFFDF7] py-20 text-center">
+          <div className="rounded-[22px] border border-dashed border-[#E7DAC6] bg-[#FFFDF7] py-16 text-center sm:rounded-[24px] sm:py-20">
             <p className="text-sm text-[#8B7355]">No delivery records yet.</p>
           </div>
         ) : (
           <>
-            {/* Section header + week/month toggle */}
-              <div className="mt-8 flex items-center justify-between">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C4A882]">
-                  Recent Deliveries
-                </p>
-                <div className="flex gap-1 rounded-[14px] border border-[#EDE8DF] bg-[#FFFDF7] p-1">
-                  {['week', 'month'].map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => setView(v)}
-                      className={`rounded-[10px] px-4 py-1.5 text-xs font-semibold capitalize transition-all ${
-                        view === v ? 'bg-[#2C2416] text-white' : 'text-[#8B7355] hover:text-[#5C3D1E]'
-                      }`}
-                    >
-                    {v}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+                Recent Deliveries
+              </p>
+
+              <div className="flex w-full gap-1 rounded-[14px] border border-[#EDE8DF] bg-[#FFFDF7] p-1 sm:w-auto">
+                {['week', 'month'].map((value) => (
+                  <button
+                    key={value}
+                    onClick={() => setView(value)}
+                    className={`flex-1 rounded-[10px] px-4 py-1.5 text-xs font-semibold capitalize transition-all sm:flex-none ${
+                      view === value
+                        ? 'bg-[#2C2416] text-white'
+                        : 'text-[#8B7355] hover:text-[#5C3D1E]'
+                    }`}
+                  >
+                    {value}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Grouped delivery list */}
             <div>
-              {groups.map((group, idx) => (
-                <GroupBlock key={group.label} group={group} isFirst={idx === 0} />
+              {groups.map((group, index) => (
+                <GroupBlock key={group.label} group={group} isFirst={index === 0} />
               ))}
             </div>
           </>
         )}
-        </div>
       </div>
     </CustomerLayout>
   );
 }
-
