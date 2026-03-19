@@ -3,6 +3,9 @@ import { supabase } from "../../config/supabase.js";
 const SUBSCRIPTION_DELIVERY_MARKER = "[SUBSCRIPTION_DAILY]";
 const ONE_TIME_ORDER_MARKER = "[ONE_TIME_ORDER]";
 const SUBSCRIPTION_PAYMENT_MARKER = "[SUBSCRIPTION_DELIVERY_PAYMENT]";
+const SUBSCRIPTION_SELECT_BASE =
+  "id, customer_id, dairy_id, milk_type, quantity_liters, delivery_slot, status, approval_status, assigned_agent_id, start_date, payment_method, updated_at, created_at";
+const SUBSCRIPTION_SELECT_WITH_DELIVERY_DAYS = `${SUBSCRIPTION_SELECT_BASE}, delivery_days`;
 const WEEKDAY_KEYS = [
   "SUNDAY",
   "MONDAY",
@@ -66,6 +69,22 @@ const isDeliveredStatus = (status) => {
   return value === "DELIVERED" || value === "COMPLETED";
 };
 
+const isMissingColumnError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("column") && message.includes("does not exist");
+};
+
+const selectSubscriptionsWithSchemaFallback = async (buildQuery) => {
+  let result = await buildQuery(SUBSCRIPTION_SELECT_WITH_DELIVERY_DAYS);
+
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await buildQuery(SUBSCRIPTION_SELECT_BASE);
+  }
+
+  if (result.error) throw result.error;
+  return Array.isArray(result.data) ? result.data : [];
+};
+
 const appendAutoFailNote = (notesValue, reason = "Delivery auto-failed at end of day") => {
   const notes = String(notesValue || "").trim();
   const lines = notes
@@ -106,18 +125,16 @@ const syncExistingSubscriptionDeliveryAgent = async ({ deliveryId, assignedAgent
 };
 
 const getLatestDeliverableSubscription = async (customerId) => {
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .select(
-      "id, customer_id, dairy_id, milk_type, quantity_liters, delivery_slot, status, approval_status, assigned_agent_id, start_date, payment_method, delivery_days, updated_at, created_at"
-    )
-    .eq("customer_id", customerId)
-    .order("updated_at", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const rows = await selectSubscriptionsWithSchemaFallback((selectClause) =>
+    supabase
+      .from("subscriptions")
+      .select(selectClause)
+      .eq("customer_id", customerId)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(20)
+  );
 
-  if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
   return rows.find((row) => isDeliverableSubscription(row?.status, row?.approval_status)) || null;
 };
 
@@ -405,16 +422,14 @@ export const runDailySubscriptionAutomationForAllCustomers = async ({
     return { date: targetDate, createdCount: 0, skippedCount: 0 };
   }
 
-  const { data: subscriptions, error } = await supabase
-    .from("subscriptions")
-    .select(
-      "id, customer_id, dairy_id, milk_type, quantity_liters, delivery_slot, status, approval_status, assigned_agent_id, start_date, payment_method, delivery_days, updated_at, created_at"
-    )
-    .order("updated_at", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(5000);
-
-  if (error) throw error;
+  const subscriptions = await selectSubscriptionsWithSchemaFallback((selectClause) =>
+    supabase
+      .from("subscriptions")
+      .select(selectClause)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(5000)
+  );
 
   const latestByCustomer = new Map();
   for (const row of subscriptions || []) {

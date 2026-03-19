@@ -715,6 +715,7 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   const isExtraOrder = toBoolean(payload?.isExtraOrder);
   const paymentMethod = String(payload?.paymentMethod || "UPI").trim().toUpperCase();
   const inputAddress = String(payload?.address || "").trim();
+  const resolvedAddress = inputAddress || String(await getSavedCustomerAddress(customerId) || "").trim();
   const slot = normalizeOneTimeSlot(payload?.slot);
   const pricePerLiterInput = toFiniteNumber(payload?.pricePerLiter ?? payload?.unitPrice);
 
@@ -733,7 +734,7 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   if (!VALID_ONE_TIME_SLOTS.has(slot)) {
     throw new Error("slot must be Morning or Evening");
   }
-  if (!address || address.length < 10) {
+  if (!resolvedAddress || resolvedAddress.length < 10) {
     throw new Error("Detailed delivery address is required");
   }
   const todayIso = getLocalDateInput();
@@ -809,7 +810,7 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   });
 
   const deliveryNotes = appendDeliveryBillingMeta(
-    `[ONE_TIME_ORDER] slot=${slot}; payment=${paymentMethod}; address=${address}`,
+    `[ONE_TIME_ORDER] slot=${slot}; payment=${paymentMethod}; address=${resolvedAddress}`,
     {
       paymentMethod,
       unitPrice: resolvedPricePerLiter,

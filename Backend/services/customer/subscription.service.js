@@ -10,6 +10,11 @@ const isMissingColumnError = (error) => {
   return message.includes("column") && message.includes("does not exist");
 };
 
+const isSpecificMissingColumnError = (error, columnName) => {
+  const message = String(error?.message || "").toLowerCase();
+  return isMissingColumnError(error) && message.includes(String(columnName || "").toLowerCase());
+};
+
 const isOnConflictConstraintError = (error) => {
   const message = String(error?.message || "").toLowerCase();
   return message.includes("no unique or exclusion constraint matching the on conflict specification");
@@ -256,58 +261,72 @@ export const upsertSubscription = async (customerId, payload) => {
     body.delivery_days = normalizeDeliveryDays(payload.delivery_days);
   }
 
-  let data;
-  let error;
+  const persistSubscriptionRow = async (candidateBody) => {
+    let data;
+    let error;
 
-  ({ data, error } = await supabase
-    .from("subscriptions")
-    .upsert(body, { onConflict: "customer_id,dairy_id" })
-    .select("*")
-    .single());
-
-  if (error && isOnConflictConstraintError(error)) {
-    const { data: existing, error: existingError } = await supabase
+    ({ data, error } = await supabase
       .from("subscriptions")
-      .select("id")
-      .eq("customer_id", customerId)
-      .eq("dairy_id", payload.dairy_id)
-      .limit(1)
-      .maybeSingle();
+      .upsert(candidateBody, { onConflict: "customer_id,dairy_id" })
+      .select("*")
+      .single());
 
-    if (existingError) throw existingError;
-
-    if (existing?.id) {
-      const { data: updated, error: updateError } = await supabase
+    if (error && isOnConflictConstraintError(error)) {
+      const { data: existing, error: existingError } = await supabase
         .from("subscriptions")
-        .update(body)
-        .eq("id", existing.id)
-        .select("*")
-        .single();
+        .select("id")
+        .eq("customer_id", customerId)
+        .eq("dairy_id", payload.dairy_id)
+        .limit(1)
+        .maybeSingle();
 
-      if (updateError) throw updateError;
-      data = updated;
-      error = null;
+      if (existingError) throw existingError;
+
+      if (existing?.id) {
+        const { data: updated, error: updateError } = await supabase
+          .from("subscriptions")
+          .update(candidateBody)
+          .eq("id", existing.id)
+          .select("*")
+          .single();
+
+        if (updateError) throw updateError;
+        data = updated;
+        error = null;
+      } else {
+        const { data: inserted, error: insertError } = await supabase
+          .from("subscriptions")
+          .insert(candidateBody)
+          .select("*")
+          .single();
+
+        if (insertError) throw insertError;
+        data = inserted;
+        error = null;
+      }
+    }
+
+    if (error) throw error;
+    return data;
+  };
+
+  let data;
+  try {
+    data = await persistSubscriptionRow(body);
+  } catch (error) {
+    if (body.delivery_days !== undefined && isSpecificMissingColumnError(error, "delivery_days")) {
+      const legacyBody = { ...body };
+      delete legacyBody.delivery_days;
+      data = await persistSubscriptionRow(legacyBody);
     } else {
-      const { data: inserted, error: insertError } = await supabase
-        .from("subscriptions")
-        .insert(body)
-        .select("*")
-        .single();
-
-      if (insertError) throw insertError;
-      data = inserted;
-      error = null;
+      const message = String(error?.message || "").toLowerCase();
+      if (message.includes("invalid input syntax for type uuid")) {
+        throw new Error(
+          "Database schema mismatch for subscriptions IDs. Run updated SUPABASE_MIGRATIONS.sql and ensure subscriptions.customer_id/dairy_id types match customers.id/dairies.id."
+        );
+      }
+      throw error;
     }
-  }
-
-  if (error) {
-    const message = String(error?.message || "").toLowerCase();
-    if (message.includes("invalid input syntax for type uuid")) {
-      throw new Error(
-        "Database schema mismatch for subscriptions IDs. Run updated SUPABASE_MIGRATIONS.sql and ensure subscriptions.customer_id/dairy_id types match customers.id/dairies.id."
-      );
-    }
-    throw error;
   }
 
   await ensureMembershipLink({

@@ -184,8 +184,6 @@ const fetchPaymentsRows = async (customerId, dairyId = null) => {
   return data || [];
 };
 
-const isMonthlyBillPaymentRow = (row) => parseMonthlyBillMeta(row?.description).isMonthlyBill;
-
 const mapPaymentRow = (row, index) => {
   const amount = extractPaymentAmount(row);
   const status = normalizeStatus(row.status);
@@ -929,11 +927,10 @@ export const addAmountToCustomerWallet = async ({
 
 export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
   await syncCustomerMonthlyBills(customerId);
-  const [{ payableTillDate }, walletBalance, paymentRows] = await Promise.all([
+  const [payableTillDateData, walletBalance, paymentRows] = await Promise.all([
     getCurrentMonthSuccessfulSubscriptionDue(customerId),
     getCustomerWalletBalance(customerId),
     fetchPaymentsRows(customerId, dairyId),
-    getCurrentMonthSuccessfulSubscriptionDue(customerId),
   ]);
   const resolvedDairyId = await resolveCustomerDairyId(customerId, dairyId, paymentRows);
   const beneficiary = await getDairyBankDetails(resolvedDairyId);

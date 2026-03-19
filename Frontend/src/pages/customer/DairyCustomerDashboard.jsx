@@ -377,6 +377,9 @@ export default function DairyCustomerDashboard() {
   const canTogglePause = Boolean(subscription?.dairyId) && !savingPause;
   const hasSubscription = Boolean(subscription?.dairyId);
   const todayMeta = getTodayDeliveryMeta(today);
+  const hasIssue = Boolean(String(today?.customerIssue || "").trim());
+  const issueStatus = String(today?.issueStatus || "").toUpperCase();
+  const hasAdminAction = Boolean(String(today?.issueAdminAction || "").trim());
   const pauseToggleLabel = savingPause
     ? pendingSubscriptionStatus === "PAUSED"
       ? "Pausing..."

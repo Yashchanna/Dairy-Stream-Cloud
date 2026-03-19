@@ -279,6 +279,8 @@ export const createCustomerWalletTopupOrder = async (payload) => {
 
 export const verifyCustomerWalletTopup = async (payload) => {
   const { data } = await client.post("/customer/payments/wallet/verify", payload);
+  invalidateCustomerDashboardCache();
+  invalidateCustomerReadCache("payments");
   return data;
 };
 

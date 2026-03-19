@@ -405,7 +405,7 @@ export default function Deliveries() {
                       {part}
                     </React.Fragment>
                   ))}
-                </div>
+                </p>
               </div>
               <button
                 onClick={() => navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })}
