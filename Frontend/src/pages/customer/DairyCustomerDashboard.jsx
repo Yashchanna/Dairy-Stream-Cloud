@@ -750,52 +750,46 @@ export default function DairyCustomerDashboard() {
         const orderId = response?.order?.id || null;
         const paymentId = getExtraOrderPaymentId(response);
 
-        if (!orderId || !paymentId) {
-          await rollbackCancelledExtraOrder({ orderId, paymentId });
-          setAddExtraError("Could not start payment. The extra order was not placed.");
-          return;
-        }
+      if (!orderId || !paymentId) {
+        await rollbackCancelledExtraOrder({ orderId, paymentId });
+        setAddExtraError("Could not start payment. The extra order was not placed.");
+        return;
+      }
 
-        let paymentResult = null;
-        try {
-          paymentResult = await processExtraOnlinePayment(paymentId, selectedAddExtraProduct.name);
-        } catch (paymentErr) {
-          if (paymentErr?.code === "PAYMENT_VERIFY_FAILED") {
-            showToast("Payment received but verification failed. Check Payments.", "warning");
-            setShowAddExtraModal(false);
-            navigate("/customer/dashboard/payments");
-            refreshDashboard().catch(() => {});
-            return;
-          }
-
-          await rollbackCancelledExtraOrder({ orderId, paymentId });
-          setAddExtraError(paymentErr?.message || "Payment cancelled. The extra order was not placed.");
-          return;
-        }
-
-        if (paymentResult?.paid) {
-          showToast("Extra order placed for tomorrow.", "success");
+      let paymentResult = null;
+      try {
+        paymentResult = await processExtraOnlinePayment(paymentId, selectedAddExtraProduct.name);
+      } catch (paymentErr) {
+        if (paymentErr?.code === "PAYMENT_VERIFY_FAILED") {
+          showToast("Payment received but verification failed. Check Payments.", "warning");
           setShowAddExtraModal(false);
+          navigate("/customer/dashboard/payments");
           refreshDashboard().catch(() => {});
           return;
         }
 
-        if (paymentResult?.dismissed || paymentResult?.failed) {
-          await rollbackCancelledExtraOrder({ orderId, paymentId });
-          setAddExtraError(
-            paymentResult?.reason || "Payment was cancelled. The extra order was not placed."
-          );
-          return;
-        }
-
         await rollbackCancelledExtraOrder({ orderId, paymentId });
-        setAddExtraError("Payment was not completed. The extra order was not placed.");
+        setAddExtraError(paymentErr?.message || "Payment cancelled. The extra order was not placed.");
         return;
       }
 
-      showToast("Extra order placed for tomorrow.", "success");
-      setShowAddExtraModal(false);
-      refreshDashboard().catch(() => {});
+      if (paymentResult?.paid) {
+        showToast("Extra order placed for tomorrow.", "success");
+        setShowAddExtraModal(false);
+        refreshDashboard().catch(() => {});
+        return;
+      }
+
+      if (paymentResult?.dismissed || paymentResult?.failed) {
+        await rollbackCancelledExtraOrder({ orderId, paymentId });
+        setAddExtraError(
+          paymentResult?.reason || "Payment was cancelled. The extra order was not placed."
+        );
+        return;
+      }
+
+      await rollbackCancelledExtraOrder({ orderId, paymentId });
+      setAddExtraError("Payment was not completed. The extra order was not placed.");
     } catch (err) {
       const message = err?.response?.data?.message || err?.message || "Failed to place extra order.";
       if (!allowDuplicate && /already exists/i.test(message)) {
@@ -873,16 +867,6 @@ export default function DairyCustomerDashboard() {
     if (action?.route) {
       navigate(action.route);
     }
-  };
-
-  const openIssueModal = () => {
-    if (!canReportIssue) {
-      showToast("No valid delivery found to report.", "error");
-      return;
-    }
-
-    setIssueText("");
-    setShowIssueModal(true);
   };
 
   const submitIssue = async () => {
@@ -1152,30 +1136,35 @@ export default function DairyCustomerDashboard() {
         )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-7 md:grid-cols-4 lg:gap-4">
-          {ACTIONS.map(({ key, label, Icon, bg, text, border }) => (
-            <button
-              key={key}
-              onClick={() => handleAction(key)}
-              disabled={key === "pause" && !canTogglePause}
-              className={`rounded-[18px] border bg-[#FFFDF7] px-3.5 py-4 text-left transition hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(100,72,35,0.08)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 ${border}`}
-            >
-              <div className={`mb-2.5 flex h-10 w-10 items-center justify-center rounded-[13px] ${bg} ${text} sm:h-11 sm:w-11`}>
-                {key === "pause" && isPaused ? <PlayCircle size={18} /> : <Icon size={18} />}
-              </div>
-              <span className="text-[13px] font-bold text-[#2C1A0E] sm:text-sm">
-                {key === "pause" ? pauseToggleLabel : label}
-              </span>
-              <p className="mt-1 text-[11px] leading-5 text-[#B89970] sm:text-xs">
-                {key === "pause"
-                  ? pauseToggleHelper
-                  : key === "add"
-                  ? "Choose extra products for tomorrow"
-                  : key === "deliveries"
-                  ? "Review delivery history"
-                  : "Open payment center"}
-              </p>
-            </button>
-          ))}
+          {ACTIONS.map((action) => {
+            const { key, label, bg, text, border } = action;
+            const ActionIcon = action.Icon;
+
+            return (
+              <button
+                key={key}
+                onClick={() => handleAction(key)}
+                disabled={key === "pause" && !canTogglePause}
+                className={`rounded-[18px] border bg-[#FFFDF7] px-3.5 py-4 text-left transition hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(100,72,35,0.08)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 ${border}`}
+              >
+                <div className={`mb-2.5 flex h-10 w-10 items-center justify-center rounded-[13px] ${bg} ${text} sm:h-11 sm:w-11`}>
+                  {key === "pause" && isPaused ? <PlayCircle size={18} /> : <ActionIcon size={18} />}
+                </div>
+                <span className="text-[13px] font-bold text-[#2C1A0E] sm:text-sm">
+                  {key === "pause" ? pauseToggleLabel : label}
+                </span>
+                <p className="mt-1 text-[11px] leading-5 text-[#B89970] sm:text-xs">
+                  {key === "pause"
+                    ? pauseToggleHelper
+                    : key === "add"
+                    ? "Choose extra products for tomorrow"
+                    : key === "deliveries"
+                    ? "Review delivery history"
+                    : "Open payment center"}
+                </p>
+              </button>
+            );
+          })}
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:mt-7 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
