@@ -124,6 +124,8 @@ function getDeliveryTypeLabel(delivery = {}) {
 function DeliveryRow({ item, muted = false }) {
   const cfg = getCfg(item.status);
   const Icon = cfg.icon;
+  const hasIssue = Boolean(String(item?.customerIssue || '').trim());
+  const hasAdminAction = Boolean(String(item?.issueAdminAction || '').trim());
 
   return (
     <div
@@ -140,9 +142,23 @@ function DeliveryRow({ item, muted = false }) {
 
         <div className="min-w-0">
           <p className={`truncate font-semibold ${muted ? 'text-sm text-[#8B7355]' : 'text-sm text-[#2C1A0E]'}`}>
-            {item.qty} {item.product}
+            {getDeliveryTypeLabel(item)} • {item.qty} {item.product}
           </p>
-          <p className="mt-0.5 text-xs text-[#A88763]">{cfg.sub(item)}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-[#A88763]">
+            <span>{cfg.sub(item)}</span>
+            {hasIssue && <span className="mx-1 text-[#D8C8B2]">|</span>}
+            {hasIssue && (
+              <span className="font-medium text-[#C0392B]">
+                Reported Issue: {item.customerIssue}
+              </span>
+            )}
+            {hasAdminAction && <span className="mx-1 text-[#D8C8B2]">|</span>}
+            {hasAdminAction && (
+              <span className="font-medium text-[#4A7C2F]">
+                Resolution: {item.issueAdminAction}
+              </span>
+            )}
+          </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 sm:hidden">
             <span className="text-[11px] text-[#C4A882]">{item.date}</span>
@@ -326,9 +342,18 @@ export default function Deliveries() {
       : 'Expected today';
 
   const todayMetaParts = [
-    todayTimingLabel,
-    getDeliveryTypeLabel(todayDelivery),
-    todayDelivery?.dairyName || null,
+    { label: todayTimingLabel },
+    { label: getDeliveryTypeLabel(todayDelivery) },
+    todayDelivery?.dairyName ? { label: todayDelivery.dairyName } : null,
+    todayHasIssue
+      ? { label: `Reported Issue: ${todayDelivery.customerIssue}`, className: 'bg-[#FDECEA] text-[#C0392B]' }
+      : null,
+    todayHasIssue && todayIssueStatus === 'OPEN'
+      ? { label: 'Pending resolution', className: 'bg-[#FFF1E4] text-[#B8641A]' }
+      : null,
+    todayHasAdminAction
+      ? { label: `Resolution: ${todayDelivery.issueAdminAction}`, className: 'bg-[#EEF5E7] text-[#4A7C2F]' }
+      : null,
   ].filter(Boolean);
 
   const insightCards = [
@@ -464,47 +489,17 @@ export default function Deliveries() {
                 <div className="flex flex-wrap gap-2">
                   {todayMetaParts.map((part, index) => (
                     <span
-                      key={`${part}-${index}`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/80"
+                      key={`${part.label}-${index}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                        part.className || 'bg-white/10 text-white/80'
+                      }`}
                     >
                       {index === 0 && <Clock size={11} className="flex-shrink-0" />}
-                      {part}
+                      {part.label}
                     </span>
                   ))}
                 </div>
 
-                {(todayHasIssue || todayHasAdminAction) && (
-                  <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    {todayHasIssue && (
-                      <div className="rounded-[16px] border border-rose-200/40 bg-rose-50 px-3.5 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-400">
-                          Reported Issue
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-rose-700">
-                          {todayDelivery.customerIssue}
-                        </p>
-                      </div>
-                    )}
-
-                    {(todayIssueStatus === 'OPEN' || todayHasAdminAction) && (
-                      <div className="rounded-[16px] border border-white/12 bg-white/8 px-3.5 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-                          Resolution
-                        </p>
-                        {todayIssueStatus === 'OPEN' && (
-                          <p className="mt-1 text-sm font-medium text-[#F5C87A]">
-                            Pending resolution
-                          </p>
-                        )}
-                        {todayHasAdminAction && (
-                          <p className="mt-1 text-sm font-medium text-[#8BE0A5]">
-                            {todayDelivery.issueAdminAction}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               <button

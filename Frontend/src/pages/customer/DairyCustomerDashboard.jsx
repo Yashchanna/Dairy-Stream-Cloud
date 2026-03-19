@@ -1031,72 +1031,75 @@ export default function DairyCustomerDashboard() {
                   )}
                 </div>
               </div>
-              <div className="grid w-full grid-cols-2 gap-2 self-start lg:w-auto lg:min-w-[260px]">
-                <button
-                  onClick={() =>
-                    navigate("/customer/dashboard/track/agent", { state: { delivery: today } })
-                  }
-                  disabled={
-                    !today?.canTrackAgent ||
-                    ["NOT_SUBSCRIBED", "NOT_SCHEDULED", "PENDING_APPROVAL", "FAILED"].includes(
-                      String(today?.status || "").toUpperCase()
-                    )
-                  }
-                  className="w-full rounded-[13px] border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Track Agent
-                </button>
-                <button
-                  onClick={() => navigate("/customer/dashboard/deliveries")}
-                  disabled={
-                    !Number.isFinite(Number(today?.deliveryId ?? today?.id)) ||
-                    ["NOT_SUBSCRIBED", "NOT_SCHEDULED"].includes(
-                      String(today?.status || "").toUpperCase()
-                    )
-                  }
-                  className="w-full rounded-[13px] border border-[#F2D0C8]/70 bg-[#FDECEA] px-3 py-2.5 text-xs font-bold text-[#A33A2B] transition hover:bg-[#F8DDD6]"
-                >
-                  {reportingIssue ? "Reporting..." : "Report Issue"}
-                </button>
-              </div>
-            </div>
-            {hasIssue && (
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
-                <div className="relative rounded-[16px] border border-rose-100 bg-rose-50 px-3 py-3 sm:rounded-[18px] sm:px-4">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-rose-400 sm:text-[10px] sm:tracking-widest">
-                    Reported Issue
-                  </p>
-                  <p className="mt-1 text-xs font-medium leading-5 text-rose-700 sm:text-sm">
-                    {today.customerIssue}
-                  </p>
+              <div className="flex w-full flex-col gap-2 self-start lg:w-auto lg:min-w-[250px]">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() =>
+                      navigate("/customer/dashboard/track/agent", { state: { delivery: today } })
+                    }
+                    disabled={
+                      !today?.canTrackAgent ||
+                      ["NOT_SUBSCRIBED", "NOT_SCHEDULED", "PENDING_APPROVAL", "FAILED"].includes(
+                        String(today?.status || "").toUpperCase()
+                      )
+                    }
+                    className="w-full rounded-[13px] border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Track Agent
+                  </button>
+                  <button
+                    onClick={() => navigate("/customer/dashboard/deliveries")}
+                    disabled={
+                      !Number.isFinite(Number(today?.deliveryId ?? today?.id)) ||
+                      ["NOT_SUBSCRIBED", "NOT_SCHEDULED"].includes(
+                        String(today?.status || "").toUpperCase()
+                      )
+                    }
+                    className="w-full rounded-[13px] border border-[#F2D0C8]/70 bg-[#FDECEA] px-3 py-2.5 text-xs font-bold text-[#A33A2B] transition hover:bg-[#F8DDD6]"
+                  >
+                    {reportingIssue ? "Reporting..." : "Report Issue"}
+                  </button>
                 </div>
 
-                {(hasAdminAction || issueStatus === "OPEN") && (
-                  <div
-                    className={`relative rounded-[16px] border px-3 py-3 sm:rounded-[18px] sm:px-4 ${
-                      hasAdminAction
-                        ? "border-emerald-100 bg-emerald-50"
-                        : "border-amber-100 bg-amber-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] font-bold uppercase tracking-[0.16em] sm:text-[10px] sm:tracking-widest ${
-                        hasAdminAction ? "text-emerald-500" : "text-amber-500"
-                      }`}
-                    >
-                      {hasAdminAction ? "Action Taken" : "Issue Status"}
-                    </p>
-                    <p
-                      className={`mt-1 text-xs font-medium leading-5 sm:text-sm ${
-                        hasAdminAction ? "text-emerald-700" : "text-amber-700"
-                      }`}
-                    >
-                      {hasAdminAction ? today.issueAdminAction : "Pending resolution"}
-                    </p>
+                {hasIssue && (
+                  <div className="grid gap-2">
+                    <div className="relative rounded-[14px] border border-rose-100 bg-rose-50 px-3 py-2 sm:rounded-[16px]">
+                      <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-rose-400 sm:text-[9px] sm:tracking-[0.16em]">
+                        Reported Issue
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-medium leading-4 text-rose-700 sm:text-xs">
+                        {today.customerIssue}
+                      </p>
+                    </div>
+
+                    {(hasAdminAction || issueStatus === "OPEN") && (
+                      <div
+                        className={`relative rounded-[14px] border px-3 py-2 sm:rounded-[16px] ${
+                          hasAdminAction
+                            ? "border-emerald-100 bg-emerald-50"
+                            : "border-amber-100 bg-amber-50"
+                        }`}
+                      >
+                        <p
+                          className={`text-[8px] font-bold uppercase tracking-[0.14em] sm:text-[9px] sm:tracking-[0.16em] ${
+                            hasAdminAction ? "text-emerald-500" : "text-amber-500"
+                          }`}
+                        >
+                          {hasAdminAction ? "Action Taken" : "Issue Status"}
+                        </p>
+                        <p
+                          className={`mt-0.5 text-[11px] font-medium leading-4 sm:text-xs ${
+                            hasAdminAction ? "text-emerald-700" : "text-amber-700"
+                          }`}
+                        >
+                          {hasAdminAction ? today.issueAdminAction : "Pending resolution"}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         )}
 
