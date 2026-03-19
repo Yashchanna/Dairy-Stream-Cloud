@@ -647,7 +647,6 @@ const Subscribe = () => {
                 </div>
               </InputBlock>
             </div>
-            </div>
           </div>
           <ModalFooter
             onCancel={() => setShowUpdateModal(false)}
@@ -751,7 +750,6 @@ const ModalWrapper = ({ children, small }) => (
   <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in sm:items-center">
     <div className={`w-full animate-in zoom-in-95 rounded-t-[28px] border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl sm:rounded-[28px] ${small ? 'max-w-md' : 'max-w-xl'}`}>
       {children}
-      </div>
     </div>
   </div>
 );
