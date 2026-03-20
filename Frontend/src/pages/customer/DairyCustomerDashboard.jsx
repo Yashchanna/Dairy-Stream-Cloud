@@ -217,6 +217,14 @@ const getTodayDeliveryMeta = (delivery = {}) => {
     };
   }
 
+  if (status === "CANCELLED") {
+    return {
+      title: "Order Cancelled",
+      tone: "failed",
+      helperText: "This one-time order was cancelled and remains in your history.",
+    };
+  }
+
   if (status === "FAILED") {
     return {
       title: "Delivery Failed",
@@ -503,7 +511,7 @@ export default function DairyCustomerDashboard() {
     if (!orderId || !paymentId) return false;
 
     try {
-      await cancelCustomerOneTimeOrder({ orderId, paymentId });
+      await cancelCustomerOneTimeOrder({ orderId, paymentId, removeFromHistory: true });
       return true;
     } catch {
       return false;
@@ -1019,7 +1027,7 @@ export default function DairyCustomerDashboard() {
                     }
                     disabled={
                       !today?.canTrackAgent ||
-                      ["NOT_SUBSCRIBED", "NOT_SCHEDULED", "PENDING_APPROVAL", "FAILED"].includes(
+                      ["NOT_SUBSCRIBED", "NOT_SCHEDULED", "PENDING_APPROVAL", "FAILED", "CANCELLED"].includes(
                         String(today?.status || "").toUpperCase()
                       )
                     }
@@ -1031,7 +1039,7 @@ export default function DairyCustomerDashboard() {
                     onClick={() => navigate("/customer/dashboard/deliveries")}
                     disabled={
                       !Number.isFinite(Number(today?.deliveryId ?? today?.id)) ||
-                      ["NOT_SUBSCRIBED", "NOT_SCHEDULED"].includes(
+                      ["NOT_SUBSCRIBED", "NOT_SCHEDULED", "CANCELLED"].includes(
                         String(today?.status || "").toUpperCase()
                       )
                     }

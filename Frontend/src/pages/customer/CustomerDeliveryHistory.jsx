@@ -16,6 +16,7 @@ import {
 
 import CustomerLayout from '../../components/customer/layouts/CustomerLayout';
 import {
+  cancelCustomerOneTimeOrder,
   fetchCustomerDeliveries,
   getCachedCustomerDeliveries,
 } from '../../api/customer/customer.api';
@@ -43,6 +44,13 @@ const STATUS_CFG = {
     badge: 'bg-[#FDECEA] text-[#C0392B]',
     label: 'Skipped',
     sub: () => 'Not delivered',
+  },
+  CANCELLED: {
+    icon: XCircle,
+    iconBg: 'bg-[#FCE8E6] text-[#B42318]',
+    badge: 'bg-[#FCE8E6] text-[#B42318]',
+    label: 'Cancelled',
+    sub: () => 'Order cancelled by you',
   },
   PENDING: {
     icon: Clock,
@@ -121,11 +129,20 @@ function getDeliveryTypeLabel(delivery = {}) {
   return delivery?.isOneTimeOrder ? 'One-time' : 'Subscription';
 }
 
-function DeliveryRow({ item, muted = false }) {
+function canCancelPendingOneTimeOrder(delivery = {}) {
+  return (
+    Boolean(delivery?.id) &&
+    Boolean(delivery?.isOneTimeOrder) &&
+    String(delivery?.status || '').toUpperCase() === 'PENDING_APPROVAL'
+  );
+}
+
+function DeliveryRow({ item, muted = false, onCancel, isCancelling = false }) {
   const cfg = getCfg(item.status);
   const Icon = cfg.icon;
   const hasIssue = Boolean(String(item?.customerIssue || '').trim());
   const hasAdminAction = Boolean(String(item?.issueAdminAction || '').trim());
+  const canCancel = canCancelPendingOneTimeOrder(item);
 
   return (
     <div
@@ -165,16 +182,37 @@ function DeliveryRow({ item, muted = false }) {
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${cfg.badge}`}>
               {cfg.label}
             </span>
+            {canCancel && (
+              <button
+                onClick={() => onCancel?.(item)}
+                disabled={isCancelling}
+                className="rounded-full border border-[#F2D0C8] bg-[#FDECEA] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#C0392B] transition hover:bg-[#F8DDD6] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+              </button>
+            )}
           </div>
         </div>
 
         <div className="hidden flex-shrink-0 sm:block sm:text-right">
           <p className="mb-1 text-xs text-[#C4A882]">{item.date}</p>
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${cfg.badge}`}>
-            {cfg.label}
-          </span>
+          <div className="flex items-center justify-end gap-2">
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${cfg.badge}`}>
+              {cfg.label}
+            </span>
+            {canCancel && (
+              <button
+                onClick={() => onCancel?.(item)}
+                disabled={isCancelling}
+                className="rounded-full border border-[#F2D0C8] bg-[#FDECEA] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#C0392B] transition hover:bg-[#F8DDD6] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
     </div>
   );
 }
@@ -182,6 +220,7 @@ function DeliveryRow({ item, muted = false }) {
 function CollapsedSummary({ items, onExpand }) {
   const delivered = items.filter((item) => String(item.status).toUpperCase() === 'DELIVERED').length;
   const skipped = items.filter((item) => String(item.status).toUpperCase() === 'SKIPPED').length;
+  const cancelled = items.filter((item) => String(item.status).toUpperCase() === 'CANCELLED').length;
   const pending = items.filter((item) =>
     ['PENDING', 'PENDING_APPROVAL'].includes(String(item.status).toUpperCase())
   ).length;
@@ -189,6 +228,7 @@ function CollapsedSummary({ items, onExpand }) {
   const parts = [
     delivered ? `${delivered} delivered` : '',
     skipped ? `${skipped} skipped` : '',
+    cancelled ? `${cancelled} cancelled` : '',
     pending ? `${pending} pending` : '',
   ]
     .filter(Boolean)
@@ -215,7 +255,7 @@ function CollapsedSummary({ items, onExpand }) {
   );
 }
 
-function GroupBlock({ group, isFirst }) {
+function GroupBlock({ group, isFirst, onCancel, cancellingOrderId }) {
   const [showMore, setShowMore] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { label, items } = group;
@@ -232,7 +272,13 @@ function GroupBlock({ group, isFirst }) {
       {isFirst ? (
         <>
           {items.slice(0, showMore ? items.length : PREVIEW).map((item, index) => (
-            <DeliveryRow key={item.id ?? index} item={item} muted={showMore && index >= PREVIEW} />
+            <DeliveryRow
+              key={item.id ?? index}
+              item={item}
+              muted={showMore && index >= PREVIEW}
+              onCancel={onCancel}
+              isCancelling={String(cancellingOrderId) === String(item.id)}
+            />
           ))}
 
           {items.length > PREVIEW && (
@@ -254,7 +300,13 @@ function GroupBlock({ group, isFirst }) {
       ) : isExpanded ? (
         <>
           {items.map((item, index) => (
-            <DeliveryRow key={item.id ?? index} item={item} muted />
+            <DeliveryRow
+              key={item.id ?? index}
+              item={item}
+              muted
+              onCancel={onCancel}
+              isCancelling={String(cancellingOrderId) === String(item.id)}
+            />
           ))}
 
           <button
@@ -282,6 +334,9 @@ export default function Deliveries() {
   const [insights, setInsights] = useState(initialDeliveryState.insights);
   const [loading, setLoading] = useState(() => !cachedDeliveries);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState(null);
   const [view, setView] = useState('week');
 
   const applyDeliveryState = (data) => {
@@ -330,6 +385,7 @@ export default function Deliveries() {
   const todayHasIssue = Boolean(String(todayDelivery?.customerIssue || '').trim());
   const todayIssueStatus = String(todayDelivery?.issueStatus || '').toUpperCase();
   const todayHasAdminAction = Boolean(String(todayDelivery?.issueAdminAction || '').trim());
+  const canCancelTodayOrder = canCancelPendingOneTimeOrder(todayDelivery);
   const todayTimingLabel =
     todayStatus === 'DELIVERED'
       ? todayDelivery?.time
@@ -380,6 +436,46 @@ export default function Deliveries() {
     },
   ];
 
+  const openCancelModal = (delivery) => {
+    setNotice(null);
+    setCancelTarget(delivery || null);
+  };
+
+  const closeCancelModal = () => {
+    if (cancellingOrderId) return;
+    setCancelTarget(null);
+  };
+
+  const confirmCancelOrder = async () => {
+    const target = cancelTarget;
+    if (!target?.id) return;
+
+    setCancellingOrderId(String(target.id));
+    setNotice(null);
+
+    try {
+      const response = await cancelCustomerOneTimeOrder({ orderId: target.id });
+      setCancelTarget(null);
+      setNotice({
+        type: 'success',
+        message:
+          response?.message ||
+          'Order cancelled successfully.',
+      });
+      await load({ force: true, showSpinner: false });
+    } catch (err) {
+      setNotice({
+        type: 'error',
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          'Failed to cancel this order.',
+      });
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+
   return (
     <CustomerLayout>
       <div className="space-y-4 sm:space-y-6 lg:space-y-8" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -413,6 +509,18 @@ export default function Deliveries() {
           {error && (
             <div className="mt-5 rounded-[16px] border border-[#F2D0C8] bg-[#FDECEA] px-4 py-3.5 text-sm text-[#C0392B]">
               {error}
+            </div>
+          )}
+
+          {notice && (
+            <div
+              className={`mt-5 rounded-[16px] px-4 py-3.5 text-sm ${
+                notice.type === 'success'
+                  ? 'border border-[#DDE8D1] bg-[#EEF5E7] text-[#4A7C2F]'
+                  : 'border border-[#F2D0C8] bg-[#FDECEA] text-[#C0392B]'
+              }`}
+            >
+              {notice.message}
             </div>
           )}
 
@@ -484,6 +592,18 @@ export default function Deliveries() {
                       {todayDelivery.paymentMethod}
                     </span>
                   )}
+
+                  {canCancelTodayOrder && (
+                    <button
+                      onClick={() => openCancelModal(todayDelivery)}
+                      disabled={String(cancellingOrderId) === String(todayDelivery?.id)}
+                      className="rounded-full border border-[#F2D0C8] bg-[#FDECEA] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#C0392B] transition hover:bg-[#F8DDD6] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {String(cancellingOrderId) === String(todayDelivery?.id)
+                        ? 'Cancelling...'
+                        : 'Cancel Order'}
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -502,16 +622,19 @@ export default function Deliveries() {
 
               </div>
 
-              <button
-                onClick={() =>
-                  navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })
-                }
-                disabled={!canTrack}
-                className="flex w-full flex-shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#FFF4E2] px-5 py-3 text-sm font-bold text-[#B8641A] transition hover:bg-[#FDE9C9] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35 sm:w-auto"
-              >
-                <MapPin size={16} />
-                Track Agent
-              </button>
+              <div className="flex w-full flex-shrink-0 flex-col gap-2 sm:w-auto">
+                <button
+                  onClick={() =>
+                    navigate('/customer/dashboard/track/agent', { state: { delivery: todayDelivery } })
+                  }
+                  disabled={!canTrack}
+                  className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-[#FFF4E2] px-5 py-3 text-sm font-bold text-[#B8641A] transition hover:bg-[#FDE9C9] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35 sm:w-auto"
+                >
+                  <MapPin size={16} />
+                  Track Agent
+                </button>
+
+              </div>
             </div>
           </div>
         )}
@@ -551,12 +674,78 @@ export default function Deliveries() {
 
             <div>
               {groups.map((group, index) => (
-                <GroupBlock key={group.label} group={group} isFirst={index === 0} />
+                <GroupBlock
+                  key={group.label}
+                  group={group}
+                  isFirst={index === 0}
+                  onCancel={openCancelModal}
+                  cancellingOrderId={cancellingOrderId}
+                />
               ))}
             </div>
           </>
         )}
       </div>
+
+      {cancelTarget && (
+        <CancelOrderModal
+          delivery={cancelTarget}
+          cancelling={String(cancellingOrderId) === String(cancelTarget?.id)}
+          onClose={closeCancelModal}
+          onConfirm={confirmCancelOrder}
+        />
+      )}
     </CustomerLayout>
+  );
+}
+
+function CancelOrderModal({ delivery, cancelling = false, onClose, onConfirm }) {
+  const deliveryDate = delivery?.deliveryDate
+    ? new Date(`${delivery.deliveryDate}T00:00:00`).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : delivery?.date || '-';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#2C1A0E]/45 px-4 pb-4 sm:items-center sm:pb-0">
+      <div className="w-full max-w-md rounded-[24px] border border-[#E7DAC6] bg-[#FFFDF7] p-5 shadow-[0_24px_60px_rgba(44,26,14,0.28)] sm:p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">
+          Cancel One-time Order
+        </p>
+        <h3 className="mt-2 text-xl font-semibold text-[#2C1A0E]" style={headingFont}>
+          Cancel this approval-pending order?
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-[#8B7355]">
+          {delivery?.qty || '-'} {delivery?.product || 'Milk'} for {deliveryDate} will be removed from your deliveries.
+          If this order was already paid, the amount will be added back to your wallet.
+        </p>
+
+        <div className="mt-5 rounded-[18px] border border-[#EDE8DF] bg-white px-4 py-3 text-sm text-[#5C3D1E]">
+          <p className="font-semibold">{getDeliveryTypeLabel(delivery)} order</p>
+          <p className="mt-1 text-xs text-[#8B7355]">
+            Status: Approval pending
+          </p>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            disabled={cancelling}
+            className="rounded-[14px] border border-[#EDE8DF] bg-white px-4 py-2.5 text-sm font-semibold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Keep Order
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={cancelling}
+            className="rounded-[14px] bg-[#C0392B] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#A93226] disabled:cursor-not-allowed disabled:bg-[#D8C8B2]"
+          >
+            {cancelling ? 'Cancelling...' : 'Yes, Cancel Order'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

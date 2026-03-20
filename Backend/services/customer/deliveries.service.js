@@ -1,5 +1,6 @@
 import { supabase } from "../../config/supabase.js";
 import { appendDeliveryBillingMeta } from "./monthlyBilling.service.js";
+import { addAmountToCustomerWallet } from "./payments.service.js";
 import { getSubscriptionByCustomerId } from "./subscription.service.js";
 import { ensureCustomerSubscriptionDeliveryForDate } from "./subscription.automation.service.js";
 
@@ -195,7 +196,8 @@ const toTitleStatus = (status) => {
   const value = String(status || "").toUpperCase();
   if (value === "DELIVERED" || value === "COMPLETED") return "DELIVERED";
   if (value === "FAILED" || value === "MISSED") return "FAILED";
-  if (value === "SKIPPED" || value === "CANCELLED") return "SKIPPED";
+  if (value === "CANCELLED" || value === "CANCELED") return "CANCELLED";
+  if (value === "SKIPPED") return "SKIPPED";
   if (value === "PENDING") return "PENDING";
   return "PENDING";
 };
@@ -205,6 +207,7 @@ const toApprovalStatus = (approvalStatus, { isOneTimeOrder = false } = {}) => {
   if (normalized === "APPROVED") return "APPROVED";
   if (normalized === "REJECTED") return "REJECTED";
   if (normalized === "PENDING") return "PENDING";
+  if (normalized === "CANCELLED" || normalized === "CANCELED") return "CANCELLED";
   return isOneTimeOrder ? "PENDING" : "APPROVED";
 };
 
@@ -391,12 +394,26 @@ const getTodayDeliveryFromRows = (
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const now = new Date();
 
-  const todayRow = rows.find((row) =>
+  const todayRows = rows.filter((row) =>
     isSameCalendarDay(
       row.delivery_date || row.date || row.created_at || row.updated_at,
       now
     )
   );
+
+  const todayRow =
+    todayRows.find((row) => {
+      const status = String(row?.status || "").toUpperCase();
+      const approvalStatus = String(row?.approval_status || "").toUpperCase();
+      return (
+        status !== "CANCELLED" &&
+        status !== "CANCELED" &&
+        approvalStatus !== "CANCELLED" &&
+        approvalStatus !== "CANCELED"
+      );
+    }) ||
+    todayRows[0] ||
+    null;
 
   if (!todayRow) return null;
 
@@ -624,6 +641,63 @@ const releaseStockForCancelledOrder = async ({ dairyId, milkType, quantity }) =>
     .eq("dairy_id", resolvedDairyId);
 
   if (error) throw error;
+};
+
+const parseDeliveryIdFromPaymentDescription = (description) => {
+  const text = String(description || "");
+  const match = text.match(/delivery_id=(\d+)/i);
+  if (!match) return null;
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const findLinkedOneTimePayment = async ({
+  customerId,
+  orderId,
+  paymentId = null,
+  dairyId = null,
+} = {}) => {
+  if (paymentId) {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("id, customer_id, dairy_id, amount, status, description, created_at")
+      .eq("id", paymentId)
+      .eq("customer_id", customerId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+  }
+
+  let query = supabase
+    .from("payments")
+    .select("id, customer_id, dairy_id, amount, status, description, created_at")
+    .eq("customer_id", customerId)
+    .ilike("description", `%delivery_id=${orderId}%`)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (dairyId != null) {
+    query = query.eq("dairy_id", dairyId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = Array.isArray(data) ? data : [];
+  return (
+    rows.find((row) => parseDeliveryIdFromPaymentDescription(row?.description) === orderId) ||
+    rows[0] ||
+    null
+  );
+};
+
+const appendCustomerCancellationNote = (existingNotes, reason = "customer_cancelled") => {
+  const previous = String(existingNotes || "").trim();
+  const stamped = `[CUSTOMER_CANCELLED_ORDER] ${new Date().toISOString()} :: ${String(reason || "customer_cancelled").trim()}`;
+  return previous ? `${previous}\n${stamped}`.slice(0, 500) : stamped.slice(0, 500);
 };
 
 const appendCustomerIssueNote = (existingNotes, issueText) => {
@@ -911,17 +985,15 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
 export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   const orderId = toPositiveId(payload?.orderId);
   const paymentId = toPositiveId(payload?.paymentId);
+  const removeFromHistory = toBoolean(payload?.removeFromHistory);
 
   if (!orderId) {
     throw new Error("Valid orderId is required");
   }
-  if (!paymentId) {
-    throw new Error("Valid paymentId is required");
-  }
 
   const { data: delivery, error: deliveryFetchError } = await supabase
     .from("deliveries")
-    .select("id, customer_id, dairy_id, milk_type, quantity_liters, status, notes")
+    .select("id, customer_id, dairy_id, delivery_date, milk_type, quantity_liters, status, approval_status, notes")
     .eq("id", orderId)
     .eq("customer_id", customerId)
     .limit(1)
@@ -940,39 +1012,87 @@ export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}
     throw new Error("Only pending one-time orders can be cancelled");
   }
 
-  const { data: payment, error: paymentFetchError } = await supabase
-    .from("payments")
-    .select("id, customer_id, status")
-    .eq("id", paymentId)
-    .eq("customer_id", customerId)
-    .limit(1)
-    .maybeSingle();
+  if (String(delivery?.approval_status || "PENDING").toUpperCase() !== "PENDING") {
+    throw new Error("Only approval-pending one-time orders can be cancelled");
+  }
 
-  if (paymentFetchError) throw paymentFetchError;
+  const payment = await findLinkedOneTimePayment({
+    customerId,
+    orderId,
+    paymentId,
+    dairyId: delivery?.dairy_id ?? null,
+  });
   if (!payment) {
     throw new Error("Payment record not found");
   }
 
-  if (String(payment?.status || "PENDING").toUpperCase() === "PAID") {
-    throw new Error("Payment already completed; order cannot be cancelled");
+  const paymentStatus = String(payment?.status || "PENDING").toUpperCase();
+  let walletCredit = null;
+
+  if (paymentStatus === "PAID") {
+    const paidAmount = Number(Number(payment?.amount || 0).toFixed(2));
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      throw new Error("Paid amount is invalid for cancellation");
+    }
+
+    walletCredit = await addAmountToCustomerWallet({
+      customerId,
+      dairyId: delivery?.dairy_id ?? null,
+      amount: paidAmount,
+      source: "ONE_TIME_ORDER_CANCEL",
+      method: "WALLET",
+      description: `[ONE_TIME_ORDER_CANCEL] order_id=${orderId}; original_payment_id=${payment.id}; amount=${paidAmount}; reason=approval_pending`,
+    });
   }
 
-  const { error: deleteDeliveryError } = await supabase
-    .from("deliveries")
-    .delete()
-    .eq("id", orderId)
-    .eq("customer_id", customerId);
+  if (removeFromHistory) {
+    const { error: deleteDeliveryError } = await supabase
+      .from("deliveries")
+      .delete()
+      .eq("id", orderId)
+      .eq("customer_id", customerId);
 
-  if (deleteDeliveryError) throw deleteDeliveryError;
+    if (deleteDeliveryError) throw deleteDeliveryError;
 
-  const { error: deletePaymentError } = await supabase
-    .from("payments")
-    .delete()
-    .eq("id", paymentId)
-    .eq("customer_id", customerId);
+    if (paymentStatus !== "PAID") {
+      const { error: deletePaymentError } = await supabase
+        .from("payments")
+        .delete()
+        .eq("id", payment.id)
+        .eq("customer_id", customerId);
 
-  if (deletePaymentError) {
-    throw deletePaymentError;
+      if (deletePaymentError) {
+        throw deletePaymentError;
+      }
+    }
+  } else {
+    const { error: updateDeliveryError } = await supabase
+      .from("deliveries")
+      .update({
+        status: "CANCELLED",
+        approval_status: "CANCELLED",
+        notes: appendCustomerCancellationNote(delivery?.notes, "approval_pending"),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId)
+      .eq("customer_id", customerId);
+
+    if (updateDeliveryError) throw updateDeliveryError;
+
+    if (paymentStatus !== "PAID") {
+      const { error: updatePaymentError } = await supabase
+        .from("payments")
+        .update({
+          status: "CANCELLED",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id)
+        .eq("customer_id", customerId);
+
+      if (updatePaymentError) {
+        throw updatePaymentError;
+      }
+    }
   }
 
   await releaseStockForCancelledOrder({
@@ -984,8 +1104,17 @@ export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}
   return {
     success: true,
     cancelled: true,
+    removedFromHistory: removeFromHistory,
     orderId,
-    paymentId,
+    paymentId: payment?.id || paymentId || null,
+    walletCredited: Boolean(walletCredit),
+    creditedAmount: walletCredit?.creditedAmount || 0,
+    walletBalance: walletCredit?.walletBalance ?? null,
+    message: removeFromHistory
+      ? "Order cancelled successfully."
+      : walletCredit
+      ? "Order cancelled. It will stay in your history, and the paid amount has been added to your wallet."
+      : "Order cancelled. It will stay visible in your delivery history.",
   };
 };
 

@@ -30,10 +30,14 @@ const hasOpenSubscriptionStatus = (status) => {
 const normalizeOneTimeStatus = (status, approvalStatus) => {
   const normalizedApproval = String(approvalStatus || "").toUpperCase();
   if (normalizedApproval === "PENDING") return "PENDING_APPROVAL";
+  if (normalizedApproval === "CANCELLED" || normalizedApproval === "CANCELED") {
+    return "CANCELLED";
+  }
 
   const value = String(status || "").toUpperCase();
   if (value === "DELIVERED" || value === "COMPLETED") return "DELIVERED";
-  if (value === "SKIPPED" || value === "CANCELLED" || value === "CANCELED") return "SKIPPED";
+  if (value === "CANCELLED" || value === "CANCELED") return "CANCELLED";
+  if (value === "SKIPPED") return "SKIPPED";
   if (value === "PENDING") return "PENDING";
   return "PENDING";
 };
@@ -196,6 +200,12 @@ const getUpcomingScheduledDelivery = async (customerId) => {
     const status = String(row?.status || "PENDING").toUpperCase();
     const approvalStatus = String(row?.approval_status || "").toUpperCase();
     const isOneTimeOrder = String(row?.notes || "").includes("[ONE_TIME_ORDER]");
+    const isCancelled =
+      status === "CANCELLED" ||
+      status === "CANCELED" ||
+      approvalStatus === "CANCELLED" ||
+      approvalStatus === "CANCELED";
+    if (isCancelled) return false;
     const blockedByApproval = isOneTimeOrder && approvalStatus === "PENDING";
     if (blockedByApproval) return true;
     return status !== "DELIVERED" && status !== "COMPLETED" && status !== "FAILED";

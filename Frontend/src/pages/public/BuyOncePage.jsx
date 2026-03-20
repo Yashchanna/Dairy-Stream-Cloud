@@ -370,7 +370,7 @@ const BuyOncePage = () => {
     if (!orderId || !paymentId) return false;
 
     try {
-      await cancelCustomerOneTimeOrder({ orderId, paymentId });
+      await cancelCustomerOneTimeOrder({ orderId, paymentId, removeFromHistory: true });
       return true;
     } catch (err) {
       console.error("Failed to rollback cancelled one-time order:", err);
