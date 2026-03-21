@@ -153,17 +153,9 @@ const paymentTypeCfg = (raw = "") => {
   };
 };
 
-const getNextBillDateLabel = (payment, dueInDays) => {
-  const dueDateLabel = formatDateLabel(payment?.dueDate, { day: "numeric", month: "short" });
-  if (dueDateLabel) return dueDateLabel;
-
-  if (typeof dueInDays === "number") {
-    const nextDate = new Date();
-    nextDate.setDate(nextDate.getDate() + dueInDays);
-    return formatDateLabel(nextDate, { day: "numeric", month: "short" });
-  }
-
-  return "Not set";
+const getMonthEndDate = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0);
 };
 
 const getNextSubscriptionDueDate = () => {
@@ -174,6 +166,7 @@ const getNextSubscriptionDueDate = () => {
 const INITIAL_SHOW = 7;
 const EMPTY_SUMMARY = {
   monthlyDue: 0,
+  overdueAmount: 0,
   walletBalance: 0,
   dueInDays: null,
   beneficiary: null,
@@ -184,6 +177,7 @@ const EMPTY_SUMMARY = {
 const toPaymentsViewState = (data) => ({
   summary: {
     monthlyDue: Number(data?.summary?.monthlyDue || 0),
+    overdueAmount: Number(data?.summary?.overdueAmount || 0),
     walletBalance: Number(data?.summary?.walletBalance || 0),
     dueInDays: data?.summary?.dueInDays == null ? null : Number(data.summary.dueInDays),
     beneficiary: data?.summary?.beneficiary || null,
@@ -449,11 +443,12 @@ export default function Payments() {
 
   const visibleHistory = showAll ? filteredHistory : filteredHistory.slice(0, INITIAL_SHOW);
   const hiddenCount = Math.max(filteredHistory.length - INITIAL_SHOW, 0);
-  const nextBillDateLabel = getNextBillDateLabel(nextUnpaidPayment, summary.dueInDays);
-  const nextBillHint =
-    summary.dueInDays === null
-      ? "Subscription bills are due by the 10th of the next month"
-      : dueText(summary.dueInDays);
+  const nextBillDateLabel = formatDateLabel(getMonthEndDate(), {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const nextBillHint = "Monthly bill closes at the end of the month";
 
   return (
     <CustomerLayout>
@@ -575,16 +570,16 @@ export default function Payments() {
                   <CreditCard size={16} />
                 </div>
                 <p className="text-[8px] font-extrabold uppercase tracking-[0.16em] text-[#C4A882] sm:text-[9px]">
-                  Pending + Overdue
+                  Overdue
                 </p>
                 <p
                   className="mt-1.5 break-words text-[18px] font-semibold leading-none tracking-[-0.04em] text-[#C0392B] sm:text-[26px]"
                   style={headingFont}
                 >
-                  {fmt(summary.monthlyDue)}
+                  {fmt(summary.overdueAmount)}
                 </p>
                 <p className="mt-1.5 text-[10px] leading-4 text-[#B89970] sm:mt-2 sm:text-[11px] sm:leading-5">
-                  All outstanding bills
+                  Increases only after the 10th if unpaid
                 </p>
               </div>
 

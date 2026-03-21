@@ -22,6 +22,14 @@ const isUuidSyntaxError = (error) => {
   return message.includes("invalid input syntax for type uuid");
 };
 
+const getLocalDateInput = (dateValue = new Date()) => {
+  const date = new Date(dateValue);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const hasOpenSubscriptionStatus = (status) => {
   const value = String(status || "ACTIVE").trim().toUpperCase();
   return value !== "CLOSED" && value !== "CANCELLED" && value !== "CANCELED";
@@ -60,6 +68,43 @@ const parseOneTimeNotes = (notesValue) => {
     slot: slotMatch?.[1]?.trim() || null,
     paymentMethod: paymentMatch?.[1]?.trim() || null,
   };
+};
+
+const formatQuantityLabel = (value) => {
+  const quantityValue = Number(value);
+  return Number.isFinite(quantityValue) && quantityValue > 0 ? `${quantityValue} L` : "-";
+};
+
+const mapOneTimeOrderRow = (row, dairyNamesMap = {}) => {
+  const parsedNotes = parseOneTimeNotes(row?.notes);
+  if (!parsedNotes.isOneTimeOrder) return null;
+
+  return {
+    id: row?.id,
+    dairyId: row?.dairy_id ?? null,
+    dairyName:
+      dairyNamesMap[String(row?.dairy_id)] ||
+      (row?.dairy_id ? `Dairy #${row.dairy_id}` : "Dairy"),
+    deliveryDate: row?.delivery_date || null,
+    product: row?.milk_type || "Milk",
+    quantity: formatQuantityLabel(row?.quantity_liters),
+    status: normalizeOneTimeStatus(row?.status, row?.approval_status),
+    approvalStatus: String(row?.approval_status || "PENDING").toUpperCase(),
+    slot: parsedNotes.slot || "-",
+    paymentMethod: parsedNotes.paymentMethod || "-",
+    createdAt: row?.created_at || null,
+  };
+};
+
+const isClosedOneTimeOrder = (row) => {
+  const status = String(row?.status || "").toUpperCase();
+  const approvalStatus = String(row?.approval_status || "").toUpperCase();
+
+  if (["CANCELLED", "CANCELED", "FAILED", "DELIVERED", "COMPLETED", "SKIPPED"].includes(status)) {
+    return true;
+  }
+
+  return ["CANCELLED", "CANCELED", "REJECTED"].includes(approvalStatus);
 };
 
 const getDairyNamesMap = async (dairyIds) => {
@@ -106,33 +151,36 @@ const getRecentOneTimeOrders = async (customerId) => {
   const rows = Array.isArray(data) ? data : [];
   const dairyNamesMap = await getDairyNamesMap(rows.map((row) => row?.dairy_id));
 
+  return rows.map((row) => mapOneTimeOrderRow(row, dairyNamesMap)).filter(Boolean);
+};
+
+const getTomorrowOneTimeOrders = async (customerId) => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = getLocalDateInput(tomorrow);
+
+  const { data, error } = await supabase
+    .from("deliveries")
+    .select("id, dairy_id, delivery_date, milk_type, quantity_liters, status, approval_status, notes, created_at")
+    .eq("customer_id", customerId)
+    .eq("delivery_date", tomorrowIso)
+    .ilike("notes", "%[ONE_TIME_ORDER]%")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    if (isMissingTableError(error) || isMissingColumnError(error) || isUuidSyntaxError(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  const dairyNamesMap = await getDairyNamesMap(rows.map((row) => row?.dairy_id));
+
   return rows
-    .map((row) => {
-      const parsedNotes = parseOneTimeNotes(row?.notes);
-      if (!parsedNotes.isOneTimeOrder) return null;
-
-      const quantityValue = Number(row?.quantity_liters);
-      const quantity =
-        Number.isFinite(quantityValue) && quantityValue > 0
-          ? `${quantityValue} L`
-          : "-";
-
-      return {
-        id: row?.id,
-        dairyId: row?.dairy_id ?? null,
-        dairyName:
-          dairyNamesMap[String(row?.dairy_id)] ||
-          (row?.dairy_id ? `Dairy #${row.dairy_id}` : "Dairy"),
-        deliveryDate: row?.delivery_date || null,
-        product: row?.milk_type || "Milk",
-        quantity,
-        status: normalizeOneTimeStatus(row?.status, row?.approval_status),
-        approvalStatus: String(row?.approval_status || "PENDING").toUpperCase(),
-        slot: parsedNotes.slot || "-",
-        paymentMethod: parsedNotes.paymentMethod || "-",
-        createdAt: row?.created_at || null,
-      };
-    })
+    .filter((row) => !isClosedOneTimeOrder(row))
+    .map((row) => mapOneTimeOrderRow(row, dairyNamesMap))
     .filter(Boolean);
 };
 
@@ -259,10 +307,19 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
   const quantityLabel = isActiveSubscription && subscription?.quantity_liters
     ? `${subscription.quantity_liters} L`
     : "-";
-  const { todayDelivery } = await getTodayDeliverySnapshot(customerId, { subscription });
-  const upcomingDeliveryAlert = await getUpcomingScheduledDelivery(customerId);
-  const oneTimeOrders = await getRecentOneTimeOrders(customerId);
-  const paymentsData = await getCustomerPaymentsData(customerId, linkedDairyId);
+  const [
+    { todayDelivery },
+    upcomingDeliveryAlert,
+    oneTimeOrders,
+    tomorrowExtraOrders,
+    paymentsData,
+  ] = await Promise.all([
+    getTodayDeliverySnapshot(customerId, { subscription }),
+    getUpcomingScheduledDelivery(customerId),
+    getRecentOneTimeOrders(customerId),
+    getTomorrowOneTimeOrders(customerId),
+    getCustomerPaymentsData(customerId, linkedDairyId),
+  ]);
 
   const legacyDairyName =
     customer?.dairy_name ??
@@ -303,6 +360,7 @@ export const getCustomerDashboard = async (customerId, { dairyId } = {}) => {
     tomorrowDelivery: {
       quantity: quantityLabel,
       slot: subscription?.delivery_slot || "-",
+      extraOrders: tomorrowExtraOrders,
     },
     billing: {
       monthlyDue: Number(paymentsData?.summary?.monthlyDue || 0),

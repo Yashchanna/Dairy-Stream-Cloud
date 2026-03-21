@@ -69,17 +69,6 @@ const ACTIONS = [
   },
 ];
 
-const formatUpcomingMessage = (alert) => {
-  if (!alert?.date) return "";
-  const parts = [];
-  if (alert.product) parts.push(alert.product);
-  if (alert.quantity) parts.push(alert.quantity);
-  const itemSummary = parts.join(" ");
-  return `Upcoming delivery scheduled${
-    itemSummary ? `: ${itemSummary}` : ""
-  } on ${alert.date}.`;
-};
-
 const getBillingDueText = (dueInDays) => {
   if (dueInDays === null || dueInDays === undefined) return "Due date not set";
   if (dueInDays < 0) return `Overdue by ${Math.abs(dueInDays)} days`;
@@ -204,6 +193,27 @@ const normalizeAddExtraSlot = (value) => {
   return "Morning";
 };
 
+const formatTomorrowExtraStatus = (status) => {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "PENDING_APPROVAL") return "Approval Pending";
+  if (normalized === "PENDING") return "Scheduled";
+  if (normalized === "DELIVERED") return "Delivered";
+  if (normalized === "FAILED") return "Failed";
+  if (normalized === "SKIPPED") return "Skipped";
+  if (normalized === "CANCELLED") return "Cancelled";
+  return "Scheduled";
+};
+
+const getTomorrowExtraStatusClasses = (status) => {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "DELIVERED") return "bg-[#EEF5E7] text-[#4A7C2F]";
+  if (normalized === "FAILED" || normalized === "CANCELLED") {
+    return "bg-[#FDECEA] text-[#C0392B]";
+  }
+  if (normalized === "PENDING_APPROVAL") return "bg-[#FFF1E4] text-[#C86A2B]";
+  return "bg-[#FFF4E2] text-[#B8641A]";
+};
+
 const getTodayDeliveryMeta = (delivery = {}) => {
   const status = String(delivery?.status || "").toUpperCase();
   const hasAgent = Boolean(delivery?.agent?.name);
@@ -324,7 +334,6 @@ export default function DairyCustomerDashboard() {
   const { data, loading, error } = useCustomerDashboard();
 
   const [dashboardData, setDashboardData] = useState(null);
-  const [bannerVisible, setBannerVisible] = useState(true);
   const [savingPause, setSavingPause] = useState(false);
   const [pendingSubscriptionStatus, setPendingSubscriptionStatus] = useState(null);
   const [toast, setToast] = useState(null);
@@ -398,14 +407,6 @@ export default function DairyCustomerDashboard() {
   const billing = resolvedData?.billing || {};
   const subscription = resolvedData?.subscription || null;
   const oneTimeOrders = Array.isArray(resolvedData?.oneTimeOrders) ? resolvedData.oneTimeOrders : [];
-  const upcomingMsg = useMemo(
-    () => formatUpcomingMessage(resolvedData?.alerts?.upcomingDelivery),
-    [resolvedData?.alerts?.upcomingDelivery]
-  );
-
-  useEffect(() => {
-    setBannerVisible(true);
-  }, [upcomingMsg]);
 
   const customerName = customer?.name || "Customer";
   const dairyName = customer?.dairy || customer?.dairyName || "Not assigned";
@@ -428,6 +429,17 @@ export default function DairyCustomerDashboard() {
   const isPaused = effectiveSubscriptionStatus === "PAUSED";
   const canTogglePause = Boolean(subscription?.dairyId) && !savingPause;
   const hasSubscription = Boolean(subscription?.dairyId);
+  const canAddExtraToSubscriptionBill =
+    Boolean(subscription?.dairyId) &&
+    linkedExtraDairyId != null &&
+    String(subscription.dairyId) === String(linkedExtraDairyId);
+  const addExtraPaymentOptions = [
+    { id: "PAY_NOW_ONLINE", label: "Pay Now Online" },
+    { id: "PAY_NOW_CASH", label: "Cash on Delivery" },
+    ...(canAddExtraToSubscriptionBill
+      ? [{ id: "ADD_TO_SUBSCRIPTION", label: "Add to Subscription Bill" }]
+      : []),
+  ];
   const todayMeta = getTodayDeliveryMeta(today);
   const hasIssue = Boolean(String(today?.customerIssue || "").trim());
   const issueStatus = String(today?.issueStatus || "").toUpperCase();
@@ -458,6 +470,30 @@ export default function DairyCustomerDashboard() {
     ? "Restart daily deliveries"
     : "Temporarily stop deliveries";
   const nextExtraDeliveryDate = getTomorrowDateInput();
+  const tomorrowExtraOrders = Array.isArray(tomorrow?.extraOrders) ? tomorrow.extraOrders : [];
+  const hasTomorrowExtras = tomorrowExtraOrders.length > 0;
+  const showTomorrowCard = Boolean(hasSubscription || hasTomorrowExtras);
+  const tomorrowTitle = hasSubscription
+    ? `${tomorrow?.quantity || "-"} ${subscription?.milkType || "Milk"}`
+    : "Extra orders for tomorrow";
+  const tomorrowSubtitle = hasSubscription
+    ? `${tomorrow?.slot || "-"} slot`
+    : `${tomorrowExtraOrders.length} extra ${tomorrowExtraOrders.length === 1 ? "item" : "items"} added`;
+
+  useEffect(() => {
+    if (canAddExtraToSubscriptionBill || addExtraForm.paymentMethod !== "ADD_TO_SUBSCRIPTION") {
+      return;
+    }
+
+    setAddExtraForm((prev) =>
+      prev.paymentMethod === "ADD_TO_SUBSCRIPTION"
+        ? {
+            ...prev,
+            paymentMethod: "PAY_NOW_ONLINE",
+          }
+        : prev
+    );
+  }, [addExtraForm.paymentMethod, canAddExtraToSubscriptionBill]);
   const nextExtraDeliveryLabel = new Date(`${nextExtraDeliveryDate}T00:00:00`).toLocaleDateString(
     "en-IN",
     {
@@ -637,7 +673,9 @@ export default function DairyCustomerDashboard() {
       String(subscription?.address || "").trim() && subscription?.address !== "-"
         ? String(subscription.address).trim()
         : getStoredCustomerAddress();
-    const preferredPaymentMethod = normalizeAddExtraPaymentOption(subscription?.paymentMethod);
+    const preferredPaymentMethod = canAddExtraToSubscriptionBill
+      ? normalizeAddExtraPaymentOption(subscription?.paymentMethod)
+      : "PAY_NOW_ONLINE";
     const preferredSlot = normalizeAddExtraSlot(subscription?.slot || tomorrow?.slot || "Morning");
     const preferredProductName = getPreferredExtraProductName({ subscription, tomorrow, today });
     const preferredQuantity = getPreferredExtraQuantity({ subscription, tomorrow, today });
@@ -734,6 +772,12 @@ export default function DairyCustomerDashboard() {
       setAddExtraError("Please enter a detailed delivery address.");
       return;
     }
+    if (addExtraForm.paymentMethod === "ADD_TO_SUBSCRIPTION" && !canAddExtraToSubscriptionBill) {
+      setAddExtraError(
+        "Add to Subscription Bill is available only when you have an active subscription with this dairy."
+      );
+      return;
+    }
 
     setAddExtraSubmitting(true);
     setAddExtraError("");
@@ -800,6 +844,16 @@ export default function DairyCustomerDashboard() {
         setAddExtraError("Payment was not completed. The extra order was not placed.");
         return;
       }
+
+      showToast(
+        addExtraForm.paymentMethod === "PAY_NOW_CASH"
+          ? "Extra order placed for tomorrow. You can pay cash on delivery."
+          : "Extra order placed for tomorrow. It will be added to your subscription bill.",
+        "success"
+      );
+      setShowAddExtraModal(false);
+      refreshDashboard().catch(() => {});
+      return;
     } catch (err) {
       const message = err?.response?.data?.message || err?.message || "Failed to place extra order.";
       if (!allowDuplicate && /already exists/i.test(message)) {
@@ -983,21 +1037,6 @@ export default function DairyCustomerDashboard() {
                 </div>
               </div>
             </div>
-
-            {bannerVisible && upcomingMsg && (
-              <div className="mt-5 flex flex-col gap-3 rounded-[18px] border border-[#EFD7B3] bg-[#FFF8EC] px-3.5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:px-4 sm:py-4">
-                <div className="flex items-start gap-2.5 text-sm text-[#8C5A1A]">
-                  <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-[#B8641A]" />
-                  {upcomingMsg}
-                </div>
-                <button
-                  onClick={() => setBannerVisible(false)}
-                  className="ml-0 flex-shrink-0 rounded-full p-1 text-[#C4A882] transition hover:bg-white hover:text-[#8B7355] sm:ml-3"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
           </div>
 
         {today && (
@@ -1179,29 +1218,55 @@ export default function DairyCustomerDashboard() {
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:mt-7 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
           <div className="space-y-4 rounded-[22px] border border-[#EDE8DF] bg-[#FFFDF7] p-4 sm:space-y-5 sm:p-6">
-            {tomorrow && hasSubscription ? (
+            {showTomorrowCard ? (
               <div>
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[#C4A882]">
                   Tomorrow
                 </p>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[13px] bg-[#FFF4E2] text-[#B8641A] sm:h-11 sm:w-11">
-                      <Truck size={18} />
+                      {hasSubscription ? <Truck size={18} /> : <PlusCircle size={18} />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-base font-bold text-[#2C1A0E]">
-                        {tomorrow.quantity || "-"} {subscription?.milkType || "Milk"}
-                      </p>
-                      <p className="mt-0.5 text-sm text-[#8B7355]">{tomorrow.slot || "-"} slot</p>
+                      <p className="text-base font-bold text-[#2C1A0E]">{tomorrowTitle}</p>
+                      <p className="mt-0.5 text-sm text-[#8B7355]">{tomorrowSubtitle}</p>
+
+                      {hasTomorrowExtras && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {tomorrowExtraOrders.map((order) => (
+                            <div
+                              key={order.id}
+                              className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-[#F2EDE4] bg-[#FBF7F0] px-2.5 py-1.5"
+                            >
+                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#FFF4E2] text-xs font-bold leading-none text-[#B8641A]">
+                                +
+                              </span>
+                              <span className="text-xs font-bold text-[#5C3D1E]">
+                                {order.quantity || "-"} {order.product || "Milk"}
+                              </span>
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] ${getTomorrowExtraStatusClasses(
+                                  order.status
+                                )}`}
+                              >
+                                {formatTomorrowExtraStatus(order.status)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => navigate("/customer/dashboard/subscriptions")}
-                    className="w-full rounded-[12px] border border-[#EDE8DF] bg-white px-3 py-2 text-xs font-bold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E] sm:w-auto"
-                  >
-                    Edit
-                  </button>
+
+                  {hasSubscription && (
+                    <button
+                      onClick={() => navigate("/customer/dashboard/subscriptions")}
+                      className="w-full rounded-[12px] border border-[#EDE8DF] bg-white px-3 py-2 text-xs font-bold text-[#8B7355] transition hover:border-[#D4B896] hover:bg-[#FDF6EC] hover:text-[#5C3D1E] sm:w-auto"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1485,11 +1550,7 @@ export default function DairyCustomerDashboard() {
                         Payment Option
                       </label>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        {[
-                          { id: "PAY_NOW_ONLINE", label: "Pay Now Online" },
-                          { id: "PAY_NOW_CASH", label: "Cash on Delivery" },
-                          { id: "ADD_TO_SUBSCRIPTION", label: "Add to Subscription Bill" },
-                        ].map((method) => (
+                        {addExtraPaymentOptions.map((method) => (
                           <button
                             key={method.id}
                             type="button"
@@ -1509,6 +1570,11 @@ export default function DairyCustomerDashboard() {
                           </button>
                         ))}
                       </div>
+                      {!canAddExtraToSubscriptionBill && (
+                        <p className="mt-2 text-xs font-medium text-[#8B7355]">
+                          Add to Subscription Bill is available only for customers with an active subscription in this dairy.
+                        </p>
+                      )}
                       {addExtraForm.paymentMethod === "ADD_TO_SUBSCRIPTION" && (
                         <p className="mt-2 text-xs font-medium text-[#8B7355]">
                           This extra order will be added to your subscription bill.

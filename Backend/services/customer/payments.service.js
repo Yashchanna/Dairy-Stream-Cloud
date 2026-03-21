@@ -1056,10 +1056,12 @@ export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
     .filter(
     (item) => item.status === "PENDING" || item.status === "OVERDUE"
     );
+  const overdueCandidates = pendingCandidates.filter((item) => item.status === "OVERDUE");
   const totalPendingAndOverdue = pendingCandidates.reduce(
     (sum, item) => sum + toNumber(item.amount, 0),
     0
   );
+  const totalOverdue = overdueCandidates.reduce((sum, item) => sum + toNumber(item.amount, 0), 0);
   const currentMonthKey = String(getLocalTodayIso()).slice(0, 7);
   const historicalPendingAndOverdue = pendingCandidates.reduce((sum, item) => {
     return item.monthKey === currentMonthKey ? sum : sum + toNumber(item.amount, 0);
@@ -1082,6 +1084,7 @@ export const getCustomerPaymentsData = async (customerId, dairyId = null) => {
   return {
     summary: {
       monthlyDue: totalPendingAndOverdue,
+      overdueAmount: Number(totalOverdue.toFixed(2)),
       walletBalance: toNumber(walletBalance, 0),
       payableTillDate: toNumber(payableTillDate, 0),
       billingSummaryAmount: Number(liveBillingSummaryAmount.toFixed(2)),

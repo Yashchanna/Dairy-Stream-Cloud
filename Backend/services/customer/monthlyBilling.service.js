@@ -105,6 +105,19 @@ export const parseDeliveryBillingMeta = (notesValue) => {
   };
 };
 
+const isOneTimeOrderAddedToSubscriptionBill = (notesValue) => {
+  const notes = String(notesValue || "");
+  if (!notes.includes(ONE_TIME_ORDER_MARKER)) return false;
+
+  return parseDeliveryBillingMeta(notes).paymentMethod === "MONTHLY_BILL";
+};
+
+const shouldIncludeDeliveryInSubscriptionBill = (delivery) => {
+  const notes = String(delivery?.notes || "");
+  if (!notes.includes(ONE_TIME_ORDER_MARKER)) return true;
+  return isOneTimeOrderAddedToSubscriptionBill(notes);
+};
+
 const isInstantOneTimePaymentMethod = (value) => {
   const normalized = String(value || "").trim().toUpperCase();
   return (
@@ -328,8 +341,7 @@ export const syncCustomerMonthlyBills = async (customerId) => {
   const groups = new Map();
 
   for (const row of deliveries) {
-    const notes = String(row?.notes || "");
-    if (notes.includes(ONE_TIME_ORDER_MARKER)) continue;
+    if (!shouldIncludeDeliveryInSubscriptionBill(row)) continue;
 
     const monthKey = getMonthKey(row?.delivery_date);
     if (!monthKey || !row?.dairy_id) continue;
@@ -376,15 +388,18 @@ export const syncCustomerMonthlyBills = async (customerId) => {
     let paymentMethod = paymentMethods.get(String(group.dairyId)) || "UPI";
 
     for (const delivery of group.deliveredRows) {
+      const isSubscriptionBillExtra = isOneTimeOrderAddedToSubscriptionBill(delivery?.notes);
       totalAmount += await resolveSubscriptionDeliveryAmount(
         delivery,
         rateCache,
         subscriptionPaymentAmountByDeliveryId
       );
-      subscriptionCount += 1;
+      if (!isSubscriptionBillExtra) {
+        subscriptionCount += 1;
+      }
 
       const notesMeta = parseDeliveryBillingMeta(delivery?.notes);
-      if (notesMeta.paymentMethod) {
+      if (notesMeta.paymentMethod && notesMeta.paymentMethod !== "MONTHLY_BILL") {
         paymentMethod = notesMeta.paymentMethod;
       }
     }
@@ -463,8 +478,7 @@ export const getCurrentMonthSuccessfulSubscriptionDue = async (customerId) => {
 
   let total = 0;
   for (const delivery of deliveries) {
-    const notes = String(delivery?.notes || "");
-    if (notes.includes(ONE_TIME_ORDER_MARKER)) continue;
+    if (!shouldIncludeDeliveryInSubscriptionBill(delivery)) continue;
     if (!isDeliveredStatus(delivery?.status)) continue;
     if (getMonthKey(delivery?.delivery_date) !== currentMonthKey) continue;
     if (String(delivery?.delivery_date || "") > todayIso) continue;
@@ -504,8 +518,7 @@ export const getUnpaidDeliveredSubscriptionMonthlySummary = async (customerId) =
 
   const unpaidDeliveryIds = [];
   for (const delivery of deliveries) {
-    const notes = String(delivery?.notes || "");
-    if (notes.includes(ONE_TIME_ORDER_MARKER)) continue;
+    if (!shouldIncludeDeliveryInSubscriptionBill(delivery)) continue;
     if (!isDeliveredStatus(delivery?.status)) continue;
 
     const monthKey = getMonthKey(delivery?.delivery_date);
@@ -533,6 +546,7 @@ export const ensureBuyOnceInvoiceForDeliveredOrder = async (delivery) => {
 
   const notes = String(delivery?.notes || "");
   if (!notes.includes(ONE_TIME_ORDER_MARKER)) return null;
+  if (isOneTimeOrderAddedToSubscriptionBill(notes)) return null;
   if (!isDeliveredStatus(delivery?.status)) return null;
 
   const descriptionPattern = `%delivery_id=${delivery.id}%`;

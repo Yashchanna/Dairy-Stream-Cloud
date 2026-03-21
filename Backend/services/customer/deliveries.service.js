@@ -96,6 +96,14 @@ const normalizeOneTimePaymentMethod = (value) => {
   if (normalized === "COD" || normalized === "CASH" || normalized === "CASH_ON_DELIVERY") {
     return "COD";
   }
+  if (
+    normalized === "MONTHLY_BILL" ||
+    normalized === "MONTHLY BILL" ||
+    normalized === "ADD_TO_SUBSCRIPTION" ||
+    normalized === "SUBSCRIPTION"
+  ) {
+    return "MONTHLY_BILL";
+  }
   return normalized;
 };
 
@@ -694,6 +702,9 @@ const findLinkedOneTimePayment = async ({
   );
 };
 
+const isStandaloneOneTimePaymentMethod = (paymentMethod) =>
+  normalizeOneTimePaymentMethod(paymentMethod) !== "MONTHLY_BILL";
+
 const appendCustomerCancellationNote = (existingNotes, reason = "customer_cancelled") => {
   const previous = String(existingNotes || "").trim();
   const stamped = `[CUSTOMER_CANCELLED_ORDER] ${new Date().toISOString()} :: ${String(reason || "customer_cancelled").trim()}`;
@@ -811,6 +822,7 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   const resolvedAddress = inputAddress || String(await getSavedCustomerAddress(customerId) || "").trim();
   const slot = normalizeOneTimeSlot(payload?.slot);
   const pricePerLiterInput = toFiniteNumber(payload?.pricePerLiter ?? payload?.unitPrice);
+  const allowedPaymentMethods = new Set(["PAY_NOW", "COD", "MONTHLY_BILL"]);
 
   if (!Number.isFinite(dairyId) || dairyId <= 0) {
     throw new Error("Valid dairyId is required");
@@ -827,8 +839,8 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   if (!VALID_ONE_TIME_SLOTS.has(slot)) {
     throw new Error("slot must be Morning or Evening");
   }
-  if (paymentMethod !== "PAY_NOW") {
-    throw new Error("Online payment is required for one-time orders");
+  if (!allowedPaymentMethods.has(paymentMethod)) {
+    throw new Error("Payment method must be online, cash on delivery, or subscription bill");
   }
   if (!resolvedAddress || resolvedAddress.length < 10) {
     throw new Error("Detailed delivery address is required");
@@ -865,6 +877,9 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
     throw new Error(
       "You already have an active subscription with this dairy. One-time delivery is not available."
     );
+  }
+  if (paymentMethod === "MONTHLY_BILL" && !hasSubscriptionInSameDairy) {
+    throw new Error("Add to subscription bill is available only for customers with an active subscription in this dairy");
   }
 
   const selectedProduct = await getProductByNameForDairy({
@@ -938,32 +953,37 @@ export const createOneTimeDeliveryOrder = async (customerId, payload = {}) => {
   }
 
   const amount = Number((quantity * resolvedPricePerLiter).toFixed(2));
-  const paymentDescription = `One-time order: delivery_id=${createdDelivery.id}; ${milkType} ${quantity}L (${slot}) for ${deliveryDate}`.slice(
-    0,
-    300
-  );
+  let createdPayment = null;
+  if (isStandaloneOneTimePaymentMethod(paymentMethod)) {
+    const paymentDescription = `One-time order: delivery_id=${createdDelivery.id}; ${milkType} ${quantity}L (${slot}) for ${deliveryDate}`.slice(
+      0,
+      300
+    );
 
-  const { data: createdPayment, error: createPaymentError } = await supabase
-    .from("payments")
-    .insert({
-      customer_id: customerId,
-      dairy_id: dairyId,
-      amount,
-      status: "PENDING",
-      method: paymentMethod,
-      description: paymentDescription,
-      due_date: deliveryDate,
-    })
-    .select("id, amount, status, due_date")
-    .single();
+    const { data: paymentRow, error: createPaymentError } = await supabase
+      .from("payments")
+      .insert({
+        customer_id: customerId,
+        dairy_id: dairyId,
+        amount,
+        status: "PENDING",
+        method: paymentMethod,
+        description: paymentDescription,
+        due_date: deliveryDate,
+      })
+      .select("id, amount, status, due_date")
+      .single();
 
-  if (createPaymentError) {
-    await releaseStockForCancelledOrder({
-      dairyId,
-      milkType,
-      quantity,
-    });
-    throw createPaymentError;
+    if (createPaymentError) {
+      await releaseStockForCancelledOrder({
+        dairyId,
+        milkType,
+        quantity,
+      });
+      throw createPaymentError;
+    }
+
+    createdPayment = paymentRow;
   }
 
   return {
@@ -1016,13 +1036,15 @@ export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}
     throw new Error("Only approval-pending one-time orders can be cancelled");
   }
 
+  const paymentMethod = normalizeOneTimePaymentMethod(parseOneTimeNotes(delivery?.notes).paymentMethod);
   const payment = await findLinkedOneTimePayment({
     customerId,
     orderId,
     paymentId,
     dairyId: delivery?.dairy_id ?? null,
   });
-  if (!payment) {
+  const requiresStandalonePayment = isStandaloneOneTimePaymentMethod(paymentMethod);
+  if (!payment && requiresStandalonePayment) {
     throw new Error("Payment record not found");
   }
 
@@ -1054,7 +1076,7 @@ export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}
 
     if (deleteDeliveryError) throw deleteDeliveryError;
 
-    if (paymentStatus !== "PAID") {
+    if (payment?.id && paymentStatus !== "PAID") {
       const { error: deletePaymentError } = await supabase
         .from("payments")
         .delete()
@@ -1079,7 +1101,7 @@ export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}
 
     if (updateDeliveryError) throw updateDeliveryError;
 
-    if (paymentStatus !== "PAID") {
+    if (payment?.id && paymentStatus !== "PAID") {
       const { error: updatePaymentError } = await supabase
         .from("payments")
         .update({
@@ -1113,8 +1135,8 @@ export const cancelPendingOneTimeDeliveryOrder = async (customerId, payload = {}
     message: removeFromHistory
       ? "Order cancelled successfully."
       : walletCredit
-      ? "Order cancelled. It will stay in your history, and the paid amount has been added to your wallet."
-      : "Order cancelled. It will stay visible in your delivery history.",
+      ? "Order cancelled. The paid amount has been added to your wallet."
+      : "Order cancelled successfully.",
   };
 };
 
