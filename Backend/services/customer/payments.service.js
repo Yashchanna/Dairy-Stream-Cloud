@@ -269,6 +269,15 @@ const isBillableCustomerPaymentRow = (row, deliveryStatusById) => {
   return false;
 };
 
+const isDirectCheckoutCustomerPaymentRow = (row, deliveryStatusById) => {
+  if (isWalletTopupPaymentRow(row)) return false;
+  if (isOneTimePaymentRow(row)) {
+    const status = normalizeStatus(row?.status);
+    return status === "PENDING" || status === "OVERDUE";
+  }
+  return isBillableCustomerPaymentRow(row, deliveryStatusById);
+};
+
 const mapPaymentRow = (row, index) => {
   const amount = extractPaymentAmount(row);
   const status = normalizeStatus(row.status);
@@ -765,7 +774,7 @@ export const createCustomerPaymentOrder = async ({ customerId, paymentId, dairyI
 
   if (paymentId !== null && paymentId !== undefined) {
     const { payment } = await getPendingPaymentForCustomer(customerId, paymentId, resolvedDairyId);
-    if (payment && isBillableCustomerPaymentRow(payment)) {
+    if (payment && isDirectCheckoutCustomerPaymentRow(payment)) {
       pendingPayment = payment;
     }
   } else {
@@ -884,7 +893,7 @@ export const verifyCustomerPayment = async ({
   if (
     !existingPayment ||
     !customerColumn ||
-    !isBillableCustomerPaymentRow(existingPayment, deliveryStatusById)
+    !isDirectCheckoutCustomerPaymentRow(existingPayment, deliveryStatusById)
   ) {
     throw new Error("Payment record not found");
   }

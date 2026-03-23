@@ -554,7 +554,7 @@ const Subscribe = () => {
             subtitle="Manage your milk delivery"
             onClose={() => setShowUpdateModal(false)}
           />
-          <div className="grid gap-5 px-5 py-5 sm:px-8 sm:py-6 md:grid-cols-2">
+          <div className="grid gap-4 px-5 py-4 sm:px-8 sm:py-5 md:grid-cols-2">
             <InputBlock label="Product">
               <>
                 <select
@@ -613,14 +613,21 @@ const Subscribe = () => {
 
             <div className="md:col-span-2">
               <InputBlock label="Delivery Days">
-                <div className="rounded-2xl border bg-gray-50 divide-y">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                   {DAY_OPTIONS.map((day) => {
                     const checked = Array.isArray(formData.deliveryDays)
                       ? formData.deliveryDays.includes(day.key)
                       : false;
 
                     return (
-                      <label key={day.key} className="flex items-center justify-between px-4 py-3 cursor-pointer">
+                      <label
+                        key={day.key}
+                        className={`flex cursor-pointer items-center justify-between rounded-[14px] border px-3 py-2.5 transition ${
+                          checked
+                            ? 'border-[#D4B896] bg-[#FBF7F0] shadow-sm'
+                            : 'border-[#EDE8DF] bg-white hover:border-[#D4B896]'
+                        }`}
+                      >
                         <span className="text-sm font-medium text-gray-700">{day.label}</span>
                         <input
                           type="checkbox"
@@ -749,15 +756,21 @@ const ExploreOtherDairiesSection = ({ onExplore }) => (
 );
 
 const ModalWrapper = ({ children, small }) => (
-  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in sm:items-center">
-    <div className={`w-full animate-in zoom-in-95 rounded-t-[28px] border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl sm:rounded-[28px] ${small ? 'max-w-md' : 'max-w-xl'}`}>
-      {children}
+  <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/40 p-3 backdrop-blur-sm animate-in fade-in sm:items-center sm:p-6">
+    <div
+      className={`my-auto w-full max-h-[calc(100vh-1.5rem)] overflow-hidden animate-in zoom-in-95 border border-[#EDE8DF] bg-[#FFFDF7] shadow-2xl sm:max-h-[calc(100vh-3rem)] ${
+        small ? 'max-w-md rounded-[24px] sm:rounded-[28px]' : 'max-w-2xl rounded-[24px] sm:rounded-[28px]'
+      }`}
+    >
+      <div className="max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)]">
+        {children}
+      </div>
     </div>
   </div>
 );
 
 const ModalHeader = ({ title, subtitle, onClose }) => (
-  <div className="flex items-start justify-between gap-4 border-b border-[#F2EDE4] px-5 py-5 sm:px-8 sm:py-6">
+  <div className="flex items-start justify-between gap-4 border-b border-[#F2EDE4] px-5 py-4 sm:px-8 sm:py-5">
     <div>
       <h3 className="text-2xl font-semibold text-[#2C1A0E]" style={headingFont}>{title}</h3>
       <p className="mt-1 text-sm text-[#8B7355]">{subtitle}</p>
@@ -769,7 +782,7 @@ const ModalHeader = ({ title, subtitle, onClose }) => (
 );
 
 const ModalFooter = ({ onCancel, onConfirm, confirmText }) => (
-  <div className="flex flex-col-reverse gap-3 border-t border-[#F2EDE4] px-5 py-5 sm:flex-row sm:justify-end sm:gap-4 sm:px-8 sm:py-6">
+  <div className="flex flex-col-reverse gap-3 border-t border-[#F2EDE4] px-5 py-4 sm:flex-row sm:justify-end sm:gap-4 sm:px-8 sm:py-5">
     <button onClick={onCancel} className="rounded-[14px] border border-[#EDE8DF] px-6 py-2 transition hover:bg-[#FBF7F0]">
       Cancel
     </button>

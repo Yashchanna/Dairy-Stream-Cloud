@@ -118,3 +118,30 @@ body,
 .animate-fade-scale {
   animation: fadeScale 0.5s ease-out forwards;
 }
+
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #c9baa5 transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 12px 0;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d4c4af 0%, #b99d7f 100%);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #c7b297 0%, #a98663 100%);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
