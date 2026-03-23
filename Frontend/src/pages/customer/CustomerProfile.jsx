@@ -170,11 +170,11 @@ const CustomerProfile = () => {
 
   return (
     <CustomerLayout>
-      <div className="mx-auto max-w-5xl space-y-6 animate-in fade-in duration-500 lg:space-y-7" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <div className="mx-auto max-w-5xl space-y-5 animate-in fade-in duration-500 sm:space-y-6 lg:space-y-7" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">Profile Center</p>
-            <h2 className="mt-2 text-[28px] font-semibold text-[#2C1A0E] sm:text-[36px]" style={headingFont}>My <span className="text-[#B8641A]">Profile</span></h2>
+            <h2 className="mt-1.5 text-[24px] font-semibold text-[#2C1A0E] sm:mt-2 sm:text-[36px]" style={headingFont}>My <span className="text-[#B8641A]">Profile</span></h2>
           </div>
           <button 
             onClick={() => navigate("/customer/dashboard")} 
@@ -185,30 +185,30 @@ const CustomerProfile = () => {
           </button>
         </div>
 
-        <div className="rounded-[28px] border border-[#E8DED1] bg-white p-4 shadow-[0_12px_30px_rgba(84,52,16,0.04)] sm:p-5">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
+        <div className="rounded-[24px] border border-[#E8DED1] bg-white p-4 shadow-[0_12px_30px_rgba(84,52,16,0.04)] sm:rounded-[28px] sm:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
               <div className="relative mx-auto sm:mx-0">
                 {profile.photo ? (
                   <img
                     src={profile.photo}
                     alt="profile"
-                    className="h-24 w-24 rounded-full object-cover ring-4 ring-[#FFF3CC] shadow-sm sm:h-28 sm:w-28"
+                    className="h-20 w-20 rounded-full object-cover ring-4 ring-[#FFF3CC] shadow-sm sm:h-28 sm:w-28"
                   />
                 ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-full border-[3px] border-[#F7D36D] bg-[#FFF3CC] text-[36px] font-semibold text-[#A85012] sm:h-28 sm:w-28 sm:text-[40px]">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full border-[3px] border-[#F7D36D] bg-[#FFF3CC] text-[30px] font-semibold text-[#A85012] sm:h-28 sm:w-28 sm:text-[40px]">
                     {getInitials(profile.name)}
                   </div>
                 )}
                 <span className="absolute bottom-2 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#11B89A]" />
               </div>
 
-              <div className="text-center sm:text-left">
-                <h3 className="text-[30px] font-semibold text-[#18120F] sm:text-[40px]" style={headingFont}>
+              <div className="min-w-0 text-center sm:text-left">
+                <h3 className="break-words text-[24px] font-semibold leading-tight text-[#18120F] sm:text-[40px]" style={headingFont}>
                   {profile.name}
                 </h3>
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
-                  <span className="rounded-full border border-[#F2CF73] bg-[#FFF3CC] px-4 py-1 text-sm font-medium text-[#B05D15]">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                  <span className="rounded-full border border-[#F2CF73] bg-[#FFF3CC] px-3 py-1 text-xs font-medium text-[#B05D15] sm:px-4 sm:text-sm">
                     Member of {profile.farm}
                   </span>
                   <span className="text-sm text-[#B1A193]">{profile.memberSince}</span>
@@ -218,7 +218,7 @@ const CustomerProfile = () => {
 
             <button
               onClick={() => { setFormData(profile); setShowModal(true); }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-[16px] bg-[#1D1815] px-6 py-2.5 text-base font-semibold text-white transition hover:bg-[#342B25] sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-[#1D1815] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#342B25] sm:w-auto sm:rounded-[16px] sm:px-6 sm:text-base"
             >
               <Edit size={18} />
               Edit Profile
@@ -226,7 +226,7 @@ const CustomerProfile = () => {
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
           <InfoCard icon={<Mail />} label="Email" value={profile.email} />
           <InfoCard icon={<Phone />} label="Phone" value={profile.phone} />
           <InfoCard icon={<MapPin />} label="Delivery Address" value={profile.address} full />
@@ -237,17 +237,17 @@ const CustomerProfile = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex h-[100svh] w-full max-w-lg flex-col overflow-hidden rounded-none border border-[#EDE8DF] bg-[#FFFDF7] shadow-[0_28px_80px_rgba(44,26,14,0.22)] animate-in zoom-in-95 sm:h-auto sm:rounded-[28px]">
-            <div className="flex items-center justify-between border-b border-[#F2EDE4] bg-[#FBF7F0] px-5 py-3.5 sm:px-7 sm:py-4">
+            <div className="flex items-center justify-between border-b border-[#F2EDE4] bg-[#FBF7F0] px-4 py-3 sm:px-7 sm:py-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C4A882]">Profile Editor</p>
-                <h3 className="mt-1 text-[22px] font-semibold text-[#2C1A0E]" style={headingFont}>Edit Details</h3>
+                <h3 className="mt-1 text-[20px] font-semibold text-[#2C1A0E] sm:text-[22px]" style={headingFont}>Edit Details</h3>
               </div>
               <button onClick={() => setShowModal(false)} className="rounded-full border border-[#EDE8DF] bg-white p-2 text-[#5C3D1E] transition-colors hover:bg-[#FBF7F0]">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-4 px-5 py-4 sm:px-7 sm:py-5">
+            <div className="space-y-4 overflow-y-auto px-4 py-4 sm:px-7 sm:py-5">
               {/* Profile Photo Section */}
               <div className="flex flex-col items-center gap-2 py-0">
                 <div className="relative group">
@@ -275,7 +275,7 @@ const CustomerProfile = () => {
               </div>
             </div>
 
-            <div className="border-t border-[#F2EDE4] bg-[#FFFDF7] px-5 py-3.5 sm:px-7 sm:py-4">
+            <div className="border-t border-[#F2EDE4] bg-[#FFFDF7] px-4 py-3 sm:px-7 sm:py-4">
               <button 
                 onClick={saveProfile} 
                 disabled={saving} 
@@ -292,13 +292,13 @@ const CustomerProfile = () => {
 };
 
 const InfoCard = ({ icon, label, value, full }) => (
-  <div className={`flex items-center gap-4 rounded-[22px] border border-[#E8DED1] bg-white p-4 shadow-[0_10px_24px_rgba(84,52,16,0.035)] sm:p-5 ${full ? "md:col-span-2" : ""}`}>
-    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#FFF1C4] text-[#C85C16]">
+  <div className={`flex items-center gap-3 rounded-[20px] border border-[#E8DED1] bg-white p-4 shadow-[0_10px_24px_rgba(84,52,16,0.035)] sm:gap-4 sm:rounded-[22px] sm:p-5 ${full ? "md:col-span-2" : ""}`}>
+    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[13px] bg-[#FFF1C4] text-[#C85C16] sm:h-12 sm:w-12 sm:rounded-[14px]">
       {icon}
     </div>
-    <div className="min-w-0">
+    <div className="min-w-0 flex-1">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#B1A193]">{label}</p>
-      <p className="mt-0.5 break-words text-[17px] font-semibold text-[#1F1713] sm:text-[16px]">{value}</p>
+      <p className="mt-0.5 break-words text-[15px] font-semibold text-[#1F1713] sm:text-[16px]">{value}</p>
     </div>
   </div>
 );
