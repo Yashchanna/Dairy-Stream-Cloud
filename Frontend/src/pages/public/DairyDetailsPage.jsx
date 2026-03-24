@@ -42,11 +42,12 @@ const normalizeProducts = (dairy = {}) => {
       .map((item) => ({
         id: item.id || item.name,
         name: String(item.name || "").trim(),
+        type: String(item.type || "MILK").trim().toUpperCase(),
         ratePerUnit: Number(item.ratePerUnit || 0),
         stockQuantity: Number(item.stockQuantity || 0),
         unit: item.unit || "LITER",
       }))
-      .filter((item) => item.name && item.ratePerUnit > 0);
+      .filter((item) => item.type === "MILK" && item.name && item.ratePerUnit > 0);
   }
 
   const legacy = dairy?.products || {
@@ -59,6 +60,7 @@ const normalizeProducts = (dairy = {}) => {
   return Object.keys(legacy).map((name) => ({
     id: name,
     name,
+    type: "MILK",
     ratePerUnit: Number(legacy[name] || 0),
     stockQuantity: Number.POSITIVE_INFINITY,
     unit: "LITER",
@@ -234,6 +236,10 @@ const handleContinueFromStep2 = () => {
       toast.error("You already have an active subscription. Close it first.");
       return;
     }
+    if (!dairy?.productItems?.length) {
+      toast.error("No milk variants available for subscription right now.");
+      return;
+    }
     setStep(1);
     setShowSubscribe(true);
   };
@@ -355,30 +361,31 @@ const handleContinueFromStep2 = () => {
       </div>
 
       {showSubscribe && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-xl rounded-[40px] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
-            <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
-              <div>
-                <h2 className="text-xl font-bold">Setup Subscription</h2>
-                <div className="flex gap-1.5 mt-2">
-                  {[1, 2, 3, 4].map(s => (
-                    <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? 'w-8 bg-blue-600' : 'w-2 bg-slate-200'}`} />
-                  ))}
+        <div className="fixed inset-0 z-[100] overflow-hidden bg-slate-900/60 p-3 backdrop-blur-md animate-in fade-in duration-300 sm:p-4">
+          <div className="flex min-h-full items-start justify-center py-4 sm:items-center sm:py-6">
+            <div className="relative flex max-h-[calc(100vh-1rem)] w-full max-w-xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl animate-in zoom-in-95 duration-300 sm:max-h-[calc(100vh-2rem)] sm:rounded-[40px]">
+              <div className="px-5 py-3 border-b flex justify-between items-center bg-slate-50/50 sm:px-8 sm:py-4">
+                <div>
+                  <h2 className="text-xl font-bold">Setup Subscription</h2>
+                  <div className="flex gap-1.5 mt-2">
+                    {[1, 2, 3, 4].map(s => (
+                      <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step >= s ? 'w-8 bg-blue-600' : 'w-2 bg-slate-200'}`} />
+                    ))}
+                  </div>
                 </div>
+                <button onClick={() => setShowSubscribe(false)} className="p-2 hover:bg-white rounded-full border shadow-sm">
+                  <X size={20} />
+                </button>
               </div>
-              <button onClick={() => setShowSubscribe(false)} className="p-2 hover:bg-white rounded-full border shadow-sm">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-8">
+              <div className={`${step === 1 ? "overflow-visible" : "overflow-y-auto"} px-5 py-4 sm:px-8 sm:py-5`}>
               {step === 1 && (
-                <div className="space-y-6">
-                  <div className="space-y-3">
+                <div className="space-y-4">
+                  <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                      <Layers size={16} /> Select Variant
+                      <Layers size={16} /> Select Milk Type
                     </label>
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="max-h-72 overflow-y-auto pr-1">
+                      <div className="grid grid-cols-1 gap-3">
                       {dairy.productItems.map((item) => (
                         <button
                           key={item.id}
@@ -389,23 +396,24 @@ const handleContinueFromStep2 = () => {
                           <span className="text-blue-600 font-black">Rs {item.ratePerUnit}/{item.unit}</span>
                         </button>
                       ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold">Daily Qty (L)</label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold">Daily Qty (L)</label>
                       <input
                         type="number"
                         step="0.5"
-                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full rounded-lg bg-slate-50 px-3 py-2.5 text-sm border-none outline-none focus:ring-2 focus:ring-blue-500"
                         value={subscription.quantity}
                         onChange={(e) => setSubscription({ ...subscription, quantity: e.target.value })}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold">Time Slot</label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold">Time Slot</label>
                       <select
-                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none"
+                        className="w-full rounded-lg bg-slate-50 px-3 py-2.5 text-sm border-none outline-none"
                         value={subscription.slot}
                         onChange={(e) => setSubscription({ ...subscription, slot: e.target.value })}
                       >
@@ -415,9 +423,9 @@ const handleContinueFromStep2 = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-bold">Delivery Days</label>
-                    <div className="grid grid-cols-7 gap-2">
+                    <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
                       {DAY_OPTIONS.map((day) => {
                         const selected = subscription.deliveryDays.includes(day.key);
                         return (
@@ -430,7 +438,7 @@ const handleContinueFromStep2 = () => {
                                 : [...subscription.deliveryDays, day.key];
                               setSubscription({ ...subscription, deliveryDays: next });
                             }}
-                            className={`py-2 rounded-xl text-xs font-bold border ${selected ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"}`}
+                            className={`rounded-lg py-1.5 text-xs font-bold border ${selected ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"}`}
                           >
                             {day.label}
                           </button>
@@ -465,7 +473,7 @@ const handleContinueFromStep2 = () => {
       )}
     </div>
 
-    <div className="flex gap-3">
+    <div className="flex flex-col gap-3 sm:flex-row">
       <button onClick={() => setStep(1)} className="flex-1 py-4 font-bold text-slate-500">
         Back
       </button>
@@ -516,13 +524,23 @@ const handleContinueFromStep2 = () => {
       </div>
     </div>
 
-    <button 
-      disabled={saving}
-      onClick={handleConfirmSubscription} 
-      className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold"
-    >
-      {saving ? "Processing..." : "Confirm Subscription"}
-    </button>
+    <div className="flex flex-col gap-3 sm:flex-row">
+      <button
+        type="button"
+        onClick={() => setStep(2)}
+        disabled={saving}
+        className="flex-1 py-3.5 font-bold text-slate-500 disabled:text-slate-300"
+      >
+        Back
+      </button>
+      <button 
+        disabled={saving}
+        onClick={handleConfirmSubscription} 
+        className="flex-[2] bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:bg-slate-300"
+      >
+        {saving ? "Processing..." : "Confirm Subscription"}
+      </button>
+    </div>
   </div>
 )}
 
@@ -542,6 +560,7 @@ const handleContinueFromStep2 = () => {
               )}
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>

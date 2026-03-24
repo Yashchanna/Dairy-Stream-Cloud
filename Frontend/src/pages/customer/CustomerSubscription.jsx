@@ -603,14 +603,6 @@ const Subscribe = () => {
               </select>
             </InputBlock>
 
-            <InputBlock label="Time Range">
-              <input
-                className="w-full rounded-[14px] border border-[#EDE8DF] bg-[#FBF7F0] p-3 outline-none focus:ring-2 focus:ring-[#D4B896]"
-                value={formData.timeRange}
-                onChange={(e) => setFormData({ ...formData, timeRange: e.target.value })}
-              />
-            </InputBlock>
-
             <div className="md:col-span-2">
               <InputBlock label="Delivery Days">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
