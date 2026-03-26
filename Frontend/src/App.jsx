@@ -26,6 +26,8 @@ const AdminDeliveries = lazy(() => import("./pages/admin/AdminDeliveries.jsx"));
 const AdminPayments = lazy(() => import("./pages/admin/AdminPayments.jsx"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts.jsx"));
 const AdminPerformanceDashboard = lazy(() => import("./pages/admin/AdminPerformanceDashboard.jsx"));
+const AdminProcurement = lazy(() => import("./pages/admin/AdminProcurement.jsx"));
+const AdminSuppliers = lazy(() => import("./pages/admin/AdminSuppliers.jsx"));
 
 const AgentDashboard = lazy(() => import("./pages/agent/agentDashboard.jsx"));
 const AgentHistory = lazy(() => import("./pages/agent/AgentHistory.jsx"));
@@ -165,6 +167,22 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["ADMIN"]}>
               <AdminPerformanceDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/procurement"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminProcurement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/suppliers"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN"]}>
+              <AdminSuppliers />
             </ProtectedRoute>
           }
         />

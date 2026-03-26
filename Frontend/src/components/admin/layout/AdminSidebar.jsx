@@ -57,6 +57,24 @@ const menuItems = [
     ),
   },
   {
+    label: "Purchases",
+    to: "/admin/procurement",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6">
+        <path d="M12 2l4 4-1.41 1.41L13 5.83V14h-2V5.83L9.41 7.41 8 6l4-4zm-7 9h2v8h12v-8h2v10H5V11z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Suppliers",
+    to: "/admin/suppliers",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6">
+        <path d="M16 6a3 3 0 110 6 3 3 0 010-6zM8 7a2.5 2.5 0 110 5 2.5 2.5 0 010-5zm8 7c2.67 0 8 1.34 8 4v2h-8.26A6.97 6.97 0 0016 18c0-1.46-.48-2.8-1.29-3.88.45-.07.87-.12 1.29-.12zM8 14c3.33 0 8 1.67 8 5v1H0v-1c0-3.33 4.67-5 8-5z" />
+      </svg>
+    ),
+  },
+  {
     label: "Performance",
     to: "/admin/performance",
     icon: (

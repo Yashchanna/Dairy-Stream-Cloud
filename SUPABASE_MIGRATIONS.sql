@@ -338,6 +338,31 @@ CREATE INDEX IF NOT EXISTS idx_products_dairy_id ON public.products(dairy_id);
 CREATE INDEX IF NOT EXISTS idx_products_name ON public.products(name);
 CREATE INDEX IF NOT EXISTS idx_products_active ON public.products(is_active);
 
+-- ============================================
+-- Extend Procurement Logs For Generic Inventory
+-- ============================================
+ALTER TABLE public.procurement_logs
+  ADD COLUMN IF NOT EXISTS supplier_id BIGINT;
+ALTER TABLE public.procurement_logs
+  ADD COLUMN IF NOT EXISTS item_name VARCHAR(150) DEFAULT 'Milk';
+ALTER TABLE public.procurement_logs
+  ADD COLUMN IF NOT EXISTS item_category VARCHAR(80) DEFAULT 'MILK';
+ALTER TABLE public.procurement_logs
+  ADD COLUMN IF NOT EXISTS unit VARCHAR(40) DEFAULT 'LITER';
+ALTER TABLE public.procurement_logs
+  ADD COLUMN IF NOT EXISTS rate_per_unit NUMERIC(10, 2);
+
+UPDATE public.procurement_logs
+SET
+  item_name = COALESCE(NULLIF(item_name, ''), 'Milk'),
+  item_category = COALESCE(NULLIF(item_category, ''), 'MILK'),
+  unit = COALESCE(NULLIF(unit, ''), 'LITER'),
+  rate_per_unit = COALESCE(rate_per_unit, rate_per_liter)
+WHERE item_name IS NULL
+   OR item_category IS NULL
+   OR unit IS NULL
+   OR rate_per_unit IS NULL;
+
 DO $$
 BEGIN
   IF NOT EXISTS (

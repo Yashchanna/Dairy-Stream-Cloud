@@ -63,7 +63,7 @@ export const getAdminDashboardStats = async ({ dairyId, forceRefresh = false } =
       getActiveCustomerCountForDairy(targetDairyId),
       supabase.from("agents").select("id", { count: "exact", head: true }).eq("dairy_id", targetDairyId),
       supabase.from("dairies").select("dairy_name").eq("id", targetDairyId).maybeSingle(),
-      supabase.from("suppliers").select("id, name").eq("status", "ACTIVE"),
+      supabase.from("suppliers").select("id, name").eq("dairy_id", targetDairyId).eq("status", "ACTIVE"),
       supabase
         .from("deliveries")
         .select("id, quantity_liters, status")
@@ -71,7 +71,7 @@ export const getAdminDashboardStats = async ({ dairyId, forceRefresh = false } =
         .eq("delivery_date", todayDate),
       supabase
         .from("procurement_logs")
-        .select("id, supplier_name, quantity, rate_per_liter, total_cost, fat_percentage, snf_percentage, created_at")
+        .select("id, supplier_id, supplier_name, item_name, item_category, unit, quantity, rate_per_unit, rate_per_liter, total_cost, fat_percentage, snf_percentage, created_at")
         .eq("dairy_id", targetDairyId)
         .gte("created_at", startIso)
         .order("created_at", { ascending: false }),
@@ -103,7 +103,10 @@ export const getAdminDashboardStats = async ({ dairyId, forceRefresh = false } =
   const failedCount = deliveriesToday.filter(
     (delivery) => String(delivery.status || "").toUpperCase() === "FAILED"
   ).length;
-  const milkProcured = procurementToday.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const milkProcured = procurementToday.reduce((sum, row) => {
+    const category = String(row.item_category || "MILK").toUpperCase();
+    return category === "MILK" ? sum + Number(row.quantity || 0) : sum;
+  }, 0);
   const cashCollected = paymentsToday
     .filter((row) => isOnOrAfter(row.paid_at || row.created_at, startIso))
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
